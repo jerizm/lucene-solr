@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,7 +21,7 @@ import java.io.IOException;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
@@ -39,10 +39,10 @@ public class TestCachingWrapperFilter extends LuceneTestCase {
   
   public void testCachingWorks() throws Exception {
     Directory dir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir);
     writer.close();
 
-    IndexReader reader = SlowCompositeReaderWrapper.wrap(IndexReader.open(dir));
+    IndexReader reader = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir));
     AtomicReaderContext context = (AtomicReaderContext) reader.getTopReaderContext();
     MockFilter filter = new MockFilter();
     CachingWrapperFilter cacher = new CachingWrapperFilter(filter);
@@ -65,10 +65,10 @@ public class TestCachingWrapperFilter extends LuceneTestCase {
   
   public void testNullDocIdSet() throws Exception {
     Directory dir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir);
     writer.close();
 
-    IndexReader reader = SlowCompositeReaderWrapper.wrap(IndexReader.open(dir));
+    IndexReader reader = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir));
     AtomicReaderContext context = (AtomicReaderContext) reader.getTopReaderContext();
 
     final Filter filter = new Filter() {
@@ -88,10 +88,10 @@ public class TestCachingWrapperFilter extends LuceneTestCase {
   
   public void testNullDocIdSetIterator() throws Exception {
     Directory dir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir);
     writer.close();
 
-    IndexReader reader = SlowCompositeReaderWrapper.wrap(IndexReader.open(dir));
+    IndexReader reader = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir));
     AtomicReaderContext context = (AtomicReaderContext) reader.getTopReaderContext();
 
     final Filter filter = new Filter() {
@@ -132,11 +132,11 @@ public class TestCachingWrapperFilter extends LuceneTestCase {
   
   public void testIsCacheAble() throws Exception {
     Directory dir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir);
     writer.addDocument(new Document());
     writer.close();
 
-    IndexReader reader = SlowCompositeReaderWrapper.wrap(IndexReader.open(dir));
+    IndexReader reader = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir));
 
     // not cacheable:
     assertDocIdSetCacheable(reader, new QueryWrapperFilter(new TermQuery(new Term("test","value"))), false);
@@ -159,9 +159,9 @@ public class TestCachingWrapperFilter extends LuceneTestCase {
   public void testEnforceDeletions() throws Exception {
     Directory dir = newDirectory();
     RandomIndexWriter writer = new RandomIndexWriter(
-        random,
+        random(),
         dir,
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).
             setMergeScheduler(new SerialMergeScheduler()).
             // asserts below requires no unexpected merges:
             setMergePolicy(newLogMergePolicy(10))
@@ -172,13 +172,13 @@ public class TestCachingWrapperFilter extends LuceneTestCase {
     // flipping a coin) may give us a newly opened reader,
     // but we use .reopen on this reader below and expect to
     // (must) get an NRT reader:
-    DirectoryReader reader = IndexReader.open(writer.w, true);
+    DirectoryReader reader = DirectoryReader.open(writer.w, true);
     // same reason we don't wrap?
     IndexSearcher searcher = newSearcher(reader, false);
 
     // add a doc, refresh the reader, and check that it's there
     Document doc = new Document();
-    doc.add(newField("id", "1", StringField.TYPE_STORED));
+    doc.add(newStringField("id", "1", Field.Store.YES));
     writer.addDocument(doc);
 
     reader = refreshReader(reader);

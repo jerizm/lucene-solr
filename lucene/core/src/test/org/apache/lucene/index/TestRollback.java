@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,7 +19,7 @@ package org.apache.lucene.index;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
 
@@ -28,27 +28,27 @@ public class TestRollback extends LuceneTestCase {
   // LUCENE-2536
   public void testRollbackIntegrityWithBufferFlush() throws Exception {
     Directory dir = newDirectory();
-    RandomIndexWriter rw = new RandomIndexWriter(random, dir);
+    RandomIndexWriter rw = new RandomIndexWriter(random(), dir);
     for (int i = 0; i < 5; i++) {
       Document doc = new Document();
-      doc.add(newField("pk", Integer.toString(i), StringField.TYPE_STORED));
+      doc.add(newStringField("pk", Integer.toString(i), Field.Store.YES));
       rw.addDocument(doc);
     }
     rw.close();
 
     // If buffer size is small enough to cause a flush, errors ensue...
-    IndexWriter w = new IndexWriter(dir, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random)).setMaxBufferedDocs(2).setOpenMode(IndexWriterConfig.OpenMode.APPEND));
+    IndexWriter w = new IndexWriter(dir, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMaxBufferedDocs(2).setOpenMode(IndexWriterConfig.OpenMode.APPEND));
 
     for (int i = 0; i < 3; i++) {
       Document doc = new Document();
       String value = Integer.toString(i);
-      doc.add(newField("pk", value, StringField.TYPE_STORED));
-      doc.add(newField("text", "foo", StringField.TYPE_STORED));
+      doc.add(newStringField("pk", value, Field.Store.YES));
+      doc.add(newStringField("text", "foo", Field.Store.YES));
       w.updateDocument(new Term("pk", value), doc);
     }
     w.rollback();
 
-    IndexReader r = IndexReader.open(dir);
+    IndexReader r = DirectoryReader.open(dir);
     assertEquals("index should contain same number of docs post rollback", 5, r.numDocs());
     r.close();
     dir.close();

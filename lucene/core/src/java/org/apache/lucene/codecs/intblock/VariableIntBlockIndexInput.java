@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.intblock;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -68,12 +68,17 @@ public abstract class VariableIntBlockIndexInput extends IntIndexInput {
 
   protected abstract BlockReader getBlockReader(IndexInput in, int[] buffer) throws IOException;
 
+  /**
+   * Interface for variable-size block decoders.
+   * <p>
+   * Implementations should decode into the buffer in {@link #readBlock}.
+   */
   public interface BlockReader {
     public int readBlock() throws IOException;
     public void seek(long pos) throws IOException;
   }
 
-  public static class Reader extends IntIndexInput.Reader {
+  private static class Reader extends IntIndexInput.Reader {
     private final IndexInput in;
 
     public final int[] pending;
@@ -207,7 +212,7 @@ public abstract class VariableIntBlockIndexInput extends IntIndexInput {
     }
 
     @Override
-    public Object clone() {
+    public Index clone() {
       Index other = new Index();
       other.fp = fp;
       other.upto = upto;

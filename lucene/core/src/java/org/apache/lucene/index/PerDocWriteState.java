@@ -1,5 +1,6 @@
 package org.apache.lucene.index;
-/**
+
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -15,7 +16,6 @@ package org.apache.lucene.index;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import java.io.PrintStream;
 
 import org.apache.lucene.codecs.PerDocConsumer;
 import org.apache.lucene.store.Directory;
@@ -32,19 +32,17 @@ import org.apache.lucene.util.InfoStream;
 public class PerDocWriteState {
   public final InfoStream infoStream;
   public final Directory directory;
-  public final String segmentName;
-  public final FieldInfos fieldInfos;
+  public final SegmentInfo segmentInfo;
   public final Counter bytesUsed;
   public final String segmentSuffix;
   public final IOContext context;
 
   public PerDocWriteState(InfoStream infoStream, Directory directory,
-      String segmentName, FieldInfos fieldInfos, Counter bytesUsed,
+      SegmentInfo segmentInfo, Counter bytesUsed,
       String segmentSuffix, IOContext context) {
     this.infoStream = infoStream;
     this.directory = directory;
-    this.segmentName = segmentName;
-    this.fieldInfos = fieldInfos;
+    this.segmentInfo = segmentInfo;
     this.segmentSuffix = segmentSuffix;
     this.bytesUsed = bytesUsed;
     this.context = context;
@@ -53,8 +51,7 @@ public class PerDocWriteState {
   public PerDocWriteState(SegmentWriteState state) {
     infoStream = state.infoStream;
     directory = state.directory;
-    segmentName = state.segmentName;
-    fieldInfos = state.fieldInfos;
+    segmentInfo = state.segmentInfo;
     segmentSuffix = state.segmentSuffix;
     bytesUsed = Counter.newCounter();
     context = state.context;
@@ -63,8 +60,7 @@ public class PerDocWriteState {
   public PerDocWriteState(PerDocWriteState state, String segmentSuffix) {
     this.infoStream = state.infoStream;
     this.directory = state.directory;
-    this.segmentName = state.segmentName;
-    this.fieldInfos = state.fieldInfos;
+    this.segmentInfo = state.segmentInfo;
     this.segmentSuffix = segmentSuffix;
     this.bytesUsed = state.bytesUsed;
     this.context = state.context;

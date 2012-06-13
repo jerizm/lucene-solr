@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -219,7 +219,5 @@ public abstract class Context {
    * @return The string w/ variables resolved
    */
   public abstract String replaceTokens(String template);
-
-  static final ThreadLocal<Context> CURRENT_CONTEXT = new ThreadLocal<Context>();
 
 }

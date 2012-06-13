@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -203,8 +203,6 @@ final class BooleanScorer extends Scorer {
   private final int minNrShouldMatch;
   private int end;
   private Bucket current;
-  private int doc = -1;
-
   // Any time a prohibited clause matches we set bit 0:
   private static final int PROHIBITED_MASK = 1;
   

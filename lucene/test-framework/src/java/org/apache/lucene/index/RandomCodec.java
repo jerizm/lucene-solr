@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,10 +20,12 @@ package org.apache.lucene.index;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.lucene40.Lucene40Codec;
@@ -49,8 +51,12 @@ import org.apache.lucene.util._TestUtil;
  * and reproducable.
  */
 public class RandomCodec extends Lucene40Codec {
-  /** shuffled list of postingsformats to use for new mappings */
+  /** Shuffled list of postings formats to use for new mappings */
   private List<PostingsFormat> formats = new ArrayList<PostingsFormat>();
+  
+  /** unique set of format names this codec knows about */
+  public Set<String> formatNames = new HashSet<String>();
+
   /** memorized field->postingsformat mappings */
   // note: we have to sync this map even though its just for debugging/toString, 
   // otherwise DWPT's .toString() calls that iterate over the map can 
@@ -74,31 +80,44 @@ public class RandomCodec extends Lucene40Codec {
     return codec;
   }
 
-  public RandomCodec(Random random, boolean useNoMemoryExpensiveCodec) {
+  public RandomCodec(Random random, Set<String> avoidCodecs) {
     this.perFieldSeed = random.nextInt();
     // TODO: make it possible to specify min/max iterms per
     // block via CL:
     int minItemsPerBlock = _TestUtil.nextInt(random, 2, 100);
     int maxItemsPerBlock = 2*(Math.max(2, minItemsPerBlock-1)) + random.nextInt(100);
-    formats.add(new Lucene40PostingsFormat(minItemsPerBlock, maxItemsPerBlock));
-    // TODO: make it possible to specify min/max iterms per
-    // block via CL:
-    minItemsPerBlock = _TestUtil.nextInt(random, 2, 100);
-    maxItemsPerBlock = 2*(Math.max(1, minItemsPerBlock-1)) + random.nextInt(100);
-    formats.add(new Pulsing40PostingsFormat(1 + random.nextInt(20), minItemsPerBlock, maxItemsPerBlock));
-    formats.add(new MockSepPostingsFormat());
-    formats.add(new MockFixedIntBlockPostingsFormat(_TestUtil.nextInt(random, 1, 2000)));
-    formats.add(new MockVariableIntBlockPostingsFormat( _TestUtil.nextInt(random, 1, 127)));
-    formats.add(new MockRandomPostingsFormat(random));
-    formats.add(new NestedPulsingPostingsFormat());
-    formats.add(new Lucene40WithOrds());
-    if (!useNoMemoryExpensiveCodec) {
-      formats.add(new SimpleTextPostingsFormat());
-      formats.add(new MemoryPostingsFormat(random.nextBoolean()));
-    }
+
+    add(avoidCodecs,
+        new Lucene40PostingsFormat(minItemsPerBlock, maxItemsPerBlock),
+        new Pulsing40PostingsFormat(1 + random.nextInt(20), minItemsPerBlock, maxItemsPerBlock),
+        // add pulsing again with (usually) different parameters
+        new Pulsing40PostingsFormat(1 + random.nextInt(20), minItemsPerBlock, maxItemsPerBlock),
+        new MockSepPostingsFormat(),
+        new MockFixedIntBlockPostingsFormat(_TestUtil.nextInt(random, 1, 2000)),
+        new MockVariableIntBlockPostingsFormat( _TestUtil.nextInt(random, 1, 127)),
+        new MockRandomPostingsFormat(random),
+        new NestedPulsingPostingsFormat(),
+        new Lucene40WithOrds(),
+        new SimpleTextPostingsFormat(),
+        new MemoryPostingsFormat(true),
+        new MemoryPostingsFormat(false));
+
     Collections.shuffle(formats, random);
   }
-  
+
+  public RandomCodec(Random random) {
+    this(random, Collections.<String> emptySet());
+  }
+
+  private final void add(Set<String> avoidCodecs, PostingsFormat... postings) {
+    for (PostingsFormat p : postings) {
+      if (!avoidCodecs.contains(p.getName())) {
+        formats.add(p);
+        formatNames.add(p.getName());
+      }
+    }
+  }
+
   @Override
   public String toString() {
     return super.toString() + ": " + previousMappings.toString();

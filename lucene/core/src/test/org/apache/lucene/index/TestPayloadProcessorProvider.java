@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -28,6 +28,7 @@ import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.PayloadAttribute;
 import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.PayloadProcessorProvider.ReaderPayloadProcessor;
@@ -104,7 +105,7 @@ public class TestPayloadProcessorProvider extends LuceneTestCase {
 
       called = true;
       byte[] p = new byte[] { 1 };
-      payload.setPayload(new Payload(p));
+      payload.setPayload(new BytesRef(p));
       term.append(t);
       return true;
     }
@@ -138,12 +139,12 @@ public class TestPayloadProcessorProvider extends LuceneTestCase {
     );
     TokenStream payloadTS1 = new PayloadTokenStream("p1");
     TokenStream payloadTS2 = new PayloadTokenStream("p2");
-    FieldType customType = new FieldType(TextField.TYPE_UNSTORED);
+    FieldType customType = new FieldType(TextField.TYPE_NOT_STORED);
     customType.setOmitNorms(true);
     for (int i = 0; i < NUM_DOCS; i++) {
       Document doc = new Document();
       doc.add(newField("id", "doc" + i, customType));
-      doc.add(newField("content", "doc content " + i, TextField.TYPE_UNSTORED));
+      doc.add(newTextField("content", "doc content " + i, Field.Store.NO));
       doc.add(new TextField("p", payloadTS1));
       doc.add(new TextField("p", payloadTS2));
       writer.addDocument(doc);
@@ -156,7 +157,7 @@ public class TestPayloadProcessorProvider extends LuceneTestCase {
 
   private void verifyPayloadExists(Directory dir, String field, BytesRef text, int numExpected)
       throws IOException {
-    IndexReader reader = IndexReader.open(dir);
+    IndexReader reader = DirectoryReader.open(dir);
     try {
       int numPayloads = 0;
       DocsAndPositionsEnum tpe = MultiFields.getTermPositionsEnum(reader, null, field, text, false);
@@ -198,7 +199,7 @@ public class TestPayloadProcessorProvider extends LuceneTestCase {
 
     IndexReader[] readers = new IndexReader[dirs.length];
     for (int i = 0; i < readers.length; i++) {
-      readers[i] = IndexReader.open(dirs[i]);
+      readers[i] = DirectoryReader.open(dirs[i]);
     }
     try {
       writer.addIndexes(readers);
@@ -221,25 +222,25 @@ public class TestPayloadProcessorProvider extends LuceneTestCase {
   @Test
   public void testAddIndexes() throws Exception {
     // addIndexes - single commit in each
-    doTest(random, true, 0, false);
+    doTest(random(), true, 0, false);
 
     // addIndexes - multiple commits in each
-    doTest(random, true, 0, true);
+    doTest(random(), true, 0, true);
   }
 
   @Test
   public void testAddIndexesIntoExisting() throws Exception {
     // addIndexes - single commit in each
-    doTest(random, false, NUM_DOCS, false);
+    doTest(random(), false, NUM_DOCS, false);
 
     // addIndexes - multiple commits in each
-    doTest(random, false, NUM_DOCS, true);
+    doTest(random(), false, NUM_DOCS, true);
   }
 
   @Test
   public void testRegularMerges() throws Exception {
     Directory dir = newDirectory();
-    populateDocs(random, dir, true);
+    populateDocs(random(), dir, true);
     verifyPayloadExists(dir, "p", new BytesRef("p1"), NUM_DOCS);
     verifyPayloadExists(dir, "p", new BytesRef("p2"), NUM_DOCS);
 
@@ -247,7 +248,7 @@ public class TestPayloadProcessorProvider extends LuceneTestCase {
     // won't get processed.
     Map<Directory, ReaderPayloadProcessor> processors = new HashMap<Directory, ReaderPayloadProcessor>();
     processors.put(dir, new PerTermPayloadProcessor());
-    IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random, MockTokenizer.WHITESPACE, false)));
+    IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false)));
     writer.setPayloadProcessorProvider(new PerDirPayloadProcessor(processors));
     writer.forceMerge(1);
     writer.close();

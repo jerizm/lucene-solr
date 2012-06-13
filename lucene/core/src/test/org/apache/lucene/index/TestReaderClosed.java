@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,7 +21,6 @@ import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.StringField;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.store.AlreadyClosedException;
@@ -30,7 +29,6 @@ import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util._TestUtil;
 
 public class TestReaderClosed extends LuceneTestCase {
-  private IndexSearcher searcher;
   private IndexReader reader;
   private Directory dir;
 
@@ -38,27 +36,28 @@ public class TestReaderClosed extends LuceneTestCase {
   public void setUp() throws Exception {
     super.setUp();
     dir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir, 
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random, MockTokenizer.KEYWORD, false))
-        .setMaxBufferedDocs(_TestUtil.nextInt(random, 50, 1000)));
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir, 
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random(), MockTokenizer.KEYWORD, false))
+        .setMaxBufferedDocs(_TestUtil.nextInt(random(), 50, 1000)));
     
     Document doc = new Document();
-    Field field = newField("field", "", StringField.TYPE_UNSTORED);
+    Field field = newStringField("field", "", Field.Store.NO);
     doc.add(field);
 
     // we generate aweful prefixes: good for testing.
     // but for preflex codec, the test can be very slow, so use less iterations.
     int num = atLeast(10);
     for (int i = 0; i < num; i++) {
-      field.setValue(_TestUtil.randomUnicodeString(random, 10));
+      field.setStringValue(_TestUtil.randomUnicodeString(random(), 10));
       writer.addDocument(doc);
     }
     reader = writer.getReader();
-    searcher = newSearcher(reader);
     writer.close();
   }
   
   public void test() throws Exception {
+    assertTrue(reader.getRefCount() > 0);
+    IndexSearcher searcher = newSearcher(reader);
     TermRangeQuery query = TermRangeQuery.newStringRange("field", "a", "z", true, true);
     searcher.search(query, 5);
     reader.close();
@@ -66,6 +65,25 @@ public class TestReaderClosed extends LuceneTestCase {
       searcher.search(query, 5);
     } catch (AlreadyClosedException ace) {
       // expected
+    }
+  }
+  
+  // LUCENE-3800
+  public void testReaderChaining() throws Exception {
+    assertTrue(reader.getRefCount() > 0);
+    IndexReader wrappedReader = SlowCompositeReaderWrapper.wrap(reader);
+    wrappedReader = new ParallelAtomicReader((AtomicReader) wrappedReader);
+    IndexSearcher searcher = newSearcher(wrappedReader);
+    TermRangeQuery query = TermRangeQuery.newStringRange("field", "a", "z", true, true);
+    searcher.search(query, 5);
+    reader.close(); // close original child reader
+    try {
+      searcher.search(query, 5);
+    } catch (AlreadyClosedException ace) {
+      assertEquals(
+        "this IndexReader cannot be used anymore as one of its child readers was closed",
+        ace.getMessage()
+      );
     }
   }
   

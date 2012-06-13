@@ -1,6 +1,6 @@
 package org.apache.lucene.document;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -63,11 +63,10 @@ public class DocumentStoredFieldVisitor extends StoredFieldVisitor {
   @Override
   public void stringField(FieldInfo fieldInfo, String value) throws IOException {
     final FieldType ft = new FieldType(TextField.TYPE_STORED);
-    ft.setStoreTermVectors(fieldInfo.storeTermVector);
-    ft.setStoreTermVectors(fieldInfo.storeTermVector);
-    ft.setIndexed(fieldInfo.isIndexed);
-    ft.setOmitNorms(fieldInfo.omitNorms);
-    ft.setIndexOptions(fieldInfo.indexOptions);
+    ft.setStoreTermVectors(fieldInfo.hasVectors());
+    ft.setIndexed(fieldInfo.isIndexed());
+    ft.setOmitNorms(fieldInfo.omitsNorms());
+    ft.setIndexOptions(fieldInfo.getIndexOptions());
     doc.add(new Field(fieldInfo.name, value, ft));
   }
 

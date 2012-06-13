@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -25,13 +25,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.MultiReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.similarities.DefaultSimilarity;
-import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.NamedThreadFactory;
@@ -71,9 +71,9 @@ public class TestBooleanQuery extends LuceneTestCase {
   // LUCENE-1630
   public void testNullOrSubScorer() throws Throwable {
     Directory dir = newDirectory();
-    RandomIndexWriter w = new RandomIndexWriter(random, dir);
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir);
     Document doc = new Document();
-    doc.add(newField("field", "a b c d", TextField.TYPE_UNSTORED));
+    doc.add(newTextField("field", "a b c d", Field.Store.NO));
     w.addDocument(doc);
 
     IndexReader r = w.getReader();
@@ -94,7 +94,7 @@ public class TestBooleanQuery extends LuceneTestCase {
     assertEquals(score*.5F, score2, 1e-6);
 
     // LUCENE-2617: make sure that a clause not in the index still contributes to the score via coord factor
-    BooleanQuery qq = (BooleanQuery)q.clone();
+    BooleanQuery qq = q.clone();
     PhraseQuery phrase = new PhraseQuery();
     phrase.add(new Term("field", "not_in_index"));
     phrase.add(new Term("field", "another_not_in_index"));
@@ -135,17 +135,17 @@ public class TestBooleanQuery extends LuceneTestCase {
 
   public void testDeMorgan() throws Exception {
     Directory dir1 = newDirectory();
-    RandomIndexWriter iw1 = new RandomIndexWriter(random, dir1);
+    RandomIndexWriter iw1 = new RandomIndexWriter(random(), dir1);
     Document doc1 = new Document();
-    doc1.add(newField("field", "foo bar", TextField.TYPE_UNSTORED));
+    doc1.add(newTextField("field", "foo bar", Field.Store.NO));
     iw1.addDocument(doc1);
     IndexReader reader1 = iw1.getReader();
     iw1.close();
     
     Directory dir2 = newDirectory();
-    RandomIndexWriter iw2 = new RandomIndexWriter(random, dir2);
+    RandomIndexWriter iw2 = new RandomIndexWriter(random(), dir2);
     Document doc2 = new Document();
-    doc2.add(newField("field", "foo baz", TextField.TYPE_UNSTORED));
+    doc2.add(newTextField("field", "foo baz", Field.Store.NO));
     iw2.addDocument(doc2);
     IndexReader reader2 = iw2.getReader();
     iw2.close();
@@ -177,27 +177,27 @@ public class TestBooleanQuery extends LuceneTestCase {
 
   public void testBS2DisjunctionNextVsAdvance() throws Exception {
     final Directory d = newDirectory();
-    final RandomIndexWriter w = new RandomIndexWriter(random, d);
+    final RandomIndexWriter w = new RandomIndexWriter(random(), d);
     final int numDocs = atLeast(300);
     for(int docUpto=0;docUpto<numDocs;docUpto++) {
       String contents = "a";
-      if (random.nextInt(20) <= 16) {
+      if (random().nextInt(20) <= 16) {
         contents += " b";
       }
-      if (random.nextInt(20) <= 8) {
+      if (random().nextInt(20) <= 8) {
         contents += " c";
       }
-      if (random.nextInt(20) <= 4) {
+      if (random().nextInt(20) <= 4) {
         contents += " d";
       }
-      if (random.nextInt(20) <= 2) {
+      if (random().nextInt(20) <= 2) {
         contents += " e";
       }
-      if (random.nextInt(20) <= 1) {
+      if (random().nextInt(20) <= 1) {
         contents += " f";
       }
       Document doc = new Document();
-      doc.add(new TextField("field", contents));
+      doc.add(new TextField("field", contents, Field.Store.NO));
       w.addDocument(doc);
     }
     w.forceMerge(1);
@@ -210,9 +210,9 @@ public class TestBooleanQuery extends LuceneTestCase {
         System.out.println("iter=" + iter);
       }
       final List<String> terms = new ArrayList<String>(Arrays.asList("a", "b", "c", "d", "e", "f"));
-      final int numTerms = _TestUtil.nextInt(random, 1, terms.size());
+      final int numTerms = _TestUtil.nextInt(random(), 1, terms.size());
       while(terms.size() > numTerms) {
-        terms.remove(random.nextInt(terms.size()));
+        terms.remove(random().nextInt(terms.size()));
       }
 
       if (VERBOSE) {
@@ -256,13 +256,13 @@ public class TestBooleanQuery extends LuceneTestCase {
           final int nextUpto;
           final int nextDoc;
           final int left = hits.size() - upto;
-          if (left == 1 || random.nextBoolean()) {
+          if (left == 1 || random().nextBoolean()) {
             // next
             nextUpto = 1+upto;
             nextDoc = scorer.nextDoc();
           } else {
             // advance
-            int inc = _TestUtil.nextInt(random, 1, left-1);
+            int inc = _TestUtil.nextInt(random(), 1, left-1);
             nextUpto = inc + upto;
             nextDoc = scorer.advance(hits.get(nextUpto).doc);
           }

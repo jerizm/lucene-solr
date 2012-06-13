@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -28,7 +28,7 @@ import org.apache.solr.common.params.UpdateParams;
 import org.apache.solr.common.util.ContentStream;
 import org.apache.solr.common.util.ContentStreamBase;
 import org.apache.solr.core.SolrCore;
-import org.apache.solr.handler.XmlUpdateRequestHandler;
+import org.apache.solr.handler.UpdateRequestHandler;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequestBase;
 import org.apache.solr.response.SolrQueryResponse;
@@ -112,7 +112,7 @@ public class UniqFieldsUpdateProcessorFactoryTest extends SolrTestCaseJ4 {
         (SolrParams) mmparams) {
     };
 
-    XmlUpdateRequestHandler handler = new XmlUpdateRequestHandler();
+    UpdateRequestHandler handler = new UpdateRequestHandler();
     handler.init(null);
     ArrayList<ContentStream> streams = new ArrayList<ContentStream>(2);
     streams.add(new ContentStreamBase.StringStream(doc));

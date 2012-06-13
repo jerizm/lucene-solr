@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,7 +22,6 @@ package org.apache.solr.handler.dataimport;
  * <p/>
  * <b>This API is experimental and subject to change</b>
  * <p/>
- * $Id$
  *
  * @since solr 1.3
  */

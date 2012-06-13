@@ -1,5 +1,5 @@
 package org.apache.solr.handler.component;
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -16,10 +16,24 @@ package org.apache.solr.handler.component;
  * limitations under the License.
  */
 
+import java.net.ConnectException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.Future;
+
+import org.apache.http.client.HttpClient;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrResponse;
 import org.apache.solr.client.solrj.SolrServer;
-import org.apache.solr.client.solrj.impl.CommonsHttpSolrServer;
+import org.apache.solr.client.solrj.impl.HttpSolrServer;
 import org.apache.solr.client.solrj.impl.LBHttpSolrServer;
 import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.client.solrj.util.ClientUtils;
@@ -41,19 +55,18 @@ import org.apache.solr.common.util.StrUtils;
 import org.apache.solr.core.CoreDescriptor;
 import org.apache.solr.request.SolrQueryRequest;
 
-import java.util.*;
-import java.util.concurrent.*;
-
 public class HttpShardHandler extends ShardHandler {
 
   private HttpShardHandlerFactory httpShardHandlerFactory;
   private CompletionService<ShardResponse> completionService;
   private     Set<Future<ShardResponse>> pending;
   private Map<String,List<String>> shardToURLs;
+  private HttpClient httpClient;
 
 
 
-  public HttpShardHandler(HttpShardHandlerFactory httpShardHandlerFactory) {
+  public HttpShardHandler(HttpShardHandlerFactory httpShardHandlerFactory, HttpClient httpClient) {
+    this.httpClient = httpClient;
     this.httpShardHandlerFactory = httpShardHandlerFactory;
     completionService = new ExecutorCompletionService<ShardResponse>(httpShardHandlerFactory.commExecutor);
     pending = new HashSet<Future<ShardResponse>>();
@@ -148,13 +161,16 @@ public class HttpShardHandler extends ShardHandler {
           if (urls.size() <= 1) {
             String url = urls.get(0);
             srsp.setShardAddress(url);
-            SolrServer server = new CommonsHttpSolrServer(url, httpShardHandlerFactory.client);
+            SolrServer server = new HttpSolrServer(url, httpClient);
             ssr.nl = server.request(req);
           } else {
             LBHttpSolrServer.Rsp rsp = httpShardHandlerFactory.loadbalancer.request(new LBHttpSolrServer.Req(req, urls));
             ssr.nl = rsp.getResponse();
             srsp.setShardAddress(rsp.getServer());
           }
+        }
+        catch( ConnectException cex ) {
+          srsp.setException(cex); //????
         } catch (Throwable th) {
           srsp.setException(th);
           if (th instanceof SolrException) {
@@ -173,26 +189,11 @@ public class HttpShardHandler extends ShardHandler {
     pending.add( completionService.submit(task) );
   }
 
-  /** returns a ShardResponse of the last response correlated with a ShardRequest */
-  ShardResponse take() {
-    while (pending.size() > 0) {
-      try {
-        Future<ShardResponse> future = completionService.take();
-        pending.remove(future);
-        ShardResponse rsp = future.get();
-        rsp.getShardRequest().responses.add(rsp);
-        if (rsp.getShardRequest().responses.size() == rsp.getShardRequest().actualShards.length) {
-          return rsp;
-        }
-      } catch (InterruptedException e) {
-        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, e);
-      } catch (ExecutionException e) {
-        // should be impossible... the problem with catching the exception
-        // at this level is we don't know what ShardRequest it applied to
-        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Impossible Exception",e);
-      }
-    }
-    return null;
+  /** returns a ShardResponse of the last response correlated with a ShardRequest.  This won't 
+   * return early if it runs into an error.  
+   **/
+  public ShardResponse takeCompletedIncludingErrors() {
+    return take(false);
   }
 
 
@@ -200,12 +201,17 @@ public class HttpShardHandler extends ShardHandler {
    * or immediately returns a ShardResponse if there was an error detected
    */
   public ShardResponse takeCompletedOrError() {
+    return take(true);
+  }
+  
+  private ShardResponse take(boolean bailOnError) {
+    
     while (pending.size() > 0) {
       try {
         Future<ShardResponse> future = completionService.take();
         pending.remove(future);
         ShardResponse rsp = future.get();
-        if (rsp.getException() != null) return rsp; // if exception, return immediately
+        if (bailOnError && rsp.getException() != null) return rsp; // if exception, return immediately
         // add response to the response list... we do this after the take() and
         // not after the completion of "call" so we know when the last response
         // for a request was received.  Otherwise we might return the same
@@ -245,7 +251,7 @@ public class HttpShardHandler extends ShardHandler {
     // search is distributed.
     boolean hasShardURL = shards != null && shards.indexOf('/') > 0;
     rb.isDistrib = hasShardURL | rb.isDistrib;
-
+    
     if (rb.isDistrib) {
       // since the cost of grabbing cloud state is still up in the air, we grab it only
       // if we need it.

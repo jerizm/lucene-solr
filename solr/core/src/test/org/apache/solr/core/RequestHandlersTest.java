@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -77,14 +77,14 @@ public class RequestHandlersTest extends SolrTestCaseJ4 {
   public void testPathNormalization()
   {
     SolrCore core = h.getCore();
-    SolrRequestHandler h1 = core.getRequestHandler("/update/csv" );
+    SolrRequestHandler h1 = core.getRequestHandler("/update" );
     assertNotNull( h1 );
 
-    SolrRequestHandler h2 = core.getRequestHandler("/update/csv/" );
+    SolrRequestHandler h2 = core.getRequestHandler("/update/" );
     assertNotNull( h2 );
     
     assertEquals( h1, h2 ); // the same object
     
-    assertNull( core.getRequestHandler("/update/csv/asdgadsgas" ) ); // prefix
+    assertNull( core.getRequestHandler("/update/asdgadsgas" ) ); // prefix
   }
 }

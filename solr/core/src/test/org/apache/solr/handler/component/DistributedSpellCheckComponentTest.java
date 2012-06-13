@@ -1,6 +1,6 @@
 package org.apache.solr.handler.component;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,9 +17,15 @@ package org.apache.solr.handler.component;
  * limitations under the License.
  */
 
+import junit.framework.Assert;
+import junit.framework.TestCase;
+
 import org.apache.solr.BaseDistributedSearchTestCase;
 import org.apache.solr.client.solrj.SolrServer;
+import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.params.SpellingParams;
+import org.apache.solr.common.util.NamedList;
 
 /**
  * Test for SpellCheckComponent's distributed querying
@@ -31,6 +37,7 @@ import org.apache.solr.common.params.ModifiableSolrParams;
 public class DistributedSpellCheckComponentTest extends BaseDistributedSearchTestCase {
   
   private String requestHandlerName;
+  private String reqHandlerWithWordbreak;
   
 	public DistributedSpellCheckComponentTest()
 	{
@@ -40,12 +47,19 @@ public class DistributedSpellCheckComponentTest extends BaseDistributedSearchTes
 	}
 	
   private String saveProp;
+
   @Override
   public void setUp() throws Exception {
     // this test requires FSDir
     saveProp = System.getProperty("solr.directoryFactory");
     System.setProperty("solr.directoryFactory", "solr.StandardDirectoryFactory");    
-    requestHandlerName = random.nextBoolean() ? "spellCheckCompRH" : "spellCheckCompRH_Direct";   
+    if(random().nextBoolean()) {
+      requestHandlerName = "spellCheckCompRH";
+      reqHandlerWithWordbreak = "spellCheckWithWordbreak";      
+    } else {
+      requestHandlerName = "spellCheckCompRH_Direct";
+      reqHandlerWithWordbreak = "spellCheckWithWordbreak_Direct";
+    }  
     super.setUp();
   }
   
@@ -75,6 +89,17 @@ public class DistributedSpellCheckComponentTest extends BaseDistributedSearchTes
   }
   
   @Override
+  public void validateControlData(QueryResponse control) throws Exception
+  {    
+    NamedList nl = control.getResponse();
+    NamedList sc = (NamedList) nl.get("spellcheck");
+    NamedList sug = (NamedList) sc.get("suggestions");
+    if(sug.size()==0) {
+      Assert.fail("Control data did not return any suggestions.");
+    }
+  }
+  
+  @Override
   public void doTest() throws Exception {
   	del("*:*");
     index(id, "1", "lowerfilt", "toyota");
@@ -100,6 +125,7 @@ public class DistributedSpellCheckComponentTest extends BaseDistributedSearchTes
     index(id, "22", "lowerfilt", "The quote red fox jumped over the lazy brown dogs.");
     index(id, "23", "lowerfilt", "The quote red fox jumped over the lazy brown dogs.");
     index(id, "24", "lowerfilt", "The quote red fox jumped over the lazy brown dogs.");
+    index(id, "25", "lowerfilt", "rod fix");
     commit();
 
     handle.clear();
@@ -109,16 +135,20 @@ public class DistributedSpellCheckComponentTest extends BaseDistributedSearchTes
     // we care only about the spellcheck results
     handle.put("response", SKIP);
         
-    q("q", "*:*", SpellCheckComponent.SPELLCHECK_BUILD, "true", "qt", "spellCheckCompRH", "shards.qt", "spellCheckCompRH");
+    q("q", "*:*", "spellcheck", "true", SpellingParams.SPELLCHECK_BUILD, "true", "qt", "spellCheckCompRH", "shards.qt", "spellCheckCompRH");
     
     query("q", "*:*", "fl", "id,lowerfilt", "spellcheck.q","toyata", "spellcheck", "true", "qt", requestHandlerName, "shards.qt", requestHandlerName);
-    query("q", "*:*", "fl", "id,lowerfilt", "spellcheck.q","toyata", "spellcheck", "true", "qt", requestHandlerName, "shards.qt", requestHandlerName, SpellCheckComponent.SPELLCHECK_EXTENDED_RESULTS, "true");
-    query("q", "*:*", "fl", "id,lowerfilt", "spellcheck.q","bluo", "spellcheck", "true", "qt", requestHandlerName, "shards.qt", requestHandlerName, SpellCheckComponent.SPELLCHECK_EXTENDED_RESULTS, "true", SpellCheckComponent.SPELLCHECK_COUNT, "4");
-    query("q", "The quick reb fox jumped over the lazy brown dogs", "fl", "id,lowerfilt", "spellcheck", "true", "qt", requestHandlerName, "shards.qt", requestHandlerName, SpellCheckComponent.SPELLCHECK_EXTENDED_RESULTS, "true", SpellCheckComponent.SPELLCHECK_COUNT, "4", SpellCheckComponent.SPELLCHECK_COLLATE, "true");
+    query("q", "*:*", "fl", "id,lowerfilt", "spellcheck.q","toyata", "spellcheck", "true", "qt", requestHandlerName, "shards.qt", requestHandlerName, SpellingParams.SPELLCHECK_EXTENDED_RESULTS, "true");
+    query("q", "*:*", "fl", "id,lowerfilt", "spellcheck.q","bluo", "spellcheck", "true", "qt", requestHandlerName, "shards.qt", requestHandlerName, SpellingParams.SPELLCHECK_EXTENDED_RESULTS, "true", SpellingParams.SPELLCHECK_COUNT, "4");
+    query("q", "The quick reb fox jumped over the lazy brown dogs", "fl", "id,lowerfilt", "spellcheck", "true", "qt", requestHandlerName, "shards.qt", requestHandlerName, SpellingParams.SPELLCHECK_EXTENDED_RESULTS, "true", SpellingParams.SPELLCHECK_COUNT, "4", SpellingParams.SPELLCHECK_COLLATE, "true");
 
-    query("q", "lowerfilt:(+quock +reb)", "fl", "id,lowerfilt", "spellcheck", "true", "qt", requestHandlerName, "shards.qt", requestHandlerName, SpellCheckComponent.SPELLCHECK_EXTENDED_RESULTS, "true", SpellCheckComponent.SPELLCHECK_COUNT, "10", SpellCheckComponent.SPELLCHECK_COLLATE, "true", SpellCheckComponent.SPELLCHECK_MAX_COLLATION_TRIES, "10", SpellCheckComponent.SPELLCHECK_MAX_COLLATIONS, "10", SpellCheckComponent.SPELLCHECK_COLLATE_EXTENDED_RESULTS, "true");
-    query("q", "lowerfilt:(+quock +reb)", "fl", "id,lowerfilt", "spellcheck", "true", "qt", requestHandlerName, "shards.qt", requestHandlerName, SpellCheckComponent.SPELLCHECK_EXTENDED_RESULTS, "true", SpellCheckComponent.SPELLCHECK_COUNT, "10", SpellCheckComponent.SPELLCHECK_COLLATE, "true", SpellCheckComponent.SPELLCHECK_MAX_COLLATION_TRIES, "10", SpellCheckComponent.SPELLCHECK_MAX_COLLATIONS, "10", SpellCheckComponent.SPELLCHECK_COLLATE_EXTENDED_RESULTS, "false");
-    query("q", "lowerfilt:(+quock +reb)", "fl", "id,lowerfilt", "spellcheck", "true", "qt", requestHandlerName, "shards.qt", requestHandlerName, SpellCheckComponent.SPELLCHECK_EXTENDED_RESULTS, "true", SpellCheckComponent.SPELLCHECK_COUNT, "10", SpellCheckComponent.SPELLCHECK_COLLATE, "true", SpellCheckComponent.SPELLCHECK_MAX_COLLATION_TRIES, "0", SpellCheckComponent.SPELLCHECK_MAX_COLLATIONS, "1", SpellCheckComponent.SPELLCHECK_COLLATE_EXTENDED_RESULTS, "false");
+    query("q", "lowerfilt:(+quock +reb)", "fl", "id,lowerfilt", "spellcheck", "true", "qt", requestHandlerName, "shards.qt", requestHandlerName, SpellingParams.SPELLCHECK_EXTENDED_RESULTS, "true", SpellingParams.SPELLCHECK_COUNT, "10", SpellingParams.SPELLCHECK_COLLATE, "true", SpellingParams.SPELLCHECK_MAX_COLLATION_TRIES, "10", SpellingParams.SPELLCHECK_MAX_COLLATIONS, "10", SpellingParams.SPELLCHECK_COLLATE_EXTENDED_RESULTS, "true");
+    query("q", "lowerfilt:(+quock +reb)", "fl", "id,lowerfilt", "spellcheck", "true", "qt", requestHandlerName, "shards.qt", requestHandlerName, SpellingParams.SPELLCHECK_EXTENDED_RESULTS, "true", SpellingParams.SPELLCHECK_COUNT, "10", SpellingParams.SPELLCHECK_COLLATE, "true", SpellingParams.SPELLCHECK_MAX_COLLATION_TRIES, "10", SpellingParams.SPELLCHECK_MAX_COLLATIONS, "10", SpellingParams.SPELLCHECK_COLLATE_EXTENDED_RESULTS, "false");
+    query("q", "lowerfilt:(+quock +reb)", "fl", "id,lowerfilt", "spellcheck", "true", "qt", requestHandlerName, "shards.qt", requestHandlerName, SpellingParams.SPELLCHECK_EXTENDED_RESULTS, "true", SpellingParams.SPELLCHECK_COUNT, "10", SpellingParams.SPELLCHECK_COLLATE, "true", SpellingParams.SPELLCHECK_MAX_COLLATION_TRIES, "0", SpellingParams.SPELLCHECK_MAX_COLLATIONS, "1", SpellingParams.SPELLCHECK_COLLATE_EXTENDED_RESULTS, "false");
   
+    query("q", "lowerfilt:(\"quote red fox\")", "fl", "id,lowerfilt", "spellcheck", "true", "qt", "spellCheckCompRH", "shards.qt", "spellCheckCompRH", SpellCheckComponent.SPELLCHECK_EXTENDED_RESULTS, "true", SpellCheckComponent.SPELLCHECK_COUNT, "10", SpellCheckComponent.SPELLCHECK_COLLATE, "true", SpellCheckComponent.SPELLCHECK_MAX_COLLATION_TRIES, "10", SpellCheckComponent.SPELLCHECK_MAX_COLLATIONS, "1", SpellCheckComponent.SPELLCHECK_COLLATE_EXTENDED_RESULTS, "true", SpellCheckComponent.SPELLCHECK_ALTERNATIVE_TERM_COUNT, "5", SpellCheckComponent.SPELLCHECK_MAX_RESULTS_FOR_SUGGEST, "10");
+    query("q", "lowerfilt:(\"rod fix\")", "fl", "id,lowerfilt", "spellcheck", "true", "qt", "spellCheckCompRH", "shards.qt", "spellCheckCompRH", SpellCheckComponent.SPELLCHECK_EXTENDED_RESULTS, "true", SpellCheckComponent.SPELLCHECK_COUNT, "10", SpellCheckComponent.SPELLCHECK_COLLATE, "true", SpellCheckComponent.SPELLCHECK_MAX_COLLATION_TRIES, "10", SpellCheckComponent.SPELLCHECK_MAX_COLLATIONS, "1", SpellCheckComponent.SPELLCHECK_COLLATE_EXTENDED_RESULTS, "true", SpellCheckComponent.SPELLCHECK_ALTERNATIVE_TERM_COUNT, "5", SpellCheckComponent.SPELLCHECK_MAX_RESULTS_FOR_SUGGEST, "10");
+  
+    query("q", "lowerfilt:(+quock +redfox +jum +ped)", "fl", "id,lowerfilt", "spellcheck", "true", "qt", reqHandlerWithWordbreak, "shards.qt", reqHandlerWithWordbreak, SpellCheckComponent.SPELLCHECK_EXTENDED_RESULTS, "true", SpellCheckComponent.SPELLCHECK_COUNT, "10", SpellCheckComponent.SPELLCHECK_COLLATE, "true", SpellCheckComponent.SPELLCHECK_MAX_COLLATION_TRIES, "0", SpellCheckComponent.SPELLCHECK_MAX_COLLATIONS, "1", SpellCheckComponent.SPELLCHECK_COLLATE_EXTENDED_RESULTS, "true");
   }
 }

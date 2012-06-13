@@ -1,6 +1,6 @@
 package org.apache.lucene.store;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -177,7 +177,7 @@ public class RAMOutputStream extends IndexOutput {
 
   /** Returns byte usage of all buffers. */
   public long sizeInBytes() {
-    return file.numBuffers() * BUFFER_SIZE;
+    return (long) file.numBuffers() * (long) BUFFER_SIZE;
   }
   
   @Override

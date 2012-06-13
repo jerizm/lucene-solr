@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.MapSolrParams;
 import org.apache.solr.common.util.ContentStream;
 import org.apache.solr.common.util.ContentStreamBase;
@@ -35,12 +36,10 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class XsltUpdateRequestHandlerTest extends SolrTestCaseJ4 {
-  protected static XsltUpdateRequestHandler handler;
 
   @BeforeClass
   public static void beforeTests() throws Exception {
     initCore("solrconfig.xml","schema.xml");
-    handler = new XsltUpdateRequestHandler();
   }
 
   @Override
@@ -57,7 +56,7 @@ public class XsltUpdateRequestHandlerTest extends SolrTestCaseJ4 {
     String xml = 
       "<random>" +
       " <document>" +
-      "  <node name=\"id\" enhance=\"2.2\" value=\"12345\"/>" +
+      "  <node name=\"id\" value=\"12345\"/>" +
       "  <node name=\"name\" value=\"kitten\"/>" +
       "  <node name=\"text\" enhance=\"3\" value=\"some other day\"/>" +
       "  <node name=\"title\" enhance=\"4\" value=\"A story\"/>" +
@@ -65,24 +64,24 @@ public class XsltUpdateRequestHandlerTest extends SolrTestCaseJ4 {
       " </document>" +
       "</random>";
 
-	Map<String,String> args = new HashMap<String, String>();
-	args.put("tr", "xsl-update-handler-test.xsl");
-    
-	SolrCore core = h.getCore();
-	LocalSolrQueryRequest req = new LocalSolrQueryRequest( core, new MapSolrParams( args) );
-	ArrayList<ContentStream> streams = new ArrayList<ContentStream>();
-	streams.add(new ContentStreamBase.StringStream(xml));
-	req.setContentStreams(streams);
-	SolrQueryResponse rsp = new SolrQueryResponse();
-	XsltUpdateRequestHandler handler = new XsltUpdateRequestHandler();
-	handler.init(new NamedList<String>());
-	handler.handleRequestBody(req, rsp);
-	StringWriter sw = new StringWriter(32000);
-	QueryResponseWriter responseWriter = core.getQueryResponseWriter(req);
-	responseWriter.write(sw,req,rsp);
-	req.close();
-	String response = sw.toString();
-	assertU(response);
+  	Map<String,String> args = new HashMap<String, String>();
+  	args.put(CommonParams.TR, "xsl-update-handler-test.xsl");
+      
+  	SolrCore core = h.getCore();
+  	LocalSolrQueryRequest req = new LocalSolrQueryRequest( core, new MapSolrParams( args) );
+  	ArrayList<ContentStream> streams = new ArrayList<ContentStream>();
+  	streams.add(new ContentStreamBase.StringStream(xml));
+  	req.setContentStreams(streams);
+  	SolrQueryResponse rsp = new SolrQueryResponse();
+  	UpdateRequestHandler handler = new UpdateRequestHandler();
+  	handler.init(new NamedList<String>());
+  	handler.handleRequestBody(req, rsp);
+  	StringWriter sw = new StringWriter(32000);
+  	QueryResponseWriter responseWriter = core.getQueryResponseWriter(req);
+  	responseWriter.write(sw,req,rsp);
+  	req.close();
+  	String response = sw.toString();
+  	assertU(response);
     assertU(commit());
 
     assertQ("test document was correctly committed", req("q","*:*")

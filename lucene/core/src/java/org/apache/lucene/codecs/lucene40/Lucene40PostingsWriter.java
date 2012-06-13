@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.lucene40;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -38,9 +38,16 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CodecUtil;
 import org.apache.lucene.util.IOUtils;
 
-/** @lucene.experimental */
+/**
+ * Concrete class that writes the 4.0 frq/prx postings format.
+ * 
+ * @see Lucene40PostingsFormat
+ * @lucene.experimental 
+ */
 public final class Lucene40PostingsWriter extends PostingsWriterBase {
-  final static String CODEC = "Lucene40PostingsWriter";
+  final static String TERMS_CODEC = "Lucene40PostingsWriterTerms";
+  final static String FRQ_CODEC = "Lucene40PostingsWriterFrq";
+  final static String PRX_CODEC = "Lucene40PostingsWriterPrx";
 
   //private static boolean DEBUG = BlockTreeTermsWriter.DEBUG;
   
@@ -94,31 +101,39 @@ public final class Lucene40PostingsWriter extends PostingsWriterBase {
     this.skipInterval = skipInterval;
     this.skipMinimum = skipInterval; /* set to the same for now */
     // this.segment = state.segmentName;
-    String fileName = IndexFileNames.segmentFileName(state.segmentName, state.segmentSuffix, Lucene40PostingsFormat.FREQ_EXTENSION);
+    String fileName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, Lucene40PostingsFormat.FREQ_EXTENSION);
     freqOut = state.directory.createOutput(fileName, state.context);
     boolean success = false;
+    IndexOutput proxOut = null;
     try {
+      CodecUtil.writeHeader(freqOut, FRQ_CODEC, VERSION_CURRENT);
+      // TODO: this is a best effort, if one of these fields has no postings
+      // then we make an empty prx file, same as if we are wrapped in 
+      // per-field postingsformat. maybe... we shouldn't
+      // bother w/ this opto?  just create empty prx file...?
       if (state.fieldInfos.hasProx()) {
         // At least one field does not omit TF, so create the
         // prox file
-        fileName = IndexFileNames.segmentFileName(state.segmentName, state.segmentSuffix, Lucene40PostingsFormat.PROX_EXTENSION);
+        fileName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, Lucene40PostingsFormat.PROX_EXTENSION);
         proxOut = state.directory.createOutput(fileName, state.context);
+        CodecUtil.writeHeader(proxOut, PRX_CODEC, VERSION_CURRENT);
       } else {
         // Every field omits TF so we will write no prox file
         proxOut = null;
       }
+      this.proxOut = proxOut;
       success = true;
     } finally {
       if (!success) {
-        IOUtils.closeWhileHandlingException(freqOut);
+        IOUtils.closeWhileHandlingException(freqOut, proxOut);
       }
     }
 
-    totalNumDocs = state.numDocs;
+    totalNumDocs = state.segmentInfo.getDocCount();
 
     skipListWriter = new Lucene40SkipListWriter(skipInterval,
                                                maxSkipLevels,
-                                               state.numDocs,
+                                               totalNumDocs,
                                                freqOut,
                                                proxOut);
   }
@@ -126,7 +141,7 @@ public final class Lucene40PostingsWriter extends PostingsWriterBase {
   @Override
   public void start(IndexOutput termsOut) throws IOException {
     this.termsOut = termsOut;
-    CodecUtil.writeHeader(termsOut, CODEC, VERSION_CURRENT);
+    CodecUtil.writeHeader(termsOut, TERMS_CODEC, VERSION_CURRENT);
     termsOut.writeInt(skipInterval);                // write skipInterval
     termsOut.writeInt(maxSkipLevels);               // write maxSkipLevels
     termsOut.writeInt(skipMinimum);                 // write skipMinimum
@@ -138,11 +153,11 @@ public final class Lucene40PostingsWriter extends PostingsWriterBase {
     //if (DEBUG) System.out.println("SPW: startTerm freqOut.fp=" + freqStart);
     if (proxOut != null) {
       proxStart = proxOut.getFilePointer();
-      // force first payload to write its length
-      lastPayloadLength = -1;
-      // force first offset to write its length
-      lastOffsetLength = -1;
     }
+    // force first payload to write its length
+    lastPayloadLength = -1;
+    // force first offset to write its length
+    lastOffsetLength = -1;
     skipListWriter.resetSkip();
   }
 
@@ -159,10 +174,10 @@ public final class Lucene40PostingsWriter extends PostingsWriterBase {
     }
     */
     this.fieldInfo = fieldInfo;
-    indexOptions = fieldInfo.indexOptions;
+    indexOptions = fieldInfo.getIndexOptions();
     
     storeOffsets = indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;        
-    storePayloads = fieldInfo.storePayloads;
+    storePayloads = fieldInfo.hasPayloads();
     //System.out.println("  set init blockFreqStart=" + freqStart);
     //System.out.println("  set init blockProxStart=" + proxStart);
   }
@@ -237,6 +252,7 @@ public final class Lucene40PostingsWriter extends PostingsWriterBase {
       // and the numbers aren't that much smaller anyways.
       int offsetDelta = startOffset - lastOffset;
       int offsetLength = endOffset - startOffset;
+      assert offsetDelta >= 0 && offsetLength >= 0 : "startOffset=" + startOffset + ",lastOffset=" + lastOffset + ",endOffset=" + endOffset;
       if (offsetLength != lastOffsetLength) {
         proxOut.writeVInt(offsetDelta << 1 | 1);
         proxOut.writeVInt(offsetLength);

@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,6 +21,8 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.MergeState;
 import org.apache.lucene.index.MultiDocsAndPositionsEnum;
+import org.apache.lucene.index.MultiDocsAndPositionsEnum.EnumWithSlice;
+
 import java.io.IOException;
 
 /**
@@ -34,7 +36,7 @@ public final class MappingMultiDocsAndPositionsEnum extends DocsAndPositionsEnum
   private MultiDocsAndPositionsEnum.EnumWithSlice[] subs;
   int numSubs;
   int upto;
-  int[] currentMap;
+  MergeState.DocMap currentMap;
   DocsAndPositionsEnum current;
   int currentBase;
   int doc = -1;
@@ -51,9 +53,17 @@ public final class MappingMultiDocsAndPositionsEnum extends DocsAndPositionsEnum
   public void setMergeState(MergeState mergeState) {
     this.mergeState = mergeState;
   }
+  
+  public int getNumSubs() {
+    return numSubs;
+  }
+
+  public EnumWithSlice[] getSubs() {
+    return subs;
+  }
 
   @Override
-  public int freq() {
+  public int freq() throws IOException {
     return current.freq();
   }
 
@@ -84,12 +94,10 @@ public final class MappingMultiDocsAndPositionsEnum extends DocsAndPositionsEnum
 
       int doc = current.nextDoc();
       if (doc != NO_MORE_DOCS) {
-        if (currentMap != null) {
-          // compact deletions
-          doc = currentMap[doc];
-          if (doc == -1) {
-            continue;
-          }
+        // compact deletions
+        doc = currentMap.get(doc);
+        if (doc == -1) {
+          continue;
         }
         return this.doc = currentBase + doc;
       } else {

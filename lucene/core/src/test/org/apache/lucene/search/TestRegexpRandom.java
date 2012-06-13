@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -48,9 +48,9 @@ public class TestRegexpRandom extends LuceneTestCase {
   public void setUp() throws Exception {
     super.setUp();
     dir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir,
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random))
-        .setMaxBufferedDocs(_TestUtil.nextInt(random, 50, 1000)));
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir,
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()))
+        .setMaxBufferedDocs(_TestUtil.nextInt(random(), 50, 1000)));
     
     Document doc = new Document();
     FieldType customType = new FieldType(TextField.TYPE_STORED);
@@ -60,7 +60,7 @@ public class TestRegexpRandom extends LuceneTestCase {
     
     NumberFormat df = new DecimalFormat("000", new DecimalFormatSymbols(Locale.ENGLISH));
     for (int i = 0; i < 1000; i++) {
-      field.setValue(df.format(i));
+      field.setStringValue(df.format(i));
       writer.addDocument(doc);
     }
     
@@ -70,7 +70,7 @@ public class TestRegexpRandom extends LuceneTestCase {
   }
   
   private char N() {
-    return (char) (0x30 + random.nextInt(10));
+    return (char) (0x30 + random().nextInt(10));
   }
   
   private String fillPattern(String wildcardPattern) {

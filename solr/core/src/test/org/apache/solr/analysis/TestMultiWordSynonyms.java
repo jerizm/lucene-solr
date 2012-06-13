@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,15 +17,15 @@
 
 package org.apache.solr.analysis;
 
+import org.apache.lucene.analysis.BaseTokenStreamTestCase;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.TokenStream;
-import org.apache.solr.common.ResourceLoader;
+import org.apache.lucene.analysis.util.ResourceLoader;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,28 +33,13 @@ import java.util.Map;
 /**
  * @since solr 1.4
  */
-public class TestMultiWordSynonyms extends BaseTokenTestCase {
-
-  /**
-   * @deprecated Remove this test in 5.0
-   */
-  @Deprecated
-  public void testMultiWordSynonymsOld() throws IOException {
-    List<String> rules = new ArrayList<String>();
-    rules.add("a b c,d");
-    SlowSynonymMap synMap = new SlowSynonymMap(true);
-    SlowSynonymFilterFactory.parseRules(rules, synMap, "=>", ",", true, null);
-
-    SlowSynonymFilter ts = new SlowSynonymFilter(new MockTokenizer(new StringReader("a e"), MockTokenizer.WHITESPACE, false), synMap);
-    // This fails because ["e","e"] is the value of the token stream
-    assertTokenStreamContents(ts, new String[] { "a", "e" });
-  }
+public class TestMultiWordSynonyms extends BaseTokenStreamTestCase {
   
   public void testMultiWordSynonyms() throws IOException {
     SynonymFilterFactory factory = new SynonymFilterFactory();
     Map<String,String> args = new HashMap<String,String>();
-    args.putAll(DEFAULT_VERSION_PARAM);
     args.put("synonyms", "synonyms.txt");
+    factory.setLuceneMatchVersion(TEST_VERSION_CURRENT);
     factory.init(args);
     factory.inform(new StringMockSolrResourceLoader("a b c,d"));
     TokenStream ts = factory.create(new MockTokenizer(new StringReader("a e"), MockTokenizer.WHITESPACE, false));
@@ -73,7 +58,7 @@ public class TestMultiWordSynonyms extends BaseTokenTestCase {
       return null;
     }
 
-    public Object newInstance(String cname, String... subpackages) {
+    public <T> T newInstance(String cname, Class<T> expectedType, String... subpackages) {
       return null;
     }
 

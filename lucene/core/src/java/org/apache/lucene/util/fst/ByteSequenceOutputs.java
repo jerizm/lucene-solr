@@ -1,6 +1,6 @@
 package org.apache.lucene.util.fst;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -24,7 +24,8 @@ import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.util.BytesRef;
 
 /**
- * Output is a sequence of bytes, for each input term.
+ * An FST {@link Outputs} implementation where each output
+ * is a sequence of bytes.
  *
  * @lucene.experimental
  */

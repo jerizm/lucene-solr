@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -91,8 +91,9 @@ final class TermVectorsConsumerPerField extends TermsHashConsumerPerField {
    *  RAMOutputStream, which is then quickly flushed to
    *  the real term vectors files in the Directory. */  @Override
   void finish() throws IOException {
-    if (!doVectors || termsHashPerField.bytesHash.size() == 0)
+    if (!doVectors || termsHashPerField.bytesHash.size() == 0) {
       return;
+    }
 
     termsWriter.addFieldToFlush(this);
   }
@@ -148,7 +149,7 @@ final class TermVectorsConsumerPerField extends TermsHashConsumerPerField {
 
     termsHashPerField.reset();
 
-    // commit the termVectors once successful success - FI will otherwise reset them
+    // commit the termVectors once successful - FI will otherwise reset them
     fieldInfo.setStoreTermVectors();
   }
 

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -414,8 +414,12 @@ public class XMLResponseParser extends ResponseParser
             doc.addField( name, val );
           }
           depth--; // the array reading clears out the 'endElement'
-        }
-        else if( !type.isLeaf ) {
+        } else if( type == KnownType.LST ) {
+            doc.addField( name, readNamedList( parser ) );
+          depth--; 
+        } else if( !type.isLeaf ) {
+          System.out.println("nbot leaf!:" + type);
+          
           throw new XMLStreamException( "must be value or array", parser.getLocation() );
         }
         break;

@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -46,7 +46,6 @@ import org.apache.lucene.util.ReaderUtil;
  */
 final class SegmentMerger {
   private final Directory directory;
-  private final String segment;
   private final int termIndexInterval;
 
   private final Codec codec;
@@ -54,18 +53,22 @@ final class SegmentMerger {
   private final IOContext context;
   
   private final MergeState mergeState = new MergeState();
+  private final FieldInfos.Builder fieldInfosBuilder;
 
-  SegmentMerger(InfoStream infoStream, Directory dir, int termIndexInterval, String name, MergeState.CheckAbort checkAbort, PayloadProcessorProvider payloadProcessorProvider, FieldInfos fieldInfos, Codec codec, IOContext context) {
+  // note, just like in codec apis Directory 'dir' is NOT the same as segmentInfo.dir!!
+  SegmentMerger(SegmentInfo segmentInfo, InfoStream infoStream, Directory dir, int termIndexInterval,
+                MergeState.CheckAbort checkAbort, PayloadProcessorProvider payloadProcessorProvider,
+                FieldInfos.FieldNumbers fieldNumbers, IOContext context) {
+    mergeState.segmentInfo = segmentInfo;
     mergeState.infoStream = infoStream;
     mergeState.readers = new ArrayList<MergeState.IndexReaderAndLiveDocs>();
-    mergeState.fieldInfos = fieldInfos;
     mergeState.checkAbort = checkAbort;
     mergeState.payloadProcessorProvider = payloadProcessorProvider;
     directory = dir;
-    segment = name;
     this.termIndexInterval = termIndexInterval;
-    this.codec = codec;
+    this.codec = segmentInfo.getCodec();
     this.context = context;
+    this.fieldInfosBuilder = new FieldInfos.Builder(fieldNumbers);
   }
 
   /**
@@ -77,7 +80,7 @@ final class SegmentMerger {
       new ReaderUtil.Gather(reader) {
         @Override
         protected void add(int base, AtomicReader r) {
-          mergeState.readers.add(new MergeState.IndexReaderAndLiveDocs(r, r.getLiveDocs()));
+          mergeState.readers.add(new MergeState.IndexReaderAndLiveDocs(r, r.getLiveDocs(), r.numDeletedDocs()));
         }
       }.run();
     } catch (IOException ioe) {
@@ -86,8 +89,8 @@ final class SegmentMerger {
     }
   }
 
-  final void add(SegmentReader reader, Bits liveDocs) {
-    mergeState.readers.add(new MergeState.IndexReaderAndLiveDocs(reader, liveDocs));
+  final void add(SegmentReader reader, Bits liveDocs, int delCount) {
+    mergeState.readers.add(new MergeState.IndexReaderAndLiveDocs(reader, liveDocs, delCount));
   }
 
   /**
@@ -104,14 +107,14 @@ final class SegmentMerger {
     // IndexWriter.close(false) takes to actually stop the
     // threads.
     
-    mergeState.mergedDocCount = setDocMaps();
-
-    mergeFieldInfos();
+    mergeState.segmentInfo.setDocCount(setDocMaps());
+    mergeDocValuesAndNormsFieldInfos();
     setMatchingSegmentReaders();
     int numMerged = mergeFields();
-    assert numMerged == mergeState.mergedDocCount;
+    assert numMerged == mergeState.segmentInfo.getDocCount();
 
-    final SegmentWriteState segmentWriteState = new SegmentWriteState(mergeState.infoStream, directory, segment, mergeState.fieldInfos, mergeState.mergedDocCount, termIndexInterval, codec, null, context);
+    final SegmentWriteState segmentWriteState = new SegmentWriteState(mergeState.infoStream, directory, mergeState.segmentInfo,
+                                                                      mergeState.fieldInfos, termIndexInterval, null, context);
     mergeTerms(segmentWriteState);
     mergePerDoc(segmentWriteState);
     
@@ -121,8 +124,12 @@ final class SegmentMerger {
 
     if (mergeState.fieldInfos.hasVectors()) {
       numMerged = mergeVectors();
-      assert numMerged == mergeState.mergedDocCount;
+      assert numMerged == mergeState.segmentInfo.getDocCount();
     }
+    
+    // write the merged infos
+    FieldInfosWriter fieldInfosWriter = codec.fieldInfosFormat().getFieldInfosWriter();
+    fieldInfosWriter.write(directory, mergeState.segmentInfo.name, mergeState.fieldInfos, context);
 
     return mergeState;
   }
@@ -150,7 +157,8 @@ final class SegmentMerger {
         boolean same = true;
         FieldInfos segmentFieldInfos = segmentReader.getFieldInfos();
         for (FieldInfo fi : segmentFieldInfos) {
-          if (!mergeState.fieldInfos.fieldName(fi.number).equals(fi.name)) {
+          FieldInfo other = mergeState.fieldInfos.fieldInfo(fi.number);
+          if (other == null || !other.name.equals(fi.name)) {
             same = false;
             break;
           }
@@ -173,30 +181,18 @@ final class SegmentMerger {
   // returns an updated typepromoter (tracking type and size) given a previous one,
   // and a newly encountered docvalues
   private TypePromoter mergeDocValuesType(TypePromoter previous, DocValues docValues) {
-    TypePromoter incoming = TypePromoter.create(docValues.type(),  docValues.getValueSize());
+    TypePromoter incoming = TypePromoter.create(docValues.getType(),  docValues.getValueSize());
     if (previous == null) {
       previous = TypePromoter.getIdentityPromoter();
     }
-    TypePromoter promoted = previous.promote(incoming);
-    if (promoted == null) {
-      // type is incompatible: promote to BYTES_VAR_STRAIGHT
-      return TypePromoter.create(DocValues.Type.BYTES_VAR_STRAIGHT, TypePromoter.VAR_TYPE_VALUE_SIZE);
-    } else {
-      return promoted;
-    }
+    return previous.promote(incoming);
   }
 
-  private void mergeFieldInfos() throws IOException {
-    mergeDocValuesAndNormsFieldInfos();
-    // write the merged infos
-    FieldInfosWriter fieldInfosWriter = codec.fieldInfosFormat()
-        .getFieldInfosWriter();
-    fieldInfosWriter.write(directory, segment, mergeState.fieldInfos, context);
-  }
-
+  // NOTE: this is actually merging all the fieldinfos
   public void mergeDocValuesAndNormsFieldInfos() throws IOException {
     // mapping from all docvalues fields found to their promoted types
-    // this is because FieldInfos does not store the valueSize
+    // this is because FieldInfos does not store the
+    // valueSize
     Map<FieldInfo,TypePromoter> docValuesTypes = new HashMap<FieldInfo,TypePromoter>();
     Map<FieldInfo,TypePromoter> normValuesTypes = new HashMap<FieldInfo,TypePromoter>();
 
@@ -204,13 +200,13 @@ final class SegmentMerger {
       final AtomicReader reader = readerAndLiveDocs.reader;
       FieldInfos readerFieldInfos = reader.getFieldInfos();
       for (FieldInfo fi : readerFieldInfos) {
-        FieldInfo merged = mergeState.fieldInfos.add(fi);
+        FieldInfo merged = fieldInfosBuilder.add(fi);
         // update the type promotion mapping for this reader
         if (fi.hasDocValues()) {
           TypePromoter previous = docValuesTypes.get(merged);
           docValuesTypes.put(merged, mergeDocValuesType(previous, reader.docValues(fi.name))); 
         }
-        if (fi.normsPresent()) {
+        if (fi.hasNorms()) {
           TypePromoter previous = normValuesTypes.get(merged);
           normValuesTypes.put(merged, mergeDocValuesType(previous, reader.normValues(fi.name))); 
         }
@@ -218,6 +214,7 @@ final class SegmentMerger {
     }
     updatePromoted(normValuesTypes, true);
     updatePromoted(docValuesTypes, false);
+    mergeState.fieldInfos = fieldInfosBuilder.finish();
   }
   
   protected void updatePromoted(Map<FieldInfo,TypePromoter> infoAndPromoter, boolean norms) {
@@ -227,21 +224,21 @@ final class SegmentMerger {
       TypePromoter promoter = e.getValue();
       if (promoter == null) {
         if (norms) {
-          fi.setNormValueType(null, true);
+          fi.setNormValueType(null);
         } else {
-          fi.setDocValuesType(null, true);
+          fi.setDocValuesType(null);
         }
       } else {
         assert promoter != TypePromoter.getIdentityPromoter();
         if (norms) {
-          if (fi.getNormType() != promoter.type()) {
+          if (fi.getNormType() != promoter.type() && !fi.omitsNorms()) {
             // reset the type if we got promoted
-            fi.setNormValueType(promoter.type(), true);
+            fi.setNormValueType(promoter.type());
           }  
         } else {
           if (fi.getDocValuesType() != promoter.type()) {
             // reset the type if we got promoted
-            fi.setDocValuesType(promoter.type(), true);
+            fi.setDocValuesType(promoter.type());
           }
         }
       }
@@ -256,7 +253,7 @@ final class SegmentMerger {
    * @throws IOException if there is a low-level IO error
    */
   private int mergeFields() throws CorruptIndexException, IOException {
-    final StoredFieldsWriter fieldsWriter = codec.storedFieldsFormat().fieldsWriter(directory, segment, context);
+    final StoredFieldsWriter fieldsWriter = codec.storedFieldsFormat().fieldsWriter(directory, mergeState.segmentInfo, context);
     
     try {
       return fieldsWriter.merge(mergeState);
@@ -270,7 +267,7 @@ final class SegmentMerger {
    * @throws IOException
    */
   private final int mergeVectors() throws IOException {
-    final TermVectorsWriter termVectorsWriter = codec.termVectorsFormat().vectorsWriter(directory, segment, context);
+    final TermVectorsWriter termVectorsWriter = codec.termVectorsFormat().vectorsWriter(directory, mergeState.segmentInfo, context);
     
     try {
       return termVectorsWriter.merge(mergeState);
@@ -284,7 +281,7 @@ final class SegmentMerger {
     final int numReaders = mergeState.readers.size();
 
     // Remap docIDs
-    mergeState.docMaps = new int[numReaders][];
+    mergeState.docMaps = new MergeState.DocMap[numReaders];
     mergeState.docBase = new int[numReaders];
     mergeState.readerPayloadProcessor = new PayloadProcessorProvider.ReaderPayloadProcessor[numReaders];
     mergeState.currentPayloadProcessor = new PayloadProcessorProvider.PayloadProcessor[numReaders];
@@ -297,30 +294,9 @@ final class SegmentMerger {
       final MergeState.IndexReaderAndLiveDocs reader = mergeState.readers.get(i);
 
       mergeState.docBase[i] = docBase;
-      final int maxDoc = reader.reader.maxDoc();
-      final int docCount;
-      final Bits liveDocs = reader.liveDocs;
-      final int[] docMap;
-      if (liveDocs != null) {
-        int delCount = 0;
-        docMap = new int[maxDoc];
-        int newDocID = 0;
-        for(int j=0;j<maxDoc;j++) {
-          if (!liveDocs.get(j)) {
-            docMap[j] = -1;
-            delCount++;
-          } else {
-            docMap[j] = newDocID++;
-          }
-        }
-        docCount = maxDoc - delCount;
-      } else {
-        docCount = maxDoc;
-        docMap = null;
-      }
-
+      final MergeState.DocMap docMap = MergeState.DocMap.build(reader);
       mergeState.docMaps[i] = docMap;
-      docBase += docCount;
+      docBase += docMap.numDocs();
 
       if (mergeState.payloadProcessorProvider != null) {
         mergeState.readerPayloadProcessor[i] = mergeState.payloadProcessorProvider.getReaderProcessor(reader.reader);
@@ -369,11 +345,7 @@ final class SegmentMerger {
   private void mergePerDoc(SegmentWriteState segmentWriteState) throws IOException {
       final PerDocConsumer docsConsumer = codec.docValuesFormat()
           .docsConsumer(new PerDocWriteState(segmentWriteState));
-      // TODO: remove this check when 3.x indexes are no longer supported
-      // (3.x indexes don't have docvalues)
-      if (docsConsumer == null) {
-        return;
-      }
+      assert docsConsumer != null;
       boolean success = false;
       try {
         docsConsumer.merge(mergeState);
@@ -390,11 +362,7 @@ final class SegmentMerger {
   private void mergeNorms(SegmentWriteState segmentWriteState) throws IOException {
     final PerDocConsumer docsConsumer = codec.normsFormat()
         .docsConsumer(new PerDocWriteState(segmentWriteState));
-    // TODO: remove this check when 3.x indexes are no longer supported
-    // (3.x indexes don't have docvalues)
-    if (docsConsumer == null) {
-      return;
-    }
+    assert docsConsumer != null;
     boolean success = false;
     try {
       docsConsumer.merge(mergeState);

@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,20 +19,17 @@ package org.apache.lucene.index;
 
 import java.io.IOException;
 
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.LuceneTestCase;
-
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.util.LuceneTestCase;
 
 /**
  * Some tests for {@link ParallelAtomicReader}s with empty indexes
- * 
- * @author Christian Kohlschuetter
  */
 public class TestParallelReaderEmptyIndex extends LuceneTestCase {
 
@@ -44,14 +41,14 @@ public class TestParallelReaderEmptyIndex extends LuceneTestCase {
    */
   public void testEmptyIndex() throws IOException {
     Directory rd1 = newDirectory();
-    IndexWriter iw = new IndexWriter(rd1, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+    IndexWriter iw = new IndexWriter(rd1, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random())));
     iw.close();
     // create a copy:
     Directory rd2 = newDirectory(rd1);
 
     Directory rdOut = newDirectory();
 
-    IndexWriter iwOut = new IndexWriter(rdOut, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+    IndexWriter iwOut = new IndexWriter(rdOut, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random())));
     
     ParallelAtomicReader apr = new ParallelAtomicReader(
         SlowCompositeReaderWrapper.wrap(DirectoryReader.open(rd1)),
@@ -91,39 +88,45 @@ public class TestParallelReaderEmptyIndex extends LuceneTestCase {
   public void testEmptyIndexWithVectors() throws IOException {
     Directory rd1 = newDirectory();
     {
-      IndexWriter iw = new IndexWriter(rd1, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+      if (VERBOSE) {
+        System.out.println("\nTEST: make 1st writer");
+      }
+      IndexWriter iw = new IndexWriter(rd1, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random())));
       Document doc = new Document();
-      Field idField = newField("id", "", TextField.TYPE_UNSTORED);
+      Field idField = newTextField("id", "", Field.Store.NO);
       doc.add(idField);
-      FieldType customType = new FieldType(TextField.TYPE_UNSTORED);
+      FieldType customType = new FieldType(TextField.TYPE_NOT_STORED);
       customType.setStoreTermVectors(true);
       doc.add(newField("test", "", customType));
-      idField.setValue("1");
+      idField.setStringValue("1");
       iw.addDocument(doc);
-      doc.add(newField("test", "", TextField.TYPE_UNSTORED));
-      idField.setValue("2");
+      doc.add(newTextField("test", "", Field.Store.NO));
+      idField.setStringValue("2");
       iw.addDocument(doc);
       iw.close();
 
-      IndexWriterConfig dontMergeConfig = new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random))
+      IndexWriterConfig dontMergeConfig = new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()))
         .setMergePolicy(NoMergePolicy.COMPOUND_FILES);
+      if (VERBOSE) {
+        System.out.println("\nTEST: make 2nd writer");
+      }
       IndexWriter writer = new IndexWriter(rd1, dontMergeConfig);
       
       writer.deleteDocuments(new Term("id", "1"));
       writer.close();
-      IndexReader ir = IndexReader.open(rd1);
+      IndexReader ir = DirectoryReader.open(rd1);
       assertEquals(2, ir.maxDoc());
       assertEquals(1, ir.numDocs());
       ir.close();
 
-      iw = new IndexWriter(rd1, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random)).setOpenMode(OpenMode.APPEND));
+      iw = new IndexWriter(rd1, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random())).setOpenMode(OpenMode.APPEND));
       iw.forceMerge(1);
       iw.close();
     }
 
     Directory rd2 = newDirectory();
     {
-      IndexWriter iw = new IndexWriter(rd2, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+      IndexWriter iw = new IndexWriter(rd2, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random())));
       Document doc = new Document();
       iw.addDocument(doc);
       iw.close();
@@ -131,7 +134,7 @@ public class TestParallelReaderEmptyIndex extends LuceneTestCase {
 
     Directory rdOut = newDirectory();
 
-    IndexWriter iwOut = new IndexWriter(rdOut, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+    IndexWriter iwOut = new IndexWriter(rdOut, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random())));
     final DirectoryReader reader1, reader2;
     ParallelAtomicReader pr = new ParallelAtomicReader(
         SlowCompositeReaderWrapper.wrap(reader1 = DirectoryReader.open(rd1)),

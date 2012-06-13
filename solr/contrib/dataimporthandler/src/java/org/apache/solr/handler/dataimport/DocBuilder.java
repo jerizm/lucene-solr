@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,6 +20,11 @@ package org.apache.solr.handler.dataimport;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.core.SolrCore;
+import org.apache.solr.handler.dataimport.config.ConfigNameConstants;
+import org.apache.solr.handler.dataimport.config.DIHConfiguration;
+import org.apache.solr.handler.dataimport.config.Entity;
+import org.apache.solr.handler.dataimport.config.EntityField;
+
 import static org.apache.solr.handler.dataimport.SolrWriter.LAST_INDEX_KEY;
 import static org.apache.solr.handler.dataimport.DataImportHandlerException.*;
 import org.apache.solr.schema.SchemaField;
@@ -29,7 +34,6 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.*;
 
 /**
  * <p> {@link DocBuilder} is responsible for creating Solr documents out of the given configuration. It also maintains
@@ -47,9 +51,9 @@ public class DocBuilder {
 
   DataImporter dataImporter;
 
-  private DataConfig.Document document;
+  private DIHConfiguration config;
 
-  private DataConfig.Entity root;
+  private EntityProcessorWrapper currentEntityProcessorWrapper;
 
   @SuppressWarnings("unchecked")
   private Map statusMessages = Collections.synchronizedMap(new LinkedHashMap());
@@ -58,37 +62,34 @@ public class DocBuilder {
 
   DIHWriter writer;
 
-  DataImporter.RequestParams requestParameters;
-
   boolean verboseDebug = false;
 
-  Map<String, Object> session = new ConcurrentHashMap<String, Object>();
+  Map<String, Object> session = new HashMap<String, Object>();
 
   static final ThreadLocal<DocBuilder> INSTANCE = new ThreadLocal<DocBuilder>();
-  Map<String, Object> functionsNamespace;
+  private Map<String, Object> functionsNamespace;
   private Properties persistedProperties;
   
   private DIHPropertiesWriter propWriter;
   private static final String PARAM_WRITER_IMPL = "writerImpl";
   private static final String DEFAULT_WRITER_NAME = "SolrWriter";
   private DebugLogger debugLogger;
-  private DataImporter.RequestParams reqParams;
+  private final RequestInfo reqParams;
   
-    @SuppressWarnings("unchecked")
-  public DocBuilder(DataImporter dataImporter, SolrWriter solrWriter, DIHPropertiesWriter propWriter, DataImporter.RequestParams reqParams) {
+  @SuppressWarnings("unchecked")
+  public DocBuilder(DataImporter dataImporter, SolrWriter solrWriter, DIHPropertiesWriter propWriter, RequestInfo reqParams) {
     INSTANCE.set(this);
     this.dataImporter = dataImporter;
     this.reqParams = reqParams;
     this.propWriter = propWriter;
     DataImporter.QUERY_COUNT.set(importStatistics.queryCount);
-    requestParameters = reqParams;
-    verboseDebug = requestParameters.debug && requestParameters.verbose;
-    functionsNamespace = EvaluatorBag.getFunctionsNamespace(this.dataImporter.getConfig().functions, this);
+    verboseDebug = reqParams.isDebug() && reqParams.getDebugInfo().verbose;
     persistedProperties = propWriter.readIndexerProperties();
+    functionsNamespace = EvaluatorBag.getFunctionsNamespace(this.dataImporter.getConfig().getFunctions(), this, getVariableResolver());
     
     String writerClassStr = null;
-    if(reqParams!=null && reqParams.requestParams != null) {
-    	writerClassStr = (String) reqParams.requestParams.get(PARAM_WRITER_IMPL);
+    if(reqParams!=null && reqParams.getRawParams() != null) {
+    	writerClassStr = (String) reqParams.getRawParams().get(PARAM_WRITER_IMPL);
     }
     if(writerClassStr != null && !writerClassStr.equals(DEFAULT_WRITER_NAME) && !writerClassStr.equals(DocBuilder.class.getPackage().getName() + "." + DEFAULT_WRITER_NAME)) {
     	try {
@@ -100,11 +101,9 @@ public class DocBuilder {
    	} else {
     	writer = solrWriter;
     }
-    ContextImpl ctx = new ContextImpl(null, null, null, null, reqParams.requestParams, null, this);
+    ContextImpl ctx = new ContextImpl(null, null, null, null, reqParams.getRawParams(), null, this);
     writer.init(ctx);
   }
-
-
 
 
   DebugLogger getDebugLogger(){
@@ -129,10 +128,10 @@ public class DocBuilder {
         indexerNamespace.put(LAST_INDEX_TIME, DataImporter.DATE_TIME_FORMAT.get().format(EPOCH));
       }
       indexerNamespace.put(INDEX_START_TIME, dataImporter.getIndexStartTime());
-      indexerNamespace.put("request", requestParameters.requestParams);
+      indexerNamespace.put("request", reqParams.getRawParams());
       indexerNamespace.put("functions", functionsNamespace);
-      for (DataConfig.Entity entity : dataImporter.getConfig().document.entities) {
-        String key = entity.name + "." + SolrWriter.LAST_INDEX_KEY;
+      for (Entity entity : dataImporter.getConfig().getEntities()) {
+        String key = entity.getName() + "." + SolrWriter.LAST_INDEX_KEY;
         String lastIndex = persistedProperties.getProperty(key);
         if (lastIndex != null) {
           indexerNamespace.put(key, lastIndex);
@@ -140,14 +139,21 @@ public class DocBuilder {
           indexerNamespace.put(key, DataImporter.DATE_TIME_FORMAT.get().format(EPOCH));
         }
       }
-      resolver.addNamespace(DataConfig.IMPORTER_NS_SHORT, indexerNamespace);
-      resolver.addNamespace(DataConfig.IMPORTER_NS, indexerNamespace);
+      resolver.addNamespace(ConfigNameConstants.IMPORTER_NS_SHORT, indexerNamespace);
+      resolver.addNamespace(ConfigNameConstants.IMPORTER_NS, indexerNamespace);
       return resolver;
     } catch (Exception e) {
       wrapAndThrow(SEVERE, e);
       // unreachable statement
       return null;
     }
+  }
+  
+  private Map<String,Object> getFunctionsNamespace() {
+    if(functionsNamespace==null) {
+      
+    }
+    return functionsNamespace;
   }
 
   private void invokeEventListener(String className) {
@@ -171,9 +177,10 @@ public class DocBuilder {
 
   @SuppressWarnings("unchecked")
   public void execute() {
+    List<EntityProcessorWrapper> epwList = null;
   	try {
 	    dataImporter.store(DataImporter.STATUS_MSGS, statusMessages);
-	    document = dataImporter.getConfig().document;
+	    config = dataImporter.getConfig();
 	    final AtomicLong startTime = new AtomicLong(System.currentTimeMillis());
 	    statusMessages.put(TIME_ELAPSED, new Object() {
 	      @Override
@@ -191,28 +198,33 @@ public class DocBuilder {
 	    statusMessages.put(DataImporter.MSG.TOTAL_DOCS_SKIPPED,
 	            importStatistics.skipDocCount);
 	
-	    List<String> entities = requestParameters.entities;
+	    List<String> entities = reqParams.getEntitiesToRun();
 	
 	    // Trigger onImportStart
-	    if (document.onImportStart != null) {
-	      invokeEventListener(document.onImportStart);
+	    if (config.getOnImportStart() != null) {
+	      invokeEventListener(config.getOnImportStart());
 	    }
 	    AtomicBoolean fullCleanDone = new AtomicBoolean(false);
 	    //we must not do a delete of *:* multiple times if there are multiple root entities to be run
 	    Properties lastIndexTimeProps = new Properties();
 	    lastIndexTimeProps.setProperty(LAST_INDEX_KEY,
 	            DataImporter.DATE_TIME_FORMAT.get().format(dataImporter.getIndexStartTime()));
-	    for (DataConfig.Entity e : document.entities) {
-	      if (entities != null && !entities.contains(e.name))
+	    
+	    epwList = new ArrayList<EntityProcessorWrapper>(config.getEntities().size());
+	    for (Entity e : config.getEntities()) {
+	      epwList.add(getEntityProcessorWrapper(e));
+	    }	    
+	    for (EntityProcessorWrapper epw : epwList) {
+	      if (entities != null && !entities.contains(epw.getEntity().getName()))
 	        continue;
-	      lastIndexTimeProps.setProperty(e.name + "." + LAST_INDEX_KEY,
+	      lastIndexTimeProps.setProperty(epw.getEntity().getName() + "." + LAST_INDEX_KEY,
 	              DataImporter.DATE_TIME_FORMAT.get().format(new Date()));
-	      root = e;
-	      String delQuery = e.allAttributes.get("preImportDeleteQuery");
+	      currentEntityProcessorWrapper = epw;
+	      String delQuery = epw.getEntity().getAllAttributes().get("preImportDeleteQuery");
 	      if (dataImporter.getStatus() == DataImporter.Status.RUNNING_DELTA_DUMP) {
 	        cleanByQuery(delQuery, fullCleanDone);
 	        doDelta();
-	        delQuery = e.allAttributes.get("postImportDeleteQuery");
+	        delQuery = epw.getEntity().getAllAttributes().get("postImportDeleteQuery");
 	        if (delQuery != null) {
 	          fullCleanDone.set(false);
 	          cleanByQuery(delQuery, fullCleanDone);
@@ -220,7 +232,7 @@ public class DocBuilder {
 	      } else {
 	        cleanByQuery(delQuery, fullCleanDone);
 	        doFullDump();
-	        delQuery = e.allAttributes.get("postImportDeleteQuery");
+	        delQuery = epw.getEntity().getAllAttributes().get("postImportDeleteQuery");
 	        if (delQuery != null) {
 	          fullCleanDone.set(false);
 	          cleanByQuery(delQuery, fullCleanDone);
@@ -235,7 +247,7 @@ public class DocBuilder {
 	      rollback();
 	    } else {
 	      // Do not commit unnecessarily if this is a delta-import and no documents were created or deleted
-	      if (!requestParameters.clean) {
+	      if (!reqParams.isClean()) {
 	        if (importStatistics.docCount.get() > 0 || importStatistics.deletedDocCount.get() > 0) {
 	          finish(lastIndexTimeProps);
 	        }
@@ -244,8 +256,8 @@ public class DocBuilder {
 	        finish(lastIndexTimeProps);
 	      } 
 	      
-	      if (document.onImportEnd != null) {
-	        invokeEventListener(document.onImportEnd);
+	      if (config.getOnImportEnd() != null) {
+	        invokeEventListener(config.getOnImportEnd());
 	      }
 	    }
 	
@@ -254,7 +266,7 @@ public class DocBuilder {
 	    if(importStatistics.failedDocCount.get() > 0)
 	      statusMessages.put(DataImporter.MSG.TOTAL_FAILED_DOCS, ""+ importStatistics.failedDocCount.get());
 	
-	    statusMessages.put("Time taken ", getTimeElapsedSince(startTime.get()));
+	    statusMessages.put("Time taken", getTimeElapsedSince(startTime.get()));
 	    LOG.info("Time taken = " + getTimeElapsedSince(startTime.get()));
 	  } catch(Exception e)
 		{
@@ -264,10 +276,22 @@ public class DocBuilder {
 			if (writer != null) {
 	      writer.close();
 	    }
-			if(requestParameters.debug) {
-				requestParameters.debugVerboseOutput = getDebugLogger().output;	
+			if (epwList != null) {
+			  closeEntityProcessorWrappers(epwList);
+			}
+			if(reqParams.isDebug()) {
+				reqParams.getDebugInfo().debugVerboseOutput = getDebugLogger().output;	
 			}
 		}
+  }
+  private void closeEntityProcessorWrappers(List<EntityProcessorWrapper> epwList) {
+    for(EntityProcessorWrapper epw : epwList) {
+      epw.close();
+      if(epw.getDatasource()!=null) {
+        epw.getDatasource().close();
+      }
+      closeEntityProcessorWrappers(epw.getChildren());
+    }
   }
 
   @SuppressWarnings("unchecked")
@@ -276,10 +300,10 @@ public class DocBuilder {
     statusMessages.put("", "Indexing completed. Added/Updated: "
             + importStatistics.docCount + " documents. Deleted "
             + importStatistics.deletedDocCount + " documents.");
-    if(requestParameters.commit) {
-      writer.commit(requestParameters.optimize);
+    if(reqParams.isCommit()) {
+      writer.commit(reqParams.isOptimize());
       addStatusMessage("Committed");
-      if (requestParameters.optimize)
+      if (reqParams.isOptimize())
         addStatusMessage("Optimized");
     }
     try {
@@ -297,20 +321,9 @@ public class DocBuilder {
     addStatusMessage("Rolledback");
   }
 
-  @SuppressWarnings("unchecked")
   private void doFullDump() {
-    addStatusMessage("Full Dump Started");
-    if(dataImporter.getConfig().isMultiThreaded && !verboseDebug){
-      try {
-        LOG.info("running multithreaded full-import");
-        new EntityRunner(root,null).run(null,Context.FULL_DUMP,null);
-      } catch (Exception e) {
-        throw new RuntimeException("Error in multi-threaded import", e);
-      }
-    } else {
-      buildDocument(getVariableResolver(), null, null, root, true, null);
-    }
-
+    addStatusMessage("Full Dump Started");    
+    buildDocument(getVariableResolver(), null, null, currentEntityProcessorWrapper, true, null);
   }
 
   @SuppressWarnings("unchecked")
@@ -318,14 +331,14 @@ public class DocBuilder {
     addStatusMessage("Delta Dump started");
     VariableResolverImpl resolver = getVariableResolver();
 
-    if (document.deleteQuery != null) {
-      writer.deleteByQuery(document.deleteQuery);
+    if (config.getDeleteQuery() != null) {
+      writer.deleteByQuery(config.getDeleteQuery());
     }
 
     addStatusMessage("Identifying Delta");
     LOG.info("Starting delta collection.");
     Set<Map<String, Object>> deletedKeys = new HashSet<Map<String, Object>>();
-    Set<Map<String, Object>> allPks = collectDelta(root, resolver, deletedKeys);
+    Set<Map<String, Object>> allPks = collectDelta(currentEntityProcessorWrapper, resolver, deletedKeys);
     if (stop.get())
       return;
     addStatusMessage("Deltas Obtained");
@@ -343,8 +356,8 @@ public class DocBuilder {
     Iterator<Map<String, Object>> pkIter = allPks.iterator();
     while (pkIter.hasNext()) {
       Map<String, Object> map = pkIter.next();
-      vri.addNamespace(DataConfig.IMPORTER_NS_SHORT + ".delta", map);
-      buildDocument(vri, null, map, root, true, null);
+      vri.addNamespace(ConfigNameConstants.IMPORTER_NS_SHORT + ".delta", map);
+      buildDocument(vri, null, map, currentEntityProcessorWrapper, true, null);
       pkIter.remove();
       // check for abort
       if (stop.get())
@@ -361,7 +374,7 @@ public class DocBuilder {
     Iterator<Map<String, Object>> iter = deletedKeys.iterator();
     while (iter.hasNext()) {
       Map<String, Object> map = iter.next();
-      String keyName = root.isDocRoot ? root.getPk() : root.getSchemaPk();
+      String keyName = currentEntityProcessorWrapper.getEntity().isDocRoot() ? currentEntityProcessorWrapper.getEntity().getPk() : currentEntityProcessorWrapper.getEntity().getSchemaPk();
       Object key = map.get(keyName);
       if(key == null) {
         keyName = findMatchingPkColumn(keyName, map);
@@ -376,268 +389,56 @@ public class DocBuilder {
       iter.remove();
     }
   }
-  Executor executorSvc = new ThreadPoolExecutor(
-          0,
-          Integer.MAX_VALUE,
-          5, TimeUnit.SECONDS, // terminate idle threads after 5 sec
-          new SynchronousQueue<Runnable>()  // directly hand off tasks
-  );
-
+  
   @SuppressWarnings("unchecked")
   public void addStatusMessage(String msg) {
     statusMessages.put(msg, DataImporter.DATE_TIME_FORMAT.get().format(new Date()));
   }
-  EntityRunner createRunner(DataConfig.Entity entity, EntityRunner parent){
-    return new EntityRunner(entity, parent);
-  }
 
-  /**This class is a just a structure to hold runtime information of one entity
-   *
-   */
-  class EntityRunner {
-    final DataConfig.Entity entity;
-    private EntityProcessor entityProcessor;
-    private final List<ThreadedEntityProcessorWrapper> entityProcessorWrapper = new ArrayList<ThreadedEntityProcessorWrapper>();
-    private DocWrapper docWrapper;
-    private volatile boolean entityInitialized ;
-    String currentProcess;
-    final ThreadLocal<ThreadedEntityProcessorWrapper> currentEntityProcWrapper = new ThreadLocal<ThreadedEntityProcessorWrapper>();
-
-    private ContextImpl context;
-    final EntityRunner parent;
-    final AtomicBoolean entityEnded = new AtomicBoolean(false);
-    private Exception exception;
-
-    public EntityRunner(DataConfig.Entity entity, EntityRunner parent) {
-      this.parent = parent;
-      this.entity = entity;
-      if (entity.proc == null) {
-        entityProcessor = new SqlEntityProcessor();
-      } else {
-        try {
-          entityProcessor = (EntityProcessor) loadClass(entity.proc, dataImporter.getCore())
-                  .newInstance();
-        } catch (Exception e) {
-          wrapAndThrow(SEVERE, e,
-                  "Unable to load EntityProcessor implementation for entity:" + entity.name);
-        } 
-      }
-      int threads = 1;
-      if (entity.allAttributes.get("threads") != null) {
-        threads = Integer.parseInt(entity.allAttributes.get("threads"));
-      }
-      for (int i = 0; i < threads; i++) {
-        entityProcessorWrapper.add(new ThreadedEntityProcessorWrapper(entityProcessor, DocBuilder.this, this, getVariableResolver()));
-      }
-      context = new ThreadedContext(this, DocBuilder.this, getVariableResolver());
+  private void resetEntity(EntityProcessorWrapper epw) {
+    epw.setInitalized(false);
+    for (EntityProcessorWrapper child : epw.getChildren()) {
+      resetEntity(child);
     }
-
-
-    public void run(DocWrapper docWrapper, final String currProcess, final EntityRow rows) throws Exception {
-      entityInitialized =  false;
-      this.docWrapper = docWrapper;
-      this.currentProcess = currProcess;
-      entityEnded.set(false);
-      try {
-        if(entityProcessorWrapper.size() <= 1){
-          runAThread(entityProcessorWrapper.get(0), rows, currProcess);
-        } else {
-          final CountDownLatch latch = new CountDownLatch(entityProcessorWrapper.size());
-          for (final ThreadedEntityProcessorWrapper processorWrapper : entityProcessorWrapper) {
-            Runnable runnable = new Runnable() {
-              public void run() {
-                try {
-                  runAThread(processorWrapper, rows, currProcess);
-                }catch(Exception e) {
-                  entityEnded.set(true);
-                  exception = e;
-                } finally {
-                  latch.countDown();
-                } 
-              }
-            };
-            executorSvc.execute(runnable);
-          }          
-          try {
-            latch.await();
-          } catch (InterruptedException e) {
-            //TODO
-          }
-          Exception copy = exception;
-          if(copy != null){
-            exception = null;
-            throw copy;
-          }
-        }
-      } finally {
-        entityProcessor.destroy();
-      }
-
-
-    }
-
-    private void runAThread(ThreadedEntityProcessorWrapper epw, EntityRow rows, String currProcess) throws Exception {
-      currentEntityProcWrapper.set(epw);
-      epw.threadedInit(context);
-      try {
-        Context.CURRENT_CONTEXT.set(context);
-        epw.init(rows);
-        initEntity();
-        DocWrapper docWrapper = this.docWrapper;
-        for (; ;) {
-          if(DocBuilder.this.stop.get()) break;
-          try {
-            Map<String, Object> arow = epw.nextRow();
-            if (arow == null) {
-              break;
-            } else {
-              importStatistics.rowsCount.incrementAndGet();
-              if (docWrapper == null && entity.isDocRoot) {
-                docWrapper = new DocWrapper();
-                context.setDoc(docWrapper);
-                DataConfig.Entity e = entity.parentEntity;
-                for (EntityRow row = rows;  row != null&& e !=null; row = row.tail,e=e.parentEntity) {
-                    addFields(e, docWrapper, row.row, epw.resolver);
-                }
-              }
-              if (docWrapper != null) {
-                handleSpecialCommands(arow, docWrapper);
-                addFields(entity, docWrapper, arow, epw.resolver);
-              }
-              if (entity.entities != null) {
-                EntityRow nextRow = new EntityRow(arow, rows, entity.name);
-                for (DataConfig.Entity e : entity.entities) {
-                  epw.children.get(e).run(docWrapper,currProcess,nextRow);
-                }
-              }
-            }
-            if (entity.isDocRoot) {
-              if (LOG.isDebugEnabled()) {
-                LOG.debug("a row on docroot" + docWrapper);
-              }
-              if (!docWrapper.isEmpty()) {
-                if (LOG.isDebugEnabled()) {
-                  LOG.debug("adding a doc "+docWrapper);
-                }
-                boolean result = writer.upload(docWrapper);
-                if(reqParams.debug) {
-                	reqParams.debugDocuments.add(docWrapper);
-                }
-                docWrapper = null;
-                if (result){
-                  importStatistics.docCount.incrementAndGet();
-                } else {
-                  importStatistics.failedDocCount.incrementAndGet();
-                }
-              }
-            }
-          } catch (DataImportHandlerException dihe) {
-            exception = dihe;
-            if(dihe.getErrCode() == SKIP_ROW || dihe.getErrCode() == SKIP) {
-              importStatistics.skipDocCount.getAndIncrement();
-              exception = null;//should not propogate up
-              continue;
-            }
-            if (entity.isDocRoot) {
-              if (dihe.getErrCode() == DataImportHandlerException.SKIP) {
-                importStatistics.skipDocCount.getAndIncrement();
-                exception = null;//should not propogate up
-              } else {
-                SolrException.log(LOG, "Exception while processing: "
-                        + entity.name + " document : " + docWrapper, dihe);
-              }
-              if (dihe.getErrCode() == DataImportHandlerException.SEVERE)
-                throw dihe;
-            } else {
-              //if this is not the docRoot then the execution has happened in the same thread. so propogate up,
-              // it will be handled at the docroot
-              entityEnded.set(true); 
-              throw dihe;
-            }
-            entityEnded.set(true);
-          }
-        }
-      } finally {
-        currentEntityProcWrapper.remove();
-        Context.CURRENT_CONTEXT.remove();
-      }
-    }
-
-    private void initEntity() {
-      if (!entityInitialized) {
-        synchronized (this) {
-          if (!entityInitialized) {
-            entityProcessor.init(context);
-            entityInitialized = true;
-          }
-        }
-      }
-    }
-  }
-
-  /**A reverse linked list .
-   *
-   */
-  static class EntityRow {
-    final Map<String, Object> row;
-    final EntityRow tail;
-    final String name;
-
-    EntityRow(Map<String, Object> row, EntityRow tail, String name) {
-      this.row = row;
-      this.tail = tail;
-      this.name = name;
-    }
-  }
-
-  private void resetEntity(DataConfig.Entity entity) {
-    entity.initalized = false;
-    if (entity.entities != null) {
-      for (DataConfig.Entity child : entity.entities) {
-        resetEntity(child);
-      }
-    }
+    
   }
   
   private void buildDocument(VariableResolverImpl vr, DocWrapper doc,
-      Map<String,Object> pk, DataConfig.Entity entity, boolean isRoot,
+      Map<String,Object> pk, EntityProcessorWrapper epw, boolean isRoot,
       ContextImpl parentCtx) {
     List<EntityProcessorWrapper> entitiesToDestroy = new ArrayList<EntityProcessorWrapper>();
     try {
-      buildDocument(vr, doc, pk, entity, isRoot, parentCtx, entitiesToDestroy);
+      buildDocument(vr, doc, pk, epw, isRoot, parentCtx, entitiesToDestroy);
     } catch (Exception e) {
       throw new RuntimeException(e);
     } finally {
       for (EntityProcessorWrapper entityWrapper : entitiesToDestroy) {
         entityWrapper.destroy();
       }
-      resetEntity(entity);
+      resetEntity(epw);
     }
   }
 
   @SuppressWarnings("unchecked")
   private void buildDocument(VariableResolverImpl vr, DocWrapper doc,
-                             Map<String, Object> pk, DataConfig.Entity entity, boolean isRoot,
+                             Map<String, Object> pk, EntityProcessorWrapper epw, boolean isRoot,
                              ContextImpl parentCtx, List<EntityProcessorWrapper> entitiesToDestroy) {
 
-    EntityProcessorWrapper entityProcessor = getEntityProcessor(entity);
-
-    ContextImpl ctx = new ContextImpl(entity, vr, null,
+    ContextImpl ctx = new ContextImpl(epw, vr, null,
             pk == null ? Context.FULL_DUMP : Context.DELTA_DUMP,
             session, parentCtx, this);
-    entityProcessor.init(ctx);
-    Context.CURRENT_CONTEXT.set(ctx);
-    if (!entity.initalized) {
-      entitiesToDestroy.add(entityProcessor);
-      entity.initalized = true;
+    epw.init(ctx);
+    if (!epw.isInitalized()) {
+      entitiesToDestroy.add(epw);
+      epw.setInitalized(true);
     }
     
-    if (requestParameters.start > 0) {
+    if (reqParams.getStart() > 0) {
       getDebugLogger().log(DIHLogLevels.DISABLE_LOGGING, null, null);
     }
 
     if (verboseDebug) {
-      getDebugLogger().log(DIHLogLevels.START_ENTITY, entity.name, null);
+      getDebugLogger().log(DIHLogLevels.START_ENTITY, epw.getEntity().getName(), null);
     }
 
     int seenDocCount = 0;
@@ -646,71 +447,66 @@ public class DocBuilder {
       while (true) {
         if (stop.get())
           return;
-        if(importStatistics.docCount.get() > (requestParameters.start + requestParameters.rows)) break;
+        if(importStatistics.docCount.get() > (reqParams.getStart() + reqParams.getRows())) break;
         try {
           seenDocCount++;
 
-          if (seenDocCount > requestParameters.start) {
+          if (seenDocCount > reqParams.getStart()) {
             getDebugLogger().log(DIHLogLevels.ENABLE_LOGGING, null, null);
           }
 
-          if (verboseDebug && entity.isDocRoot) {
-            getDebugLogger().log(DIHLogLevels.START_DOC, entity.name, null);
+          if (verboseDebug && epw.getEntity().isDocRoot()) {
+            getDebugLogger().log(DIHLogLevels.START_DOC, epw.getEntity().getName(), null);
           }
-          if (doc == null && entity.isDocRoot) {
+          if (doc == null && epw.getEntity().isDocRoot()) {
             doc = new DocWrapper();
             ctx.setDoc(doc);
-            DataConfig.Entity e = entity;
-            while (e.parentEntity != null) {
-              addFields(e.parentEntity, doc, (Map<String, Object>) vr
-                      .resolve(e.parentEntity.name), vr);
-              e = e.parentEntity;
+            Entity e = epw.getEntity();
+            while (e.getParentEntity() != null) {
+              addFields(e.getParentEntity(), doc, (Map<String, Object>) vr
+                      .resolve(e.getParentEntity().getName()), vr);
+              e = e.getParentEntity();
             }
           }
 
-          Map<String, Object> arow = entityProcessor.nextRow();
+          Map<String, Object> arow = epw.nextRow();
           if (arow == null) {
             break;
           }
 
           // Support for start parameter in debug mode
-          if (entity.isDocRoot) {
-            if (seenDocCount <= requestParameters.start)
+          if (epw.getEntity().isDocRoot()) {
+            if (seenDocCount <= reqParams.getStart())
               continue;
-            if (seenDocCount > requestParameters.start + requestParameters.rows) {
+            if (seenDocCount > reqParams.getStart() + reqParams.getRows()) {
               LOG.info("Indexing stopped at docCount = " + importStatistics.docCount);
               break;
             }
           }
 
           if (verboseDebug) {
-            getDebugLogger().log(DIHLogLevels.ENTITY_OUT, entity.name, arow);
+            getDebugLogger().log(DIHLogLevels.ENTITY_OUT, epw.getEntity().getName(), arow);
           }
           importStatistics.rowsCount.incrementAndGet();
           if (doc != null) {
             handleSpecialCommands(arow, doc);
-            addFields(entity, doc, arow, vr);
+            addFields(epw.getEntity(), doc, arow, vr);
           }
-          if (entity.entities != null) {
-            vr.addNamespace(entity.name, arow);
-            for (DataConfig.Entity child : entity.entities) {
+          if (epw.getEntity().getChildren() != null) {
+            vr.addNamespace(epw.getEntity().getName(), arow);
+            for (EntityProcessorWrapper child : epw.getChildren()) {
               buildDocument(vr, doc,
-                  child.isDocRoot ? pk : null, child, false, ctx, entitiesToDestroy);
+                  child.getEntity().isDocRoot() ? pk : null, child, false, ctx, entitiesToDestroy);
             }
-            vr.removeNamespace(entity.name);
+            vr.removeNamespace(epw.getEntity().getName());
           }
-          /*The child entities would have changed the CURRENT_CONTEXT. So when they are done, set it back to the old.
-           *
-           */
-          Context.CURRENT_CONTEXT.set(ctx);
-
-          if (entity.isDocRoot) {
+          if (epw.getEntity().isDocRoot()) {
             if (stop.get())
               return;
             if (!doc.isEmpty()) {
               boolean result = writer.upload(doc);
-              if(reqParams.debug) {
-              	reqParams.debugDocuments.add(doc);
+              if(reqParams.isDebug()) {
+              	reqParams.getDebugInfo().debugDocuments.add(doc);
               }
               doc = null;
               if (result){
@@ -720,10 +516,9 @@ public class DocBuilder {
               }
             }
           }
-
         } catch (DataImportHandlerException e) {
           if (verboseDebug) {
-            getDebugLogger().log(DIHLogLevels.ENTITY_EXCEPTION, entity.name, e);
+            getDebugLogger().log(DIHLogLevels.ENTITY_EXCEPTION, epw.getEntity().getName(), e);
           }
           if(e.getErrCode() == DataImportHandlerException.SKIP_ROW){
             continue;
@@ -734,7 +529,7 @@ public class DocBuilder {
               doc = null;
             } else {
               SolrException.log(LOG, "Exception while processing: "
-                      + entity.name + " document : " + doc, e);
+                      + epw.getEntity().getName() + " document : " + doc, e);
             }
             if (e.getErrCode() == DataImportHandlerException.SEVERE)
               throw e;
@@ -742,15 +537,14 @@ public class DocBuilder {
             throw e;
         } catch (Throwable t) {
           if (verboseDebug) {
-            getDebugLogger().log(DIHLogLevels.ENTITY_EXCEPTION, entity.name, t);
+            getDebugLogger().log(DIHLogLevels.ENTITY_EXCEPTION, epw.getEntity().getName(), t);
           }
           throw new DataImportHandlerException(DataImportHandlerException.SEVERE, t);
         } finally {
           if (verboseDebug) {
-            getDebugLogger().log(DIHLogLevels.ROW_END, entity.name, null);
-            if (entity.isDocRoot)
+            getDebugLogger().log(DIHLogLevels.ROW_END, epw.getEntity().getName(), null);
+            if (epw.getEntity().isDocRoot())
               getDebugLogger().log(DIHLogLevels.END_DOC, null, null);
-            Context.CURRENT_CONTEXT.remove();
           }
         }
       }
@@ -830,19 +624,19 @@ public class DocBuilder {
   }
 
   @SuppressWarnings("unchecked")
-  private void addFields(DataConfig.Entity entity, DocWrapper doc,
+  private void addFields(Entity entity, DocWrapper doc,
                          Map<String, Object> arow, VariableResolver vr) {
     for (Map.Entry<String, Object> entry : arow.entrySet()) {
       String key = entry.getKey();
       Object value = entry.getValue();
       if (value == null)  continue;
       if (key.startsWith("$")) continue;
-      List<DataConfig.Field> field = entity.colNameVsField.get(key);
+      Set<EntityField> field = entity.getColNameVsField().get(key);
       if (field == null && dataImporter.getSchema() != null) {
         // This can be a dynamic field or a field which does not have an entry in data-config ( an implicit field)
         SchemaField sf = dataImporter.getSchema().getFieldOrNull(key);
         if (sf == null) {
-          sf = dataImporter.getConfig().lowerNameVsSchemaField.get(key.toLowerCase(Locale.ENGLISH));
+          sf = dataImporter.getSchemaField(key);
         }
         if (sf != null) {
           addFieldToDoc(entry.getValue(), sf.getName(), 1.0f, sf.multiValued(), doc);
@@ -850,12 +644,14 @@ public class DocBuilder {
         //else do nothing. if we add it it may fail
       } else {
         if (field != null) {
-          for (DataConfig.Field f : field) {
+          for (EntityField f : field) {
             String name = f.getName();
-            if(f.dynamicName){
+            if(f.isDynamicName()){
               name =  vr.replaceTokens(name);
             }
-            if (f.toWrite) addFieldToDoc(entry.getValue(), name, f.boost, f.multiValued, doc);
+            if (f.isToWrite()) {
+              addFieldToDoc(entry.getValue(), name, f.getBoost(), f.isMultiValued(), doc);
+            }
           }
         }
       }
@@ -889,22 +685,25 @@ public class DocBuilder {
     }
   }
 
-  private EntityProcessorWrapper getEntityProcessor(DataConfig.Entity entity) {
-    if (entity.processor != null)
-      return entity.processor;
+  private EntityProcessorWrapper getEntityProcessorWrapper(Entity entity) {
     EntityProcessor entityProcessor = null;
-    if (entity.proc == null) {
+    if (entity.getProcessorName() == null) {
       entityProcessor = new SqlEntityProcessor();
     } else {
       try {
-        entityProcessor = (EntityProcessor) loadClass(entity.proc, dataImporter.getCore())
+        entityProcessor = (EntityProcessor) loadClass(entity.getProcessorName(), dataImporter.getCore())
                 .newInstance();
       } catch (Exception e) {
         wrapAndThrow (SEVERE,e,
-                "Unable to load EntityProcessor implementation for entity:" + entity.name);
+                "Unable to load EntityProcessor implementation for entity:" + entity.getName());
       }
     }
-    return entity.processor = new EntityProcessorWrapper(entityProcessor, this);
+    EntityProcessorWrapper epw = new EntityProcessorWrapper(entityProcessor, entity, this);
+    for(Entity e1 : entity.getChildren()) {
+      epw.getChildren().add(getEntityProcessorWrapper(e1));
+    }
+      
+    return epw;
   }
 
   private String findMatchingPkColumn(String pk, Map<String, Object> row) {
@@ -937,37 +736,34 @@ public class DocBuilder {
    * @return an iterator to the list of keys for which Solr documents should be updated.
    */
   @SuppressWarnings("unchecked")
-  public Set<Map<String, Object>> collectDelta(DataConfig.Entity entity, VariableResolverImpl resolver,
+  public Set<Map<String, Object>> collectDelta(EntityProcessorWrapper epw, VariableResolverImpl resolver,
                                                Set<Map<String, Object>> deletedRows) {
     //someone called abort
     if (stop.get())
       return new HashSet();
 
-    EntityProcessor entityProcessor = getEntityProcessor(entity);
-    ContextImpl context1 = new ContextImpl(entity, resolver, null, Context.FIND_DELTA, session, null, this);
-    entityProcessor.init(context1);
+    ContextImpl context1 = new ContextImpl(epw, resolver, null, Context.FIND_DELTA, session, null, this);
+    epw.init(context1);
 
     Set<Map<String, Object>> myModifiedPks = new HashSet<Map<String, Object>>();
 
-    if (entity.entities != null) {
+   
 
-      for (DataConfig.Entity entity1 : entity.entities) {
-        //this ensures that we start from the leaf nodes
-        myModifiedPks.addAll(collectDelta(entity1, resolver, deletedRows));
-        //someone called abort
-        if (stop.get())
-          return new HashSet();
-      }
-
+    for (EntityProcessorWrapper childEpw : epw.getChildren()) {
+      //this ensures that we start from the leaf nodes
+      myModifiedPks.addAll(collectDelta(childEpw, resolver, deletedRows));
+      //someone called abort
+      if (stop.get())
+        return new HashSet();
     }
+    
     // identifying the modified rows for this entity
-
     Map<String, Map<String, Object>> deltaSet = new HashMap<String, Map<String, Object>>();
-    LOG.info("Running ModifiedRowKey() for Entity: " + entity.name);
+    LOG.info("Running ModifiedRowKey() for Entity: " + epw.getEntity().getName());
     //get the modified rows in this entity
-    String pk = entity.getPk();
+    String pk = epw.getEntity().getPk();
     while (true) {
-      Map<String, Object> row = entityProcessor.nextModifiedRowKey();
+      Map<String, Object> row = epw.nextModifiedRowKey();
 
       if (row == null)
         break;
@@ -987,7 +783,7 @@ public class DocBuilder {
     //get the deleted rows for this entity
     Set<Map<String, Object>> deletedSet = new HashSet<Map<String, Object>>();
     while (true) {
-      Map<String, Object> row = entityProcessor.nextDeletedRowKey();
+      Map<String, Object> row = epw.nextDeletedRowKey();
       if (row == null)
         break;
 
@@ -1011,36 +807,36 @@ public class DocBuilder {
         return new HashSet();
     }
 
-    LOG.info("Completed ModifiedRowKey for Entity: " + entity.name + " rows obtained : " + deltaSet.size());
-    LOG.info("Completed DeletedRowKey for Entity: " + entity.name + " rows obtained : " + deletedSet.size());
+    LOG.info("Completed ModifiedRowKey for Entity: " + epw.getEntity().getName() + " rows obtained : " + deltaSet.size());
+    LOG.info("Completed DeletedRowKey for Entity: " + epw.getEntity().getName() + " rows obtained : " + deletedSet.size());
 
     myModifiedPks.addAll(deltaSet.values());
     Set<Map<String, Object>> parentKeyList = new HashSet<Map<String, Object>>();
     //all that we have captured is useless (in a sub-entity) if no rows in the parent is modified because of these
     //propogate up the changes in the chain
-    if (entity.parentEntity != null) {
+    if (epw.getEntity().getParentEntity() != null) {
       // identifying deleted rows with deltas
 
       for (Map<String, Object> row : myModifiedPks) {
-        getModifiedParentRows(resolver.addNamespace(entity.name, row), entity.name, entityProcessor, parentKeyList);
+        getModifiedParentRows(resolver.addNamespace(epw.getEntity().getName(), row), epw.getEntity().getName(), epw, parentKeyList);
         // check for abort
         if (stop.get())
           return new HashSet();
       }
       // running the same for deletedrows
       for (Map<String, Object> row : deletedSet) {
-        getModifiedParentRows(resolver.addNamespace(entity.name, row), entity.name, entityProcessor, parentKeyList);
+        getModifiedParentRows(resolver.addNamespace(epw.getEntity().getName(), row), epw.getEntity().getName(), epw, parentKeyList);
         // check for abort
         if (stop.get())
           return new HashSet();
       }
     }
-    LOG.info("Completed parentDeltaQuery for Entity: " + entity.name);
-    if (entity.isDocRoot)
+    LOG.info("Completed parentDeltaQuery for Entity: " + epw.getEntity().getName());
+    if (epw.getEntity().isDocRoot())
       deletedRows.addAll(deletedSet);
 
     // Do not use entity.isDocRoot here because one of descendant entities may set rootEntity="true"
-    return entity.parentEntity == null ?
+    return epw.getEntity().getParentEntity() == null ?
         myModifiedPks : new HashSet<Map<String, Object>>(parentKeyList);
   }
 
@@ -1080,17 +876,24 @@ public class DocBuilder {
             % 60 + "." + l % 1000;
   }
 
+  public RequestInfo getReqParams() {
+    return reqParams;
+  }
+
+
+
+
   @SuppressWarnings("unchecked")
   static Class loadClass(String name, SolrCore core) throws ClassNotFoundException {
     try {
       return core != null ?
-              core.getResourceLoader().findClass(name) :
+              core.getResourceLoader().findClass(name, Object.class) :
               Class.forName(name);
     } catch (Exception e) {
       try {
         String n = DocBuilder.class.getPackage().getName() + "." + name;
         return core != null ?
-                core.getResourceLoader().findClass(n) :
+                core.getResourceLoader().findClass(n, Object.class) :
                 Class.forName(n);
       } catch (Exception e1) {
         throw new ClassNotFoundException("Unable to load " + name + " or " + DocBuilder.class.getPackage().getName() + "." + name, e);
@@ -1134,7 +937,7 @@ public class DocBuilder {
 
   private void cleanByQuery(String delQuery, AtomicBoolean completeCleanDone) {
     delQuery = getVariableResolver().replaceTokens(delQuery);
-    if (requestParameters.clean) {
+    if (reqParams.isClean()) {
       if (delQuery == null && !completeCleanDone.get()) {
         writer.doDeleteAll();
         completeCleanDone.set(true);

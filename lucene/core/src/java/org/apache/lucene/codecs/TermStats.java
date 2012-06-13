@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,6 +17,14 @@ package org.apache.lucene.codecs;
  * limitations under the License.
  */
 
+import org.apache.lucene.index.TermsEnum; // javadocs
+
+/**
+ * Holder for per-term statistics.
+ * 
+ * @see TermsEnum#docFreq
+ * @see TermsEnum#totalTermFreq
+ */
 public class TermStats {
   public final int docFreq;
   public final long totalTermFreq;

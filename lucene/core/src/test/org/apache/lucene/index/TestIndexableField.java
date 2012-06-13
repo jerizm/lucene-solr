@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -25,9 +25,10 @@ import java.util.Iterator;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
+import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
@@ -99,7 +100,7 @@ public class TestIndexableField extends LuceneTestCase {
 
     @Override
     public float boost() {
-      return 1.0f + random.nextFloat();
+      return 1.0f + random().nextFloat();
     }
 
     @Override
@@ -156,7 +157,7 @@ public class TestIndexableField extends LuceneTestCase {
   public void testArbitraryFields() throws Exception {
 
     final Directory dir = newDirectory();
-    final RandomIndexWriter w = new RandomIndexWriter(random, dir);
+    final RandomIndexWriter w = new RandomIndexWriter(random(), dir);
 
     final int NUM_DOCS = atLeast(27);
     if (VERBOSE) {
@@ -166,7 +167,7 @@ public class TestIndexableField extends LuceneTestCase {
     int baseCount = 0;
 
     for(int docCount=0;docCount<NUM_DOCS;docCount++) {
-      final int fieldCount = _TestUtil.nextInt(random, 1, 17);
+      final int fieldCount = _TestUtil.nextInt(random(), 1, 17);
       fieldsPerDoc[docCount] = fieldCount-1;
 
       final int finalDocCount = docCount;
@@ -193,7 +194,7 @@ public class TestIndexableField extends LuceneTestCase {
               assert fieldUpto < fieldCount;
               if (fieldUpto == 0) {
                 fieldUpto = 1;
-                return newField("id", ""+finalDocCount, StringField.TYPE_STORED);
+                return newStringField("id", ""+finalDocCount, Field.Store.YES);
               } else {
                 return new MyField(finalBaseCount + (fieldUpto++-1));
               }
@@ -264,14 +265,14 @@ public class TestIndexableField extends LuceneTestCase {
             assertEquals(new BytesRef(""+counter), termsEnum.next());
             assertEquals(1, termsEnum.totalTermFreq());
             DocsAndPositionsEnum dpEnum = termsEnum.docsAndPositions(null, null, false);
-            assertTrue(dpEnum.nextDoc() != DocsEnum.NO_MORE_DOCS);
+            assertTrue(dpEnum.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
             assertEquals(1, dpEnum.freq());
             assertEquals(1, dpEnum.nextPosition());
 
             assertEquals(new BytesRef("text"), termsEnum.next());
             assertEquals(1, termsEnum.totalTermFreq());
             dpEnum = termsEnum.docsAndPositions(null, dpEnum, false);
-            assertTrue(dpEnum.nextDoc() != DocsEnum.NO_MORE_DOCS);
+            assertTrue(dpEnum.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
             assertEquals(1, dpEnum.freq());
             assertEquals(0, dpEnum.nextPosition());
 

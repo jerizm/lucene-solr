@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -27,7 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.io.IOException;
 
-/** Utility which converts certain query clauses into {@link QueryFilter}s and
+/** Utility which converts certain query clauses into {@link QueryWrapperFilter}s and
  * caches these.  Only required {@link TermQuery}s whose boost is zero and
  * whose term occurs in at least a certain fraction of documents are converted
  * to cached filters.  This accelerates query constraints like language,

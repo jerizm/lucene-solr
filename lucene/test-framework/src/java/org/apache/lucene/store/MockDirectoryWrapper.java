@@ -1,6 +1,6 @@
 package org.apache.lucene.store;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -94,6 +94,8 @@ public class MockDirectoryWrapper extends Directory {
   // is made to delete an open file, we enroll it here.
   private Set<String> openFilesDeleted;
 
+  final RateLimiter rateLimiter;
+
   private synchronized void init() {
     if (openFiles == null) {
       openFiles = new HashMap<String,Integer>();
@@ -120,6 +122,19 @@ public class MockDirectoryWrapper extends Directory {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+
+    // 2% of the time use rate limiter
+    if (randomState.nextInt(50) == 17) {
+      // Use RateLimiter
+      double maxMBPerSec = 10 + 5*(randomState.nextDouble()-0.5);
+      if (LuceneTestCase.VERBOSE) {
+        System.out.println("MockDirectoryWrapper: will rate limit output IO to " + maxMBPerSec + " MB/sec");
+      }
+      rateLimiter = new RateLimiter(maxMBPerSec);
+    } else {
+      rateLimiter = null;
+    }
+
     init();
   }
 
@@ -154,8 +169,9 @@ public class MockDirectoryWrapper extends Directory {
   public synchronized void sync(Collection<String> names) throws IOException {
     maybeYield();
     maybeThrowDeterministicException();
-    if (crashed)
+    if (crashed) {
       throw new IOException("cannot sync after crash");
+    }
     unSyncedFiles.removeAll(names);
     if (LuceneTestCase.rarely(randomState) || delegate instanceof NRTCachingDirectory) {
       // don't wear out our hardware so much in tests.
@@ -491,8 +507,9 @@ public class MockDirectoryWrapper extends Directory {
     if (failOnOpenInput) {
       maybeThrowDeterministicException();
     }
-    if (!delegate.fileExists(name))
-      throw new FileNotFoundException(name);
+    if (!delegate.fileExists(name)) {
+      throw new FileNotFoundException(name + " in dir=" + delegate);
+    }
 
     // cannot open a file for input if it's still open for
     // output, except for segments.gen and segments_N
@@ -559,7 +576,7 @@ public class MockDirectoryWrapper extends Directory {
     }
     open = false;
     if (checkIndexOnClose) {
-      if (DirectoryReader.indexExists(this)) {
+      if (indexPossiblyExists(this)) {
         if (LuceneTestCase.VERBOSE) {
           System.out.println("\nNOTE: MockDirectoryWrapper: now crash");
         }
@@ -594,6 +611,26 @@ public class MockDirectoryWrapper extends Directory {
       }
     }
     delegate.close();
+  }
+  
+  /** don't rely upon DirectoryReader.fileExists to determine if we should
+   *  checkIndex() or not. It might mask real problems, where we silently
+   *  don't checkindex at all. instead we look for a segments file.
+   */
+  private boolean indexPossiblyExists(Directory d) throws IOException {
+    String files[];
+    try {
+      files = d.listAll();
+    } catch (IOException ex) {
+      // this means directory doesn't exist, which is ok. return false
+      return false;
+    }
+    for (String f : files) {
+      if (f.startsWith("segments_")) {
+        return true;
+      }
+    }
+    return false;
   }
 
   synchronized void removeOpenFile(Closeable c, String name) {
@@ -749,8 +786,9 @@ public class MockDirectoryWrapper extends Directory {
   public IndexInputSlicer createSlicer(final String name, IOContext context)
       throws IOException {
     maybeYield();
-    if (!delegate.fileExists(name))
+    if (!delegate.fileExists(name)) {
       throw new FileNotFoundException(name);
+    }
     // cannot open a file for input if it's still open for
     // output, except for segments.gen and segments_N
     if (openFilesForWrite.contains(name) && !name.startsWith("segments")) {

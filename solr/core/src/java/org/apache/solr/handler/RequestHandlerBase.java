@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -138,10 +138,21 @@ public abstract class RequestHandlerBase implements SolrRequestHandler, SolrInfo
         }
       }
     } catch (Exception e) {
-      SolrException.log(SolrCore.log,e);
-      if (e instanceof ParseException) {
-        e = new SolrException(SolrException.ErrorCode.BAD_REQUEST, e);
+      if (e instanceof SolrException) {
+        SolrException se = (SolrException)e;
+        if (se.code() == SolrException.ErrorCode.CONFLICT.code) {
+          // TODO: should we allow this to be counted as an error (numErrors++)?
+
+        } else {
+          SolrException.log(SolrCore.log,e);
+        }
+      } else {
+        SolrException.log(SolrCore.log,e);
+        if (e instanceof ParseException) {
+          e = new SolrException(SolrException.ErrorCode.BAD_REQUEST, e);
+        }
       }
+
       rsp.setException(e);
       numErrors++;
     }
@@ -156,9 +167,11 @@ public abstract class RequestHandlerBase implements SolrRequestHandler, SolrInfo
   }
 
   public abstract String getDescription();
-  public abstract String getSourceId();
   public abstract String getSource();
-  public abstract String getVersion();
+  
+  public String getVersion() {
+    return getClass().getPackage().getSpecificationVersion();
+  }
   
   public Category getCategory() {
     return Category.QUERYHANDLER;

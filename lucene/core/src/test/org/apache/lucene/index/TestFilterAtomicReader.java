@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,17 +21,15 @@ package org.apache.lucene.index;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.HashSet;
-
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.TextField;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util.ReaderUtil;
 
 public class TestFilterAtomicReader extends LuceneTestCase {
 
@@ -131,18 +129,18 @@ public class TestFilterAtomicReader extends LuceneTestCase {
   public void testFilterIndexReader() throws Exception {
     Directory directory = newDirectory();
 
-    IndexWriter writer = new IndexWriter(directory, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+    IndexWriter writer = new IndexWriter(directory, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
 
     Document d1 = new Document();
-    d1.add(newField("default","one two", TextField.TYPE_STORED));
+    d1.add(newTextField("default", "one two", Field.Store.YES));
     writer.addDocument(d1);
 
     Document d2 = new Document();
-    d2.add(newField("default","one three", TextField.TYPE_STORED));
+    d2.add(newTextField("default", "one three", Field.Store.YES));
     writer.addDocument(d2);
 
     Document d3 = new Document();
-    d3.add(newField("default","two four", TextField.TYPE_STORED));
+    d3.add(newTextField("default", "two four", Field.Store.YES));
     writer.addDocument(d3);
 
     writer.close();
@@ -152,12 +150,12 @@ public class TestFilterAtomicReader extends LuceneTestCase {
     // We mess with the postings so this can fail:
     ((MockDirectoryWrapper) target).setCrossCheckTermVectorsOnClose(false);
 
-    writer = new IndexWriter(target, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)));
-    IndexReader reader = new TestReader(IndexReader.open(directory));
+    writer = new IndexWriter(target, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
+    IndexReader reader = new TestReader(DirectoryReader.open(directory));
     writer.addIndexes(reader);
     writer.close();
     reader.close();
-    reader = IndexReader.open(target);
+    reader = DirectoryReader.open(target);
     
     TermsEnum terms = MultiFields.getTerms(reader, "default").iterator(null);
     while (terms.next() != null) {
@@ -168,7 +166,7 @@ public class TestFilterAtomicReader extends LuceneTestCase {
     
     DocsAndPositionsEnum positions = terms.docsAndPositions(MultiFields.getLiveDocs(reader),
                                                             null, false);
-    while (positions.nextDoc() != DocsEnum.NO_MORE_DOCS) {
+    while (positions.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
       assertTrue((positions.docID() % 2) == 1);
     }
 
@@ -176,22 +174,31 @@ public class TestFilterAtomicReader extends LuceneTestCase {
     directory.close();
     target.close();
   }
-
-  public void testOverrideMethods() throws Exception {
+  
+  private void checkOverrideMethods(Class<?> clazz) throws Exception {
     boolean fail = false;
-    for (Method m : FilterAtomicReader.class.getMethods()) {
+    for (Method m : clazz.getMethods()) {
       int mods = m.getModifiers();
       if (Modifier.isStatic(mods) || Modifier.isFinal(mods) || m.isSynthetic()) {
         continue;
       }
       Class<?> declaringClass = m.getDeclaringClass();
-      String name = m.getName();
-      if (declaringClass != FilterAtomicReader.class && declaringClass != Object.class) {
-        System.err.println("method is not overridden by FilterIndexReader: " + name);
+      if (declaringClass != clazz && declaringClass != Object.class) {
+        System.err.println("method is not overridden by "+clazz.getName()+": " + m.toGenericString());
         fail = true;
       }
     }
-    assertFalse("FilterIndexReader overrides (or not) some problematic methods; see log above", fail);
+    assertFalse(clazz.getName()+" does not override some methods; see log above", fail);
+  }
+
+  public void testOverrideMethods() throws Exception {
+    checkOverrideMethods(FilterAtomicReader.class);
+    checkOverrideMethods(FilterAtomicReader.FilterFields.class);
+    checkOverrideMethods(FilterAtomicReader.FilterTerms.class);
+    checkOverrideMethods(FilterAtomicReader.FilterFieldsEnum.class);
+    checkOverrideMethods(FilterAtomicReader.FilterTermsEnum.class);
+    checkOverrideMethods(FilterAtomicReader.FilterDocsEnum.class);
+    checkOverrideMethods(FilterAtomicReader.FilterDocsAndPositionsEnum.class);
   }
 
 }

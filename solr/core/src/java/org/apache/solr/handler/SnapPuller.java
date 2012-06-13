@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -16,15 +16,22 @@
  */
 package org.apache.solr.handler;
 
-import org.apache.commons.httpclient.*;
-import org.apache.commons.httpclient.auth.AuthScope;
-import org.apache.commons.httpclient.methods.PostMethod;
 import org.apache.commons.io.IOUtils;
+import org.apache.http.Header;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.message.AbstractHttpMessage;
+import org.apache.http.message.BasicNameValuePair;
 import org.apache.lucene.index.IndexCommit;
+import org.apache.solr.client.solrj.impl.HttpClientUtil;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.FastInputStream;
-import org.apache.solr.common.util.FileUtils;
+import org.apache.solr.util.FileUtils;
 import org.apache.solr.common.util.JavaBinCodec;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.SolrCore;
@@ -109,22 +116,25 @@ public class SnapPuller {
   // HttpClient for this instance if connectionTimeout or readTimeout has been specified
   private final HttpClient myHttpClient;
 
-  private static synchronized HttpClient createHttpClient(String connTimeout, String readTimeout) {
+  private static synchronized HttpClient createHttpClient(String connTimeout, String readTimeout, String httpBasicAuthUser, String httpBasicAuthPassword) {
     if (connTimeout == null && readTimeout == null && client != null)  return client;
-    MultiThreadedHttpConnectionManager mgr = new MultiThreadedHttpConnectionManager();
+    final ModifiableSolrParams httpClientParams = new ModifiableSolrParams();
+    httpClientParams.set(HttpClientUtil.PROP_CONNECTION_TIMEOUT, connTimeout != null ? connTimeout : "5000");
+    httpClientParams.set(HttpClientUtil.PROP_SO_TIMEOUT, readTimeout != null ? readTimeout : "20000");
+    httpClientParams.set(HttpClientUtil.PROP_BASIC_AUTH_USER, httpBasicAuthUser);
+    httpClientParams.set(HttpClientUtil.PROP_BASIC_AUTH_PASS, httpBasicAuthPassword);
     // Keeping a very high number so that if you have a large number of cores
     // no requests are kept waiting for an idle connection.
-    mgr.getParams().setDefaultMaxConnectionsPerHost(10000);
-    mgr.getParams().setMaxTotalConnections(10000);
-    mgr.getParams().setSoTimeout(readTimeout == null ? 20000 : Integer.parseInt(readTimeout)); //20 secs
-    mgr.getParams().setConnectionTimeout(connTimeout == null ? 5000 : Integer.parseInt(connTimeout)); //5 secs
-    HttpClient httpClient = new HttpClient(mgr);
+    httpClientParams.set(HttpClientUtil.PROP_MAX_CONNECTIONS, 10000);
+    httpClientParams.set(HttpClientUtil.PROP_MAX_CONNECTIONS_PER_HOST, 10000);
+    HttpClient httpClient = HttpClientUtil.createClient(httpClientParams);
     if (client == null && connTimeout == null && readTimeout == null) client = httpClient;
     return httpClient;
   }
 
   public SnapPuller(NamedList initArgs, ReplicationHandler handler, SolrCore sc) {
     solrCore = sc;
+    SolrParams params = SolrParams.toSolrParams(initArgs);
     masterUrl = (String) initArgs.get(MASTER_URL);
     if (masterUrl == null)
       throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
@@ -135,15 +145,11 @@ public class SnapPuller {
     String compress = (String) initArgs.get(COMPRESSION);
     useInternal = INTERNAL.equals(compress);
     useExternal = EXTERNAL.equals(compress);
-    String connTimeout = (String) initArgs.get(HTTP_CONN_TIMEOUT);
-    String readTimeout = (String) initArgs.get(HTTP_READ_TIMEOUT);
-    String httpBasicAuthUser = (String) initArgs.get(HTTP_BASIC_AUTH_USER);
-    String httpBasicAuthPassword = (String) initArgs.get(HTTP_BASIC_AUTH_PASSWORD);
-    myHttpClient = createHttpClient(connTimeout, readTimeout);
-    if (httpBasicAuthUser != null && httpBasicAuthPassword != null) {
-      myHttpClient.getState().setCredentials(AuthScope.ANY,
-              new UsernamePasswordCredentials(httpBasicAuthUser, httpBasicAuthPassword));
-    }
+    String connTimeout = (String) initArgs.get(HttpClientUtil.PROP_CONNECTION_TIMEOUT);
+    String readTimeout = (String) initArgs.get(HttpClientUtil.PROP_SO_TIMEOUT);
+    String httpBasicAuthUser = (String) initArgs.get(HttpClientUtil.PROP_BASIC_AUTH_USER);
+    String httpBasicAuthPassword = (String) initArgs.get(HttpClientUtil.PROP_BASIC_AUTH_PASS);
+    myHttpClient = createHttpClient(connTimeout, readTimeout, httpBasicAuthUser, httpBasicAuthPassword);
     if (pollInterval != null && pollInterval > 0) {
       startExecutorService();
     } else {
@@ -177,45 +183,66 @@ public class SnapPuller {
    */
   @SuppressWarnings("unchecked")
   NamedList getLatestVersion() throws IOException {
-    PostMethod post = new PostMethod(masterUrl);
-    post.addParameter(COMMAND, CMD_INDEX_VERSION);
-    post.addParameter("wt", "javabin");
+    HttpPost post = new HttpPost(masterUrl);
+    List<BasicNameValuePair> formparams = new ArrayList<BasicNameValuePair>();
+    formparams.add(new BasicNameValuePair("wt", "javabin"));
+    formparams.add(new BasicNameValuePair(COMMAND, CMD_INDEX_VERSION));
+    UrlEncodedFormEntity entity = new UrlEncodedFormEntity(formparams, "UTF-8");
+    post.setEntity(entity);
     return getNamedListResponse(post);
   }
 
   NamedList getCommandResponse(NamedList<String> commands) throws IOException {
-    PostMethod post = new PostMethod(masterUrl);
+    
+    HttpPost post = new HttpPost(masterUrl);
+
+    List<BasicNameValuePair> formparams = new ArrayList<BasicNameValuePair>();
+    formparams.add(new BasicNameValuePair("wt", "javabin"));
+    
     for (Map.Entry<String, String> c : commands) {
-      post.addParameter(c.getKey(),c.getValue());
+      formparams.add(new BasicNameValuePair(c.getKey(), c.getValue()));
     }
-    post.addParameter("wt", "javabin");
+    UrlEncodedFormEntity entity = new UrlEncodedFormEntity(formparams, "UTF-8");
+    post.setEntity(entity);
     return getNamedListResponse(post);
   }
 
-  private NamedList<?> getNamedListResponse(PostMethod method) throws IOException {
+  private NamedList<?> getNamedListResponse(HttpPost method) throws IOException {
+    InputStream input = null;
+    NamedList<?> result = null;
     try {
-      int status = myHttpClient.executeMethod(method);
+      HttpResponse response = myHttpClient.execute(method);
+      int status = response.getStatusLine().getStatusCode();
       if (status != HttpStatus.SC_OK) {
         throw new SolrException(SolrException.ErrorCode.SERVICE_UNAVAILABLE,
                 "Request failed for the url " + method);
       }
-      return (NamedList<?>) new JavaBinCodec().unmarshal(method.getResponseBodyAsStream());
+      input = response.getEntity().getContent();
+      result = (NamedList<?>)new JavaBinCodec().unmarshal(input);
     } finally {
       try {
-        method.releaseConnection();
+        if (input != null) {
+          input.close();
+        }
       } catch (Exception e) {
       }
     }
+    return result;
   }
 
   /**
    * Fetches the list of files in a given index commit point
    */
   void fetchFileList(long gen) throws IOException {
-    PostMethod post = new PostMethod(masterUrl);
-    post.addParameter(COMMAND, CMD_GET_FILE_LIST);
-    post.addParameter(GENERATION, String.valueOf(gen));
-    post.addParameter("wt", "javabin");
+    HttpPost post = new HttpPost(masterUrl);
+
+    List<BasicNameValuePair> formparams = new ArrayList<BasicNameValuePair>();
+    formparams.add(new BasicNameValuePair("wt", "javabin"));
+    formparams.add(new BasicNameValuePair(COMMAND, CMD_GET_FILE_LIST));
+    formparams.add(new BasicNameValuePair(GENERATION, String.valueOf(gen)));
+
+    UrlEncodedFormEntity entity = new UrlEncodedFormEntity(formparams, "UTF-8");
+    post.setEntity(entity);
 
     @SuppressWarnings("unchecked")
     NamedList<List<Map<String, Object>>> nl 
@@ -314,6 +341,7 @@ public class SnapPuller {
       File tmpIndexDir = createTempindexDir(core);
       if (isIndexStale())
         isFullCopyNeeded = true;
+      LOG.info("Starting download to " + tmpIndexDir + " fullCopy=" + isFullCopyNeeded);
       successfulInstall = false;
       boolean deleteTmpIdxDir = true;
       File indexDir = null ;
@@ -360,8 +388,13 @@ public class SnapPuller {
       } catch (Exception e) {
         throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Index fetch failed : ", e);
       } finally {
-        if (deleteTmpIdxDir) delTree(tmpIndexDir);
-        else delTree(indexDir);
+        if (deleteTmpIdxDir) {
+          LOG.info("removing temporary index download directory " + tmpIndexDir);
+          delTree(tmpIndexDir);
+        } else {
+          LOG.info("removing old index directory " + indexDir);
+          delTree(indexDir);
+        }
       }
     } finally {
       if (!successfulInstall) {
@@ -495,10 +528,24 @@ public class SnapPuller {
   private void doCommit() throws IOException {
     SolrQueryRequest req = new LocalSolrQueryRequest(solrCore,
         new ModifiableSolrParams());
+    // reboot the writer on the new index and get a new searcher
+    solrCore.getUpdateHandler().newIndexWriter();
+    
     try {
-      
-      // reboot the writer on the new index and get a new searcher
-      solrCore.getUpdateHandler().newIndexWriter();
+      // first try to open an NRT searcher so that the new 
+      // IndexWriter is registered with the reader
+      Future[] waitSearcher = new Future[1];
+      solrCore.getSearcher(true, false, waitSearcher, true);
+      if (waitSearcher[0] != null) {
+        try {
+         waitSearcher[0].get();
+       } catch (InterruptedException e) {
+         SolrException.log(LOG,e);
+       } catch (ExecutionException e) {
+         SolrException.log(LOG,e);
+       }
+     }
+
       // update our commit point to the right dir
       solrCore.getUpdateHandler().commit(new CommitUpdateCommand(req, false));
 
@@ -565,8 +612,9 @@ public class SnapPuller {
    * @param latestGeneration         the version number
    */
   private void downloadIndexFiles(boolean downloadCompleteIndex, File tmpIdxDir, long latestGeneration) throws Exception {
+    String indexDir = solrCore.getIndexDir();
     for (Map<String, Object> file : filesToDownload) {
-      File localIndexFile = new File(solrCore.getIndexDir(), (String) file.get(NAME));
+      File localIndexFile = new File(indexDir, (String) file.get(NAME));
       if (!localIndexFile.exists() || downloadCompleteIndex) {
         fileFetcher = new FileFetcher(tmpIdxDir, file, (String) file.get(NAME), false, latestGeneration);
         currentFile = file;
@@ -609,9 +657,21 @@ public class SnapPuller {
     if(!success){
       try {
         LOG.error("Unable to move index file from: " + indexFileInTmpDir
-              + " to: " + indexFileInIndex + "Trying to do a copy");
+              + " to: " + indexFileInIndex + " Trying to do a copy");
         FileUtils.copyFile(indexFileInTmpDir,indexFileInIndex);
         success = true;
+      } catch (FileNotFoundException e) {
+        if (!indexDir.exists()) {
+          File parent = indexDir.getParentFile();
+          String[] children = null;
+          if (parent != null) {
+            children = parent.list();
+          }
+          LOG.error("The index directory does not exist: " + indexDir.getAbsolutePath()
+              + " dirs found: " + (children == null ? "none could be found" : Arrays.asList(children)));
+        }
+        LOG.error("Unable to copy index file from: " + indexFileInTmpDir
+            + " to: " + indexFileInIndex , e);
       } catch (IOException e) {
         LOG.error("Unable to copy index file from: " + indexFileInTmpDir
               + " to: " + indexFileInIndex , e);
@@ -689,7 +749,7 @@ public class SnapPuller {
    * If the index is stale by any chance, load index from a different dir in the data dir.
    */
   private boolean modifyIndexProps(String tmpIdxDirName) {
-    LOG.info("New index installed. Updating index properties...");
+    LOG.info("New index installed. Updating index properties... index="+tmpIdxDirName);
     File idxprops = new File(solrCore.getDataDir() + "index.properties");
     Properties p = new Properties();
     if (idxprops.exists()) {
@@ -893,7 +953,7 @@ public class SnapPuller {
 
     private boolean isConf;
 
-    private PostMethod post;
+    private HttpPost post;
 
     private boolean aborted = false;
 
@@ -1050,10 +1110,6 @@ public class SnapPuller {
       } catch (Exception e) {/* noop */
           LOG.error("Error closing the file stream: "+ this.saveAs ,e);
       }
-      try {
-        post.releaseConnection();
-      } catch (Exception e) {
-      }
       if (bytesDownloaded != size) {
         //if the download is not complete then
         //delete the file being downloaded
@@ -1074,35 +1130,43 @@ public class SnapPuller {
      * Open a new stream using HttpClient
      */
     FastInputStream getStream() throws IOException {
-      post = new PostMethod(masterUrl);
+      post = new HttpPost(masterUrl);
       //the method is command=filecontent
-      post.addParameter(COMMAND, CMD_GET_FILE);
+      
+      List<BasicNameValuePair> formparams = new ArrayList<BasicNameValuePair>();
+
+      formparams.add(new BasicNameValuePair(COMMAND, CMD_GET_FILE));
+
       //add the version to download. This is used to reserve the download
-      post.addParameter(GENERATION, indexGen.toString());
+      formparams.add(new BasicNameValuePair(GENERATION, indexGen.toString()));
       if (isConf) {
         //set cf instead of file for config file
-        post.addParameter(CONF_FILE_SHORT, fileName);
+        formparams.add(new BasicNameValuePair(CONF_FILE_SHORT, fileName));
       } else {
-        post.addParameter(FILE, fileName);
+        formparams.add(new BasicNameValuePair(FILE, fileName));
       }
       if (useInternal) {
-        post.addParameter(COMPRESSION, "true");
+        formparams.add(new BasicNameValuePair(COMPRESSION, "true"));
       }
       if (useExternal) {
-        post.setRequestHeader(new Header("Accept-Encoding", "gzip,deflate"));
+        formparams.add(new BasicNameValuePair("Accept-Encoding", "gzip,deflate"));
       }
       //use checksum
       if (this.includeChecksum)
-        post.addParameter(CHECKSUM, "true");
+        formparams.add(new BasicNameValuePair(CHECKSUM, "true"));
       //wt=filestream this is a custom protocol
-      post.addParameter("wt", FILE_STREAM);
+      formparams.add(new BasicNameValuePair("wt", FILE_STREAM));
       // This happen if there is a failure there is a retry. the offset=<sizedownloaded> ensures that
       // the server starts from the offset
       if (bytesDownloaded > 0) {
-        post.addParameter(OFFSET, "" + bytesDownloaded);
+        formparams.add(new BasicNameValuePair(OFFSET, "" + bytesDownloaded));
       }
-      myHttpClient.executeMethod(post);
-      InputStream is = post.getResponseBodyAsStream();
+      
+      UrlEncodedFormEntity entity = new UrlEncodedFormEntity(formparams, "UTF-8");
+      post.setEntity(entity);
+
+      HttpResponse response = myHttpClient.execute(post);
+      InputStream is = response.getEntity().getContent();
       //wrap it using FastInputStream
       if (useInternal) {
         is = new InflaterInputStream(is);
@@ -1116,8 +1180,8 @@ public class SnapPuller {
   /*
    * This is copied from CommonsHttpSolrServer
    */
-  private InputStream checkCompressed(HttpMethod method, InputStream respBody) throws IOException {
-    Header contentEncodingHeader = method.getResponseHeader("Content-Encoding");
+  private InputStream checkCompressed(AbstractHttpMessage method, InputStream respBody) throws IOException {
+    Header contentEncodingHeader = method.getFirstHeader("Content-Encoding");
     if (contentEncodingHeader != null) {
       String contentEncoding = contentEncodingHeader.getValue();
       if (contentEncoding.contains("gzip")) {
@@ -1126,7 +1190,7 @@ public class SnapPuller {
         respBody = new InflaterInputStream(respBody);
       }
     } else {
-      Header contentTypeHeader = method.getResponseHeader("Content-Type");
+      Header contentTypeHeader = method.getFirstHeader("Content-Type");
       if (contentTypeHeader != null) {
         String contentType = contentTypeHeader.getValue();
         if (contentType != null) {
@@ -1198,14 +1262,6 @@ public class SnapPuller {
   public static final String INTERVAL_ERR_MSG = "The " + POLL_INTERVAL + " must be in this format 'HH:mm:ss'";
 
   private static final Pattern INTERVAL_PATTERN = Pattern.compile("(\\d*?):(\\d*?):(\\d*)");
-
-  private static final String HTTP_CONN_TIMEOUT = "httpConnTimeout";
-
-  private static final String HTTP_READ_TIMEOUT = "httpReadTimeout";
-
-  private static final String HTTP_BASIC_AUTH_USER = "httpBasicAuthUser";
-
-  private static final String HTTP_BASIC_AUTH_PASSWORD = "httpBasicAuthPassword";
 
   static final String INDEX_REPLICATED_AT = "indexReplicatedAt";
 

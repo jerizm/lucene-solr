@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -44,15 +44,5 @@ public class ScoreOrderFragmentsBuilder extends SolrFragmentsBuilder {
   @Override
   public String getSource() {
     return "$URL$";
-  }
-
-  @Override
-  public String getSourceId() {
-    return "$Id$";
-  }
-
-  @Override
-  public String getVersion() {
-    return "$Revision$";
   }
 }

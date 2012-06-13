@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,7 +19,8 @@ package org.apache.lucene.search;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.concurrent.Semaphore;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.lucene.store.AlreadyClosedException;
 
@@ -42,7 +43,7 @@ public abstract class ReferenceManager<G> implements Closeable {
   
   protected volatile G current;
   
-  private final Semaphore reopenLock = new Semaphore(1);
+  private final Lock refreshLock = new ReentrantLock();
   
   private void ensureOpen() {
     if (current == null) {
@@ -56,7 +57,7 @@ public abstract class ReferenceManager<G> implements Closeable {
     current = newReference;
     release(oldReference);
   }
-  
+
   /** Decrement reference counting on the given reference. */
   protected abstract void decRef(G reference) throws IOException;
   
@@ -100,12 +101,50 @@ public abstract class ReferenceManager<G> implements Closeable {
       // closeable javadoc says:
       // if this is already closed then invoking this method has no effect.
       swapReference(null);
+      afterClose();
     }
   }
 
+  /** Called after close(), so subclass can free any resources. */
+  protected void afterClose() throws IOException {
+  }
+
+  private void doMaybeRefresh() throws IOException {
+    // it's ok to call lock() here (blocking) because we're supposed to get here
+    // from either maybeRefreh() or maybeRefreshBlocking(), after the lock has
+    // already been obtained. Doing that protects us from an accidental bug
+    // where this method will be called outside the scope of refreshLock.
+    // Per ReentrantLock's javadoc, calling lock() by the same thread more than
+    // once is ok, as long as unlock() is called a matching number of times.
+    refreshLock.lock();
+    try {
+      final G reference = acquire();
+      try {
+        G newReference = refreshIfNeeded(reference);
+        if (newReference != null) {
+          assert newReference != reference : "refreshIfNeeded should return null if refresh wasn't needed";
+          boolean success = false;
+          try {
+            swapReference(newReference);
+            success = true;
+          } finally {
+            if (!success) {
+              release(newReference);
+            }
+          }
+        }
+      } finally {
+        release(reference);
+      }
+      afterRefresh();
+    } finally {
+      refreshLock.unlock();
+    }
+  }
+  
   /**
-   * You must call this, periodically, if you want that {@link #acquire()} will
-   * return refreshed instances.
+   * You must call this (or {@link #maybeRefreshBlocking()}), periodically, if
+   * you want that {@link #acquire()} will return refreshed instances.
    * 
    * <p>
    * <b>Threads</b>: it's fine for more than one thread to call this at once.
@@ -116,41 +155,54 @@ public abstract class ReferenceManager<G> implements Closeable {
    * refresh to complete.
    * 
    * <p>
-   * This method returns true if the reference was in fact refreshed, or if the
-   * current reference has no pending changes.
+   * If this method returns true it means the calling thread either refreshed or
+   * that there were no changes to refresh. If it returns false it means another
+   * thread is currently refreshing.
    */
   public final boolean maybeRefresh() throws IOException {
     ensureOpen();
-    // Ensure only 1 thread does reopen at once; other threads just return immediately:
-    if (reopenLock.tryAcquire()) {
+
+    // Ensure only 1 thread does refresh at once; other threads just return immediately:
+    final boolean doTryRefresh = refreshLock.tryLock();
+    if (doTryRefresh) {
       try {
-        final G reference = acquire();
-        try {
-          G newReference = refreshIfNeeded(reference);
-          if (newReference != null) {
-            assert newReference != reference : "refreshIfNeeded should return null if refresh wasn't needed";
-            boolean success = false;
-            try {
-              swapReference(newReference);
-              success = true;
-            } finally {
-              if (!success) {
-                release(newReference);
-              }
-            }
-          }
-        } finally {
-          release(reference);
-        }
-        return true;
+        doMaybeRefresh();
       } finally {
-        reopenLock.release();
+        refreshLock.unlock();
       }
-    } else {
-      return false;
+    }
+
+    return doTryRefresh;
+  }
+  
+  /**
+   * You must call this (or {@link #maybeRefresh()}), periodically, if you want
+   * that {@link #acquire()} will return refreshed instances.
+   * 
+   * <p>
+   * <b>Threads</b>: unlike {@link #maybeRefresh()}, if another thread is
+   * currently refreshing, this method blocks until that thread completes. It is
+   * useful if you want to guarantee that the next call to {@link #acquire()}
+   * will return a refreshed instance. Otherwise, consider using the
+   * non-blocking {@link #maybeRefresh()}.
+   */
+  public final void maybeRefreshBlocking() throws IOException, InterruptedException {
+    ensureOpen();
+
+    // Ensure only 1 thread does refresh at once
+    refreshLock.lock();
+    try {
+      doMaybeRefresh();
+    } finally {
+      refreshLock.unlock();
     }
   }
 
+  /** Called after swapReference has installed a new
+   *  instance. */
+  protected void afterRefresh() throws IOException {
+  }
+  
   /**
    * Release the refernce previously obtained via {@link #acquire()}.
    * <p>
@@ -160,5 +212,4 @@ public abstract class ReferenceManager<G> implements Closeable {
     assert reference != null;
     decRef(reference);
   }
-  
 }

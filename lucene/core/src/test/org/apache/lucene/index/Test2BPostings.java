@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -30,13 +30,13 @@ import org.apache.lucene.index.FieldInfo.IndexOptions;
 import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util._TestUtil;
-import org.apache.lucene.util.LuceneTestCase.UseNoMemoryExpensiveCodec;
+import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
 
 /**
  * Test indexes ~82M docs with 26 terms each, so you get > Integer.MAX_VALUE terms/docs pairs
  * @lucene.experimental
  */
-@UseNoMemoryExpensiveCodec
+@SuppressCodecs({ "SimpleText", "Memory" })
 public class Test2BPostings extends LuceneTestCase {
 
   @Nightly
@@ -46,7 +46,7 @@ public class Test2BPostings extends LuceneTestCase {
     dir.setCheckIndexOnClose(false); // don't double-checkindex
     
     IndexWriter w = new IndexWriter(dir,
-        new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random))
+        new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()))
         .setMaxBufferedDocs(IndexWriterConfig.DISABLE_AUTO_FLUSH)
         .setRAMBufferSizeMB(256.0)
         .setMergeScheduler(new ConcurrentMergeScheduler())
@@ -60,7 +60,7 @@ public class Test2BPostings extends LuceneTestCase {
     }
 
     Document doc = new Document();
-    FieldType ft = new FieldType(TextField.TYPE_UNSTORED);
+    FieldType ft = new FieldType(TextField.TYPE_NOT_STORED);
     ft.setOmitNorms(true);
     ft.setIndexOptions(IndexOptions.DOCS_ONLY);
     Field field = new Field("field", new MyTokenStream(), ft);

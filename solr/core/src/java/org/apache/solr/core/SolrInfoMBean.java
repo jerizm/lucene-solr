@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -43,8 +43,6 @@ public interface SolrInfoMBean {
   public String getDescription();
   /** Purpose of this Class */
   public Category getCategory();
-  /** CVS Id, SVN Id, etc */
-  public String getSourceId();
   /** CVS Source, SVN Source, etc */
   public String getSource();
   /**

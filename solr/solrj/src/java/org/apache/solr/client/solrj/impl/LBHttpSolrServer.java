@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -16,12 +16,10 @@
  */
 package org.apache.solr.client.solrj.impl;
 
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.MultiThreadedHttpConnectionManager;
-import org.apache.commons.httpclient.DefaultHttpMethodRetryHandler;
-import org.apache.commons.httpclient.params.HttpMethodParams;
+import org.apache.http.client.HttpClient;
 import org.apache.solr.client.solrj.*;
 import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.SolrException;
 
@@ -36,7 +34,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.*;
 
 /**
- * LBHttpSolrServer or "LoadBalanced HttpSolrServer" is a load balancing wrapper to CommonsHttpSolrServer. This is useful when you
+ * LBHttpSolrServer or "LoadBalanced HttpSolrServer" is a load balancing wrapper around
+ * {@link org.apache.solr.client.solrj.impl.HttpSolrServer}. This is useful when you
  * have multiple SolrServers and the requests need to be Load Balanced among them. This should <b>NOT</b> be used for
  * indexing. Also see the <a href="http://wiki.apache.org/solr/LBHttpSolrServer">wiki</a> page.
  * <p/>
@@ -80,7 +79,8 @@ public class LBHttpSolrServer extends SolrServer {
 
   private ScheduledExecutorService aliveCheckExecutor;
 
-  private HttpClient httpClient;
+  private final HttpClient httpClient;
+  private final boolean clientIsInternal;
   private final AtomicInteger counter = new AtomicInteger(-1);
 
   private static final SolrQuery solrQuery = new SolrQuery("*:*");
@@ -91,7 +91,7 @@ public class LBHttpSolrServer extends SolrServer {
   }
 
   private static class ServerWrapper {
-    final CommonsHttpSolrServer solrServer;
+    final HttpSolrServer solrServer;
 
     long lastUsed;     // last time used for a real request
     long lastChecked;  // last time checked for liveness
@@ -103,7 +103,7 @@ public class LBHttpSolrServer extends SolrServer {
 
     int failedPings = 0;
 
-    public ServerWrapper(CommonsHttpSolrServer solrServer) {
+    public ServerWrapper(HttpSolrServer solrServer) {
       this.solrServer = solrServer;
     }
 
@@ -175,12 +175,9 @@ public class LBHttpSolrServer extends SolrServer {
   }
 
   public LBHttpSolrServer(String... solrServerUrls) throws MalformedURLException {
-    this(new HttpClient(new MultiThreadedHttpConnectionManager()), solrServerUrls);
-
-    DefaultHttpMethodRetryHandler retryhandler = new DefaultHttpMethodRetryHandler(0, false);
-    httpClient.getParams().setParameter(HttpMethodParams.RETRY_HANDLER, retryhandler);
+    this(null, solrServerUrls);
   }
-
+  
   /** The provided httpClient should use a multi-threaded connection manager */ 
   public LBHttpSolrServer(HttpClient httpClient, String... solrServerUrl)
           throws MalformedURLException {
@@ -190,7 +187,14 @@ public class LBHttpSolrServer extends SolrServer {
   /** The provided httpClient should use a multi-threaded connection manager */  
   public LBHttpSolrServer(HttpClient httpClient, ResponseParser parser, String... solrServerUrl)
           throws MalformedURLException {
-    this.httpClient = httpClient;
+    clientIsInternal = (httpClient == null);
+    if (httpClient == null) {
+      ModifiableSolrParams params = new ModifiableSolrParams();
+      params.set(HttpClientUtil.PROP_USE_RETRY, false);
+      this.httpClient = HttpClientUtil.createClient(params);
+    } else {
+      this.httpClient = httpClient;
+    }
     for (String s : solrServerUrl) {
       ServerWrapper wrapper = new ServerWrapper(makeServer(s));
       aliveServers.put(wrapper.getKey(), wrapper);
@@ -204,8 +208,8 @@ public class LBHttpSolrServer extends SolrServer {
     return server;
   }
 
-  protected CommonsHttpSolrServer makeServer(String server) throws MalformedURLException {
-    return new CommonsHttpSolrServer(server, httpClient, binaryParser);
+  protected HttpSolrServer makeServer(String server) throws MalformedURLException {
+    return new HttpSolrServer(server, httpClient, binaryParser);
   }
 
 
@@ -245,7 +249,7 @@ public class LBHttpSolrServer extends SolrServer {
         continue;
       }
       rsp.server = serverStr;
-      CommonsHttpSolrServer server = makeServer(serverStr);
+      HttpSolrServer server = makeServer(serverStr);
 
       try {
         rsp.rsp = server.request(req.getRequest());
@@ -322,7 +326,7 @@ public class LBHttpSolrServer extends SolrServer {
 
   }
 
-  private Exception addZombie(CommonsHttpSolrServer server,
+  private Exception addZombie(HttpSolrServer server,
       Exception e) {
 
     ServerWrapper wrapper;
@@ -361,7 +365,7 @@ public class LBHttpSolrServer extends SolrServer {
   }
 
   public void addSolrServer(String server) throws MalformedURLException {
-    CommonsHttpSolrServer solrServer = makeServer(server);
+    HttpSolrServer solrServer = makeServer(server);
     addToAlive(new ServerWrapper(solrServer));
   }
 
@@ -383,14 +387,7 @@ public class LBHttpSolrServer extends SolrServer {
   }
 
   public void setConnectionTimeout(int timeout) {
-    httpClient.getHttpConnectionManager().getParams().setConnectionTimeout(timeout);
-  }
-
-  /**
-   * set connectionManagerTimeout on the HttpClient.*
-   */
-  public void setConnectionManagerTimeout(int timeout) {
-    httpClient.getParams().setConnectionManagerTimeout(timeout);
+    HttpClientUtil.setConnectionTimeout(httpClient, timeout);
   }
 
   /**
@@ -398,12 +395,16 @@ public class LBHttpSolrServer extends SolrServer {
    * not for indexing.
    */
   public void setSoTimeout(int timeout) {
-    httpClient.getParams().setSoTimeout(timeout);
+    HttpClientUtil.setSoTimeout(httpClient, timeout);
   }
   
+  @Override
   public void shutdown() {
     if (aliveCheckExecutor != null) {
       aliveCheckExecutor.shutdownNow();
+    }
+    if(clientIsInternal) {
+      httpClient.getConnectionManager().shutdown();
     }
   }
 

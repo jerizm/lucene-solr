@@ -1,6 +1,6 @@
 package org.apache.lucene.util;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,6 +18,7 @@ package org.apache.lucene.util;
  */
 
 /**
+ * Interface for Bitset-like structures.
  * @lucene.experimental
  */
 
@@ -27,6 +28,9 @@ public interface Bits {
 
   public static final Bits[] EMPTY_ARRAY = new Bits[0];
   
+  /**
+   * Bits impl of the specified length with all bits set. 
+   */
   public static class MatchAllBits implements Bits {
     final int len;
     
@@ -43,6 +47,9 @@ public interface Bits {
     }
   }
 
+  /**
+   * Bits impl of the specified length with no bits set. 
+   */
   public static class MatchNoBits implements Bits {
     final int len;
     

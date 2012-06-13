@@ -1,5 +1,5 @@
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,6 +21,9 @@ package org.apache.solr.analysis;
 
 import org.apache.lucene.analysis.fa.PersianNormalizationFilter;
 import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
  * Factory for {@link PersianNormalizationFilter}.
@@ -34,9 +37,14 @@ import org.apache.lucene.analysis.TokenStream;
  * &lt;/fieldType&gt;</pre>
  *
  */
-public class PersianNormalizationFilterFactory extends BaseTokenFilterFactory {
+public class PersianNormalizationFilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
   public PersianNormalizationFilter create(TokenStream input) {
     return new PersianNormalizationFilter(input);
+  }
+  
+  @Override
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }
 

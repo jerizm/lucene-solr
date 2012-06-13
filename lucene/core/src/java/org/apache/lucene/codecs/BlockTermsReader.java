@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -95,7 +95,7 @@ public class BlockTermsReader extends FieldsProducer {
     }
 
     @Override
-    public Object clone() {
+    public FieldAndTerm clone() {
       return new FieldAndTerm(this);
     }
 
@@ -135,7 +135,7 @@ public class BlockTermsReader extends FieldsProducer {
         assert numTerms >= 0;
         final long termsStartPointer = in.readVLong();
         final FieldInfo fieldInfo = fieldInfos.fieldInfo(field);
-        final long sumTotalTermFreq = fieldInfo.indexOptions == IndexOptions.DOCS_ONLY ? -1 : in.readVLong();
+        final long sumTotalTermFreq = fieldInfo.getIndexOptions() == IndexOptions.DOCS_ONLY ? -1 : in.readVLong();
         final long sumDocFreq = in.readVLong();
         final int docCount = in.readVInt();
         assert !fields.containsKey(fieldInfo.name);
@@ -186,10 +186,6 @@ public class BlockTermsReader extends FieldsProducer {
     }
   }
 
-  public static void files(SegmentInfo segmentInfo, String segmentSuffix, Collection<String> files) {
-    files.add(IndexFileNames.segmentFileName(segmentInfo.name, segmentSuffix, BlockTermsWriter.TERMS_EXTENSION));
-  }
-
   @Override
   public FieldsEnum iterator() {
     return new TermFieldsEnum();
@@ -197,11 +193,12 @@ public class BlockTermsReader extends FieldsProducer {
 
   @Override
   public Terms terms(String field) throws IOException {
+    assert field != null;
     return fields.get(field);
   }
 
   @Override
-  public int getUniqueFieldCount() {
+  public int size() {
     return fields.size();
   }
 
@@ -260,7 +257,7 @@ public class BlockTermsReader extends FieldsProducer {
     }
 
     @Override
-    public long getUniqueTermCount() {
+    public long size() {
       return numTerms;
     }
 
@@ -691,6 +688,9 @@ public class BlockTermsReader extends FieldsProducer {
       @Override
       public DocsEnum docs(Bits liveDocs, DocsEnum reuse, boolean needsFreqs) throws IOException {
         //System.out.println("BTR.docs this=" + this);
+        if (needsFreqs && fieldInfo.getIndexOptions() == IndexOptions.DOCS_ONLY) {
+          return null;
+        }
         decodeMetaData();
         //System.out.println("BTR.docs:  state.docFreq=" + state.docFreq);
         return postingsReader.docs(fieldInfo, state, liveDocs, reuse, needsFreqs);
@@ -698,13 +698,13 @@ public class BlockTermsReader extends FieldsProducer {
 
       @Override
       public DocsAndPositionsEnum docsAndPositions(Bits liveDocs, DocsAndPositionsEnum reuse, boolean needsOffsets) throws IOException {
-        if (fieldInfo.indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) < 0) {
+        if (fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) < 0) {
           // Positions were not indexed:
           return null;
         }
 
         if (needsOffsets &&
-            fieldInfo.indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) < 0) {
+            fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) < 0) {
           // Offsets were not indexed:
           return null;
         }
@@ -728,7 +728,7 @@ public class BlockTermsReader extends FieldsProducer {
       public TermState termState() throws IOException {
         //System.out.println("BTR.termState this=" + this);
         decodeMetaData();
-        TermState ts = (TermState) state.clone();
+        TermState ts = state.clone();
         //System.out.println("  return ts=" + ts);
         return ts;
       }
@@ -776,9 +776,6 @@ public class BlockTermsReader extends FieldsProducer {
           throw new UnsupportedOperationException();
         }
         return state.ord;
-      }
-
-      private void doPendingSeek() {
       }
 
       /* Does initial decode of next block of terms; this
@@ -862,7 +859,7 @@ public class BlockTermsReader extends FieldsProducer {
             // just skipN here:
             state.docFreq = freqReader.readVInt();
             //System.out.println("    dF=" + state.docFreq);
-            if (fieldInfo.indexOptions != IndexOptions.DOCS_ONLY) {
+            if (fieldInfo.getIndexOptions() != IndexOptions.DOCS_ONLY) {
               state.totalTermFreq = state.docFreq + freqReader.readVLong();
               //System.out.println("    totTF=" + state.totalTermFreq);
             }

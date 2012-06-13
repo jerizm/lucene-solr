@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,7 +21,8 @@ import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.miscellaneous.TrimFilter;
-import org.apache.solr.common.SolrException;
+import org.apache.lucene.analysis.util.InitializationException;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
  * Factory for {@link TrimFilter}.
@@ -35,7 +36,7 @@ import org.apache.solr.common.SolrException;
  *
  * @see TrimFilter
  */
-public class TrimFilterFactory extends BaseTokenFilterFactory {
+public class TrimFilterFactory extends TokenFilterFactory {
   
   protected boolean updateOffsets = false;
   
@@ -49,7 +50,7 @@ public class TrimFilterFactory extends BaseTokenFilterFactory {
         updateOffsets = Boolean.valueOf( v );
       }
       catch( Exception ex ) {
-        throw new SolrException( SolrException.ErrorCode.BAD_REQUEST, "Error reading updateOffsets value.  Must be true or false.", ex );
+        throw new InitializationException("Error reading updateOffsets value.  Must be true or false.", ex);
       }
     }
   }

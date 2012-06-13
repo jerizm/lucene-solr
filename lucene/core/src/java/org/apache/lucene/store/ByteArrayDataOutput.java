@@ -1,6 +1,6 @@
 package org.apache.lucene.store;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,6 +20,9 @@ package org.apache.lucene.store;
 import org.apache.lucene.util.BytesRef;
 
 /**
+ * DataOutput backed by a byte array.
+ * <b>WARNING:</b> This class omits most low-level checks,
+ * so be sure to test heavily with assertions enabled.
  * @lucene.experimental
  */
 public class ByteArrayDataOutput extends DataOutput {

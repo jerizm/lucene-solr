@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.perfield;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,13 +18,11 @@ package org.apache.lucene.codecs.perfield;
  */
 
 import java.io.Closeable;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Set;
+import java.util.ServiceLoader; // javadocs
 import java.util.TreeMap;
 
 import org.apache.lucene.codecs.FieldsConsumer;
@@ -33,31 +31,32 @@ import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.TermsConsumer;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldsEnum;
-import org.apache.lucene.index.IndexFileNames;
-import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Terms;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.IOContext;
-import org.apache.lucene.store.IndexInput;
-import org.apache.lucene.store.IndexOutput;
-import org.apache.lucene.util.CodecUtil;
 import org.apache.lucene.util.IOUtils;
 
 /**
  * Enables per field format support.
- * 
+ * <p>
+ * Note, when extending this class, the name ({@link #getName}) is 
+ * written into the index. In order for the field to be read, the
+ * name must resolve to your implementation via {@link #forName(String)}.
+ * This method uses Java's 
+ * {@link ServiceLoader Service Provider Interface} to resolve format names.
+ * <p>
+ * Files written by each posting format have an additional suffix containing the 
+ * format name. For example, in a per-field configuration instead of <tt>_1.prx</tt> 
+ * filenames would look like <tt>_1_Lucene40_0.prx</tt>.
+ * @see ServiceLoader
  * @lucene.experimental
  */
 
 public abstract class PerFieldPostingsFormat extends PostingsFormat {
-
-  public static final String PER_FIELD_EXTENSION = "per";
   public static final String PER_FIELD_NAME = "PerField40";
-
-  public static final int VERSION_START = 0;
-  public static final int VERSION_LATEST = VERSION_START;
+  
+  public static final String PER_FIELD_FORMAT_KEY = PerFieldPostingsFormat.class.getSimpleName() + ".format";
+  public static final String PER_FIELD_SUFFIX_KEY = PerFieldPostingsFormat.class.getSimpleName() + ".suffix";
 
   public PerFieldPostingsFormat() {
     super(PER_FIELD_NAME);
@@ -68,30 +67,22 @@ public abstract class PerFieldPostingsFormat extends PostingsFormat {
       throws IOException {
     return new FieldsWriter(state);
   }
-
-  // NOTE: not private to avoid $accessN at runtime!!
-  static class FieldsConsumerAndID implements Closeable {
-    final FieldsConsumer fieldsConsumer;
-    final String segmentSuffix;
-
-    public FieldsConsumerAndID(FieldsConsumer fieldsConsumer, String segmentSuffix) {
-      this.fieldsConsumer = fieldsConsumer;
-      this.segmentSuffix = segmentSuffix;
-    }
-
+  
+  static class FieldsConsumerAndSuffix implements Closeable {
+    FieldsConsumer consumer;
+    int suffix;
+    
     @Override
     public void close() throws IOException {
-      fieldsConsumer.close();
+      consumer.close();
     }
-  };
+  }
     
   private class FieldsWriter extends FieldsConsumer {
 
-    private final Map<PostingsFormat,FieldsConsumerAndID> formats = new IdentityHashMap<PostingsFormat,FieldsConsumerAndID>();
-
-    /** Records all fields we wrote. */
-    private final Map<String,PostingsFormat> fieldToFormat = new HashMap<String,PostingsFormat>();
-
+    private final Map<PostingsFormat,FieldsConsumerAndSuffix> formats = new HashMap<PostingsFormat,FieldsConsumerAndSuffix>();
+    private final Map<String,Integer> suffixes = new HashMap<String,Integer>();
+    
     private final SegmentWriteState segmentWriteState;
 
     public FieldsWriter(SegmentWriteState state) throws IOException {
@@ -104,62 +95,59 @@ public abstract class PerFieldPostingsFormat extends PostingsFormat {
       if (format == null) {
         throw new IllegalStateException("invalid null PostingsFormat for field=\"" + field.name + "\"");
       }
-
-      assert !fieldToFormat.containsKey(field.name);
-      fieldToFormat.put(field.name, format);
-
-      FieldsConsumerAndID consumerAndId = formats.get(format);
-      if (consumerAndId == null) {
-        // First time we are seeing this format; assign
-        // next id and init it:
+      final String formatName = format.getName();
+      
+      String previousValue = field.putAttribute(PER_FIELD_FORMAT_KEY, formatName);
+      assert previousValue == null;
+      
+      Integer suffix;
+      
+      FieldsConsumerAndSuffix consumer = formats.get(format);
+      if (consumer == null) {
+        // First time we are seeing this format; create a new instance
+        
+        // bump the suffix
+        suffix = suffixes.get(formatName);
+        if (suffix == null) {
+          suffix = 0;
+        } else {
+          suffix = suffix + 1;
+        }
+        suffixes.put(formatName, suffix);
+        
         final String segmentSuffix = getFullSegmentSuffix(field.name,
                                                           segmentWriteState.segmentSuffix,
-                                                          ""+formats.size());
-        consumerAndId = new FieldsConsumerAndID(format.fieldsConsumer(new SegmentWriteState(segmentWriteState, segmentSuffix)),
-                                                segmentSuffix);
-        formats.put(format, consumerAndId);
+                                                          getSuffix(formatName, Integer.toString(suffix)));
+        consumer = new FieldsConsumerAndSuffix();
+        consumer.consumer = format.fieldsConsumer(new SegmentWriteState(segmentWriteState, segmentSuffix));
+        consumer.suffix = suffix;
+        formats.put(format, consumer);
+      } else {
+        // we've already seen this format, so just grab its suffix
+        assert suffixes.containsKey(formatName);
+        suffix = consumer.suffix;
       }
+      
+      previousValue = field.putAttribute(PER_FIELD_SUFFIX_KEY, Integer.toString(suffix));
+      assert previousValue == null;
 
-      return consumerAndId.fieldsConsumer.addField(field);
+      // TODO: we should only provide the "slice" of FIS
+      // that this PF actually sees ... then stuff like
+      // .hasProx could work correctly?
+      // NOTE: .hasProx is already broken in the same way for the non-perfield case,
+      // if there is a fieldinfo with prox that has no postings, you get a 0 byte file.
+      return consumer.consumer.addField(field);
     }
 
     @Override
     public void close() throws IOException {
-
       // Close all subs
       IOUtils.close(formats.values());
-
-      // Write _X.per: maps field name -> format name and
-      // format name -> format id
-      final String mapFileName = IndexFileNames.segmentFileName(segmentWriteState.segmentName, segmentWriteState.segmentSuffix, PER_FIELD_EXTENSION);
-      final IndexOutput out = segmentWriteState.directory.createOutput(mapFileName, segmentWriteState.context);
-      boolean success = false;
-      try {
-        CodecUtil.writeHeader(out, PER_FIELD_NAME, VERSION_LATEST);
-
-        // format name -> int id
-        out.writeVInt(formats.size());
-        for(Map.Entry<PostingsFormat,FieldsConsumerAndID> ent : formats.entrySet()) {
-          out.writeString(ent.getValue().segmentSuffix);
-          out.writeString(ent.getKey().getName());
-        }
-
-        // field name -> format name
-        out.writeVInt(fieldToFormat.size());
-        for(Map.Entry<String,PostingsFormat> ent : fieldToFormat.entrySet()) {
-          out.writeString(ent.getKey());
-          out.writeString(ent.getValue().getName());
-        }
-
-        success = true;
-      } finally {
-        if (!success) {
-          IOUtils.closeWhileHandlingException(out);
-        } else {
-          IOUtils.close(out);
-        }
-      }
     }
+  }
+  
+  static String getSuffix(String formatName, String suffix) {
+    return formatName + "_" + suffix;
   }
 
   static String getFullSegmentSuffix(String fieldName, String outerSegmentSuffix, String segmentSuffix) {
@@ -176,25 +164,31 @@ public abstract class PerFieldPostingsFormat extends PostingsFormat {
   private class FieldsReader extends FieldsProducer {
 
     private final Map<String,FieldsProducer> fields = new TreeMap<String,FieldsProducer>();
-    private final Map<PostingsFormat,FieldsProducer> formats = new IdentityHashMap<PostingsFormat,FieldsProducer>();
+    private final Map<String,FieldsProducer> formats = new HashMap<String,FieldsProducer>();
 
     public FieldsReader(final SegmentReadState readState) throws IOException {
 
       // Read _X.per and init each format:
       boolean success = false;
       try {
-        new VisitPerFieldFile(readState.dir, readState.segmentInfo.name, readState.segmentSuffix) {
-          @Override
-          protected void visitOneFormat(String segmentSuffix, PostingsFormat postingsFormat) throws IOException {
-            formats.put(postingsFormat, postingsFormat.fieldsProducer(new SegmentReadState(readState, segmentSuffix)));
+        // Read field name -> format name
+        for (FieldInfo fi : readState.fieldInfos) {
+          if (fi.isIndexed()) {
+            final String fieldName = fi.name;
+            final String formatName = fi.getAttribute(PER_FIELD_FORMAT_KEY);
+            if (formatName != null) {
+              // null formatName means the field is in fieldInfos, but has no postings!
+              final String suffix = fi.getAttribute(PER_FIELD_SUFFIX_KEY);
+              assert suffix != null;
+              PostingsFormat format = PostingsFormat.forName(formatName);
+              String segmentSuffix = getSuffix(formatName, suffix);
+              if (!formats.containsKey(segmentSuffix)) {
+                formats.put(segmentSuffix, format.fieldsProducer(new SegmentReadState(readState, segmentSuffix)));
+              }
+              fields.put(fieldName, formats.get(segmentSuffix));
+            }
           }
-
-          @Override
-          protected void visitOneField(String fieldName, PostingsFormat postingsFormat) throws IOException {
-            assert formats.containsKey(postingsFormat);
-            fields.put(fieldName, formats.get(postingsFormat));
-          }
-        };
+        }
         success = true;
       } finally {
         if (!success) {
@@ -240,7 +234,7 @@ public abstract class PerFieldPostingsFormat extends PostingsFormat {
     }
     
     @Override
-    public int getUniqueFieldCount() {
+    public int size() {
       return fields.size();
     }
 
@@ -254,83 +248,6 @@ public abstract class PerFieldPostingsFormat extends PostingsFormat {
   public FieldsProducer fieldsProducer(SegmentReadState state)
       throws IOException {
     return new FieldsReader(state);
-  }
-
-  private abstract class VisitPerFieldFile {
-    public VisitPerFieldFile(Directory dir, String segmentName, String outerSegmentSuffix) throws IOException {
-      final String mapFileName = IndexFileNames.segmentFileName(segmentName, outerSegmentSuffix, PER_FIELD_EXTENSION);
-      final IndexInput in = dir.openInput(mapFileName, IOContext.READONCE);
-      boolean success = false;
-      try {
-        CodecUtil.checkHeader(in, PER_FIELD_NAME, VERSION_START, VERSION_LATEST);
-
-        // Read format name -> format id
-        final int formatCount = in.readVInt();
-        for(int formatIDX=0;formatIDX<formatCount;formatIDX++) {
-          final String segmentSuffix = in.readString();
-          final String formatName = in.readString();
-          PostingsFormat postingsFormat = PostingsFormat.forName(formatName);
-          //System.out.println("do lookup " + formatName + " -> " + postingsFormat);
-          if (postingsFormat == null) {
-            throw new IllegalStateException("unable to lookup PostingsFormat for name=\"" + formatName + "\": got null");
-          }
-
-          // Better be defined, because it was defined
-          // during indexing:
-          visitOneFormat(segmentSuffix, postingsFormat);
-        }
-
-        // Read field name -> format name
-        final int fieldCount = in.readVInt();
-        for(int fieldIDX=0;fieldIDX<fieldCount;fieldIDX++) {
-          final String fieldName = in.readString();
-          final String formatName = in.readString();
-          visitOneField(fieldName, PostingsFormat.forName(formatName));
-        }
-
-        success = true;
-      } finally {
-        if (!success) {
-          IOUtils.closeWhileHandlingException(in);
-        } else {
-          IOUtils.close(in);
-        }
-      }
-    }
-
-    // This is called first, for all formats:
-    protected abstract void visitOneFormat(String segmentSuffix, PostingsFormat format) throws IOException;
-
-    // ... then this is called, for all fields:
-    protected abstract void visitOneField(String fieldName, PostingsFormat format) throws IOException;
-  }
-
-  @Override
-  public void files(final SegmentInfo info, String segmentSuffix, final Set<String> files) throws IOException {
-    final Directory dir = info.dir;
-
-    final String mapFileName = IndexFileNames.segmentFileName(info.name, segmentSuffix, PER_FIELD_EXTENSION);
-    files.add(mapFileName);
-
-    try {
-      new VisitPerFieldFile(dir, info.name, segmentSuffix) {
-        @Override
-        protected void visitOneFormat(String segmentSuffix, PostingsFormat format) throws IOException {
-          format.files(info, segmentSuffix, files);
-        }
-
-        @Override
-          protected void visitOneField(String field, PostingsFormat format) {
-        }
-      };
-    } catch (FileNotFoundException fnfe) {
-      // TODO: this is somewhat shady... if we can't open
-      // the .per file then most likely someone is calling
-      // .files() after this segment was deleted, so, they
-      // wouldn't be able to do anything with the files even
-      // if we could return them, so we don't add any files
-      // in this case.
-    }
   }
 
   // NOTE: only called during writing; for reading we read

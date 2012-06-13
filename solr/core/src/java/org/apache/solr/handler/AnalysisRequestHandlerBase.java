@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,18 +22,17 @@ import org.apache.lucene.analysis.CharReader;
 import org.apache.lucene.analysis.CharStream;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.*;
+import org.apache.lucene.analysis.util.CharFilterFactory;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenizerFactory;
 import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.index.Payload;
 import org.apache.lucene.util.Attribute;
 import org.apache.lucene.util.AttributeImpl;
 import org.apache.lucene.util.AttributeSource;
 import org.apache.lucene.util.AttributeReflector;
 import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.ArrayUtil;
-import org.apache.solr.analysis.CharFilterFactory;
-import org.apache.solr.analysis.TokenFilterFactory;
 import org.apache.solr.analysis.TokenizerChain;
-import org.apache.solr.analysis.TokenizerFactory;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.common.SolrException;
@@ -273,9 +272,9 @@ public abstract class AnalysisRequestHandlerBase extends RequestHandlerBase {
             k = ATTRIBUTE_MAPPING.get(k);
           }
           
-          if (value instanceof Payload) {
-            final Payload p = (Payload) value;
-            value = new BytesRef(p.getData()).toString();
+          if (value instanceof BytesRef) {
+            final BytesRef p = (BytesRef) value;
+            value = p.toString();
           }
 
           tokenNamedList.add(k, value);

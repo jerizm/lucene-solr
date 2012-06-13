@@ -1,6 +1,6 @@
 package org.apache.lucene.store;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,6 +19,10 @@ package org.apache.lucene.store;
 
 import java.io.IOException;
 
+/**
+ * Used by MockDirectoryWrapper to wrap another factory
+ * and track open locks.
+ */
 public class MockLockFactoryWrapper extends LockFactory {
   MockDirectoryWrapper dir;
   LockFactory delegate;

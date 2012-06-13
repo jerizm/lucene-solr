@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -34,6 +34,7 @@ public class SuggesterTest extends SolrTestCaseJ4 {
 
   // TODO: fix this test to not require FSDirectory
   static String savedFactory;
+
   @BeforeClass
   public static void beforeClass() throws Exception {
     savedFactory = System.getProperty("solr.DirectoryFactory");

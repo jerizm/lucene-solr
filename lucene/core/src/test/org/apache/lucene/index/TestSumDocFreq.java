@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,8 +19,6 @@ package org.apache.lucene.index;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util._TestUtil;
@@ -35,23 +33,23 @@ public class TestSumDocFreq extends LuceneTestCase {
     final int numDocs = atLeast(500);
     
     Directory dir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir);
     
     Document doc = new Document();
-    Field id = newField("id", "", StringField.TYPE_UNSTORED);
-    Field field1 = newField("foo", "", TextField.TYPE_UNSTORED);
-    Field field2 = newField("bar", "", TextField.TYPE_UNSTORED);
+    Field id = newStringField("id", "", Field.Store.NO);
+    Field field1 = newTextField("foo", "", Field.Store.NO);
+    Field field2 = newTextField("bar", "", Field.Store.NO);
     doc.add(id);
     doc.add(field1);
     doc.add(field2);
     for (int i = 0; i < numDocs; i++) {
-      id.setValue("" + i);
-      char ch1 = (char) _TestUtil.nextInt(random, 'a', 'z');
-      char ch2 = (char) _TestUtil.nextInt(random, 'a', 'z');
-      field1.setValue("" + ch1 + " " + ch2);
-      ch1 = (char) _TestUtil.nextInt(random, 'a', 'z');
-      ch2 = (char) _TestUtil.nextInt(random, 'a', 'z');
-      field2.setValue("" + ch1 + " " + ch2);
+      id.setStringValue("" + i);
+      char ch1 = (char) _TestUtil.nextInt(random(), 'a', 'z');
+      char ch2 = (char) _TestUtil.nextInt(random(), 'a', 'z');
+      field1.setStringValue("" + ch1 + " " + ch2);
+      ch1 = (char) _TestUtil.nextInt(random(), 'a', 'z');
+      ch2 = (char) _TestUtil.nextInt(random(), 'a', 'z');
+      field2.setStringValue("" + ch1 + " " + ch2);
       writer.addDocument(doc);
     }
     
@@ -62,12 +60,12 @@ public class TestSumDocFreq extends LuceneTestCase {
     
     int numDeletions = atLeast(20);
     for (int i = 0; i < numDeletions; i++) {
-      writer.deleteDocuments(new Term("id", "" + random.nextInt(numDocs)));
+      writer.deleteDocuments(new Term("id", "" + random().nextInt(numDocs)));
     }
     writer.forceMerge(1);
     writer.close();
     
-    ir = IndexReader.open(dir);
+    ir = DirectoryReader.open(dir);
     assertSumDocFreq(ir);
     ir.close();
     dir.close();

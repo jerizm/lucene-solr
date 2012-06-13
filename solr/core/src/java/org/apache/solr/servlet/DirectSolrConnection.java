@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -70,7 +70,7 @@ public class DirectSolrConnection
    * For example:
    * 
    * String json = solr.request( "/select?qt=dismax&wt=json&q=...", null );
-   * String xml = solr.request( "/update", "&lt;add><doc><field ..." );
+   * String xml = solr.request( "/update", "&lt;add&gt;&lt;doc&gt;&lt;field ..." );
    */
   public String request( String pathAndParams, String body ) throws Exception
   {

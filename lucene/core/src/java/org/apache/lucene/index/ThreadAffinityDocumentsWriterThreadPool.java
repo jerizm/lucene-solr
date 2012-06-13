@@ -1,5 +1,5 @@
 package org.apache.lucene.index;
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -30,7 +30,7 @@ import org.apache.lucene.index.DocumentsWriterPerThreadPool.ThreadState; //javad
  * {@link ThreadAffinityDocumentsWriterThreadPool} tries to find the currently
  * minimal contended {@link ThreadState}.
  */
-public class ThreadAffinityDocumentsWriterThreadPool extends DocumentsWriterPerThreadPool {
+class ThreadAffinityDocumentsWriterThreadPool extends DocumentsWriterPerThreadPool {
   private Map<Thread, ThreadState> threadBindings = new ConcurrentHashMap<Thread, ThreadState>();
   
   /**
@@ -73,5 +73,12 @@ public class ThreadAffinityDocumentsWriterThreadPool extends DocumentsWriterPerT
     
     minThreadState.lock();
     return minThreadState;
+  }
+
+  @Override
+  public ThreadAffinityDocumentsWriterThreadPool clone() {
+    ThreadAffinityDocumentsWriterThreadPool clone = (ThreadAffinityDocumentsWriterThreadPool) super.clone();
+    clone.threadBindings = new ConcurrentHashMap<Thread, ThreadState>();
+    return clone;
   }
 }

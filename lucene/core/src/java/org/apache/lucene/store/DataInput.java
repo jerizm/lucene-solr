@@ -1,6 +1,6 @@
 package org.apache.lucene.store;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,7 +19,9 @@ package org.apache.lucene.store;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.lucene.util.IOUtils;
 
@@ -79,6 +81,9 @@ public abstract class DataInput implements Cloneable {
   /** Reads an int stored in variable-length format.  Reads between one and
    * five bytes.  Smaller values take fewer bytes.  Negative numbers are not
    * supported.
+   * <p>
+   * The format is described further in {@link DataOutput#writeVInt(int)}.
+   * 
    * @see DataOutput#writeVInt(int)
    */
   public int readVInt() throws IOException {
@@ -94,20 +99,22 @@ public abstract class DataInput implements Cloneable {
     return i;
     */
     byte b = readByte();
+    if (b >= 0) return b;
     int i = b & 0x7F;
-    if ((b & 0x80) == 0) return i;
     b = readByte();
     i |= (b & 0x7F) << 7;
-    if ((b & 0x80) == 0) return i;
+    if (b >= 0) return i;
     b = readByte();
     i |= (b & 0x7F) << 14;
-    if ((b & 0x80) == 0) return i;
+    if (b >= 0) return i;
     b = readByte();
     i |= (b & 0x7F) << 21;
-    if ((b & 0x80) == 0) return i;
+    if (b >= 0) return i;
     b = readByte();
-    assert (b & 0x80) == 0;
-    return i | ((b & 0x7F) << 28);
+    // Warning: the next ands use 0x0F / 0xF0 - beware copy/paste errors:
+    i |= (b & 0x0F) << 28;
+    if ((b & 0xF0) == 0) return i;
+    throw new IOException("Invalid vInt detected (too many bits)");
   }
 
   /** Reads eight bytes and returns a long.
@@ -119,7 +126,12 @@ public abstract class DataInput implements Cloneable {
 
   /** Reads a long stored in variable-length format.  Reads between one and
    * nine bytes.  Smaller values take fewer bytes.  Negative numbers are not
-   * supported. */
+   * supported.
+   * <p>
+   * The format is described further in {@link DataOutput#writeVInt(int)}.
+   * 
+   * @see DataOutput#writeVLong(long)
+   */
   public long readVLong() throws IOException {
     /* This is the original code of this method,
      * but a Hotspot bug (see LUCENE-2975) corrupts the for-loop if
@@ -133,32 +145,33 @@ public abstract class DataInput implements Cloneable {
     return i;
     */
     byte b = readByte();
+    if (b >= 0) return b;
     long i = b & 0x7FL;
-    if ((b & 0x80) == 0) return i;
     b = readByte();
     i |= (b & 0x7FL) << 7;
-    if ((b & 0x80) == 0) return i;
+    if (b >= 0) return i;
     b = readByte();
     i |= (b & 0x7FL) << 14;
-    if ((b & 0x80) == 0) return i;
+    if (b >= 0) return i;
     b = readByte();
     i |= (b & 0x7FL) << 21;
-    if ((b & 0x80) == 0) return i;
+    if (b >= 0) return i;
     b = readByte();
     i |= (b & 0x7FL) << 28;
-    if ((b & 0x80) == 0) return i;
+    if (b >= 0) return i;
     b = readByte();
     i |= (b & 0x7FL) << 35;
-    if ((b & 0x80) == 0) return i;
+    if (b >= 0) return i;
     b = readByte();
     i |= (b & 0x7FL) << 42;
-    if ((b & 0x80) == 0) return i;
+    if (b >= 0) return i;
     b = readByte();
     i |= (b & 0x7FL) << 49;
-    if ((b & 0x80) == 0) return i;
+    if (b >= 0) return i;
     b = readByte();
-    assert (b & 0x80) == 0;
-    return i | ((b & 0x7FL) << 56);
+    i |= (b & 0x7FL) << 56;
+    if (b >= 0) return i;
+    throw new IOException("Invalid vLong detected (negative values disallowed)");
   }
 
   /** Reads a string.
@@ -181,7 +194,7 @@ public abstract class DataInput implements Cloneable {
    * were cloned from.
    */
   @Override
-  public Object clone() {
+  public DataInput clone() {
     DataInput clone = null;
     try {
       clone = (DataInput)super.clone();
@@ -190,6 +203,8 @@ public abstract class DataInput implements Cloneable {
     return clone;
   }
 
+  /** Reads a Map&lt;String,String&gt; previously written
+   *  with {@link DataOutput#writeStringStringMap(Map)}. */
   public Map<String,String> readStringStringMap() throws IOException {
     final Map<String,String> map = new HashMap<String,String>();
     final int count = readInt();
@@ -200,5 +215,17 @@ public abstract class DataInput implements Cloneable {
     }
 
     return map;
+  }
+
+  /** Reads a Set&lt;String&gt; previously written
+   *  with {@link DataOutput#writeStringSet(Set)}. */
+  public Set<String> readStringSet() throws IOException {
+    final Set<String> set = new HashSet<String>();
+    final int count = readInt();
+    for(int i=0;i<count;i++) {
+      set.add(readString());
+    }
+
+    return set;
   }
 }

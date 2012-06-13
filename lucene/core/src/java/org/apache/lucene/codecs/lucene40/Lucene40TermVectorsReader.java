@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.lucene40;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,7 +22,6 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.lucene.codecs.TermVectorsReader;
 import org.apache.lucene.index.CorruptIndexException;
@@ -33,8 +32,6 @@ import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.FieldsEnum;
 import org.apache.lucene.index.IndexFileNames;
-import org.apache.lucene.index.IndexFormatTooNewException;
-import org.apache.lucene.index.IndexFormatTooOldException;
 import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
@@ -43,25 +40,17 @@ import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.CodecUtil;
 import org.apache.lucene.util.IOUtils;
 
+/**
+ * Lucene 4.0 Term Vectors reader.
+ * <p>
+ * It reads .tvd, .tvf, and .tvx files.
+ * 
+ * @see Lucene40TermVectorsFormat
+ */
 public class Lucene40TermVectorsReader extends TermVectorsReader {
-
-  // NOTE: if you make a new format, it must be larger than
-  // the current format
-
-  // Changed strings to UTF8 with length-in-bytes not length-in-chars
-  static final int FORMAT_UTF8_LENGTH_IN_BYTES = 4;
-
-  // NOTE: always change this if you switch to a new format!
-  // whenever you add a new format, make it 1 larger (positive version logic)!
-  static final int FORMAT_CURRENT = FORMAT_UTF8_LENGTH_IN_BYTES;
-  
-  // when removing support for old versions, leave the last supported version here
-  static final int FORMAT_MINIMUM = FORMAT_UTF8_LENGTH_IN_BYTES;
-
-  //The size in bytes that the FORMAT_VERSION will take up at the beginning of each file 
-  static final int FORMAT_SIZE = 4;
 
   static final byte STORE_POSITIONS_WITH_TERMVECTOR = 0x1;
 
@@ -75,6 +64,17 @@ public class Lucene40TermVectorsReader extends TermVectorsReader {
 
   /** Extension of vectors index file */
   static final String VECTORS_INDEX_EXTENSION = "tvx";
+  
+  static final String CODEC_NAME_FIELDS = "Lucene40TermVectorsFields";
+  static final String CODEC_NAME_DOCS = "Lucene40TermVectorsDocs";
+  static final String CODEC_NAME_INDEX = "Lucene40TermVectorsIndex";
+
+  static final int VERSION_START = 0;
+  static final int VERSION_CURRENT = VERSION_START;
+  
+  static final long HEADER_LENGTH_FIELDS = CodecUtil.headerLength(CODEC_NAME_FIELDS);
+  static final long HEADER_LENGTH_DOCS = CodecUtil.headerLength(CODEC_NAME_DOCS);
+  static final long HEADER_LENGTH_INDEX = CodecUtil.headerLength(CODEC_NAME_INDEX);
 
   private FieldInfos fieldInfos;
 
@@ -84,41 +84,42 @@ public class Lucene40TermVectorsReader extends TermVectorsReader {
   private int size;
   private int numTotalDocs;
   
-  private final int format;
 
   // used by clone
-  Lucene40TermVectorsReader(FieldInfos fieldInfos, IndexInput tvx, IndexInput tvd, IndexInput tvf, int size, int numTotalDocs, int format) {
+  Lucene40TermVectorsReader(FieldInfos fieldInfos, IndexInput tvx, IndexInput tvd, IndexInput tvf, int size, int numTotalDocs) {
     this.fieldInfos = fieldInfos;
     this.tvx = tvx;
     this.tvd = tvd;
     this.tvf = tvf;
     this.size = size;
     this.numTotalDocs = numTotalDocs;
-    this.format = format;
   }
     
   public Lucene40TermVectorsReader(Directory d, SegmentInfo si, FieldInfos fieldInfos, IOContext context)
     throws CorruptIndexException, IOException {
     final String segment = si.name;
-    final int size = si.docCount;
+    final int size = si.getDocCount();
     
     boolean success = false;
 
     try {
       String idxName = IndexFileNames.segmentFileName(segment, "", VECTORS_INDEX_EXTENSION);
       tvx = d.openInput(idxName, context);
-      format = checkValidFormat(tvx);
+      final int tvxVersion = CodecUtil.checkHeader(tvx, CODEC_NAME_INDEX, VERSION_START, VERSION_CURRENT);
+      
       String fn = IndexFileNames.segmentFileName(segment, "", VECTORS_DOCUMENTS_EXTENSION);
       tvd = d.openInput(fn, context);
-      final int tvdFormat = checkValidFormat(tvd);
+      final int tvdVersion = CodecUtil.checkHeader(tvd, CODEC_NAME_DOCS, VERSION_START, VERSION_CURRENT);
       fn = IndexFileNames.segmentFileName(segment, "", VECTORS_FIELDS_EXTENSION);
       tvf = d.openInput(fn, context);
-      final int tvfFormat = checkValidFormat(tvf);
+      final int tvfVersion = CodecUtil.checkHeader(tvf, CODEC_NAME_FIELDS, VERSION_START, VERSION_CURRENT);
+      assert HEADER_LENGTH_INDEX == tvx.getFilePointer();
+      assert HEADER_LENGTH_DOCS == tvd.getFilePointer();
+      assert HEADER_LENGTH_FIELDS == tvf.getFilePointer();
+      assert tvxVersion == tvdVersion;
+      assert tvxVersion == tvfVersion;
 
-      assert format == tvdFormat;
-      assert format == tvfFormat;
-
-      numTotalDocs = (int) (tvx.length() >> 4);
+      numTotalDocs = (int) (tvx.length()-HEADER_LENGTH_INDEX >> 4);
 
       this.size = numTotalDocs;
       assert size == 0 || numTotalDocs == size;
@@ -149,13 +150,7 @@ public class Lucene40TermVectorsReader extends TermVectorsReader {
 
   // Not private to avoid synthetic access$NNN methods
   void seekTvx(final int docNum) throws IOException {
-    tvx.seek(docNum * 16L + FORMAT_SIZE);
-  }
-
-  boolean canReadRawDocs() {
-    // we can always read raw docs, unless the term vectors
-    // didn't exist
-    return format != 0;
+    tvx.seek(docNum * 16L + HEADER_LENGTH_INDEX);
   }
 
   /** Retrieve the length (in bytes) of the tvd and tvf
@@ -201,16 +196,6 @@ public class Lucene40TermVectorsReader extends TermVectorsReader {
       lastTvdPosition = tvdPosition;
       lastTvfPosition = tvfPosition;
     }
-  }
-
-  private int checkValidFormat(IndexInput in) throws CorruptIndexException, IOException
-  {
-    int format = in.readInt();
-    if (format < FORMAT_MINIMUM)
-      throw new IndexFormatTooOldException(in, format, FORMAT_MINIMUM, FORMAT_CURRENT);
-    if (format > FORMAT_CURRENT)
-      throw new IndexFormatTooNewException(in, format, FORMAT_MINIMUM, FORMAT_CURRENT);
-    return format;
   }
 
   public void close() throws IOException {
@@ -269,7 +254,7 @@ public class Lucene40TermVectorsReader extends TermVectorsReader {
         @Override
         public String next() throws IOException {
           if (fieldNumbers != null && fieldUpto < fieldNumbers.length) {
-            return fieldInfos.fieldName(fieldNumbers[fieldUpto++]);
+            return fieldInfos.fieldInfo(fieldNumbers[fieldUpto++]).name;
           } else {
             return null;
           }
@@ -277,7 +262,7 @@ public class Lucene40TermVectorsReader extends TermVectorsReader {
 
         @Override
         public Terms terms() throws IOException {
-          return TVFields.this.terms(fieldInfos.fieldName(fieldNumbers[fieldUpto-1]));
+          return TVFields.this.terms(fieldInfos.fieldInfo(fieldNumbers[fieldUpto-1]).name);
         }
       };
     }
@@ -300,7 +285,7 @@ public class Lucene40TermVectorsReader extends TermVectorsReader {
     }
 
     @Override
-    public int getUniqueFieldCount() {
+    public int size() {
       if (fieldNumbers == null) {
         return 0;
       } else {
@@ -335,7 +320,7 @@ public class Lucene40TermVectorsReader extends TermVectorsReader {
     }
 
     @Override
-    public long getUniqueTermCount() {
+    public long size() {
       return numTerms;
     }
 
@@ -406,9 +391,14 @@ public class Lucene40TermVectorsReader extends TermVectorsReader {
     @Override
     public SeekStatus seekCeil(BytesRef text, boolean useCache)
       throws IOException {
-      if (nextTerm != 0 && text.compareTo(term) < 0) {
-        nextTerm = 0;
-        tvf.seek(tvfFP);
+      if (nextTerm != 0) {
+        final int cmp = text.compareTo(term);
+        if (cmp < 0) {
+          nextTerm = 0;
+          tvf.seek(tvfFP);
+        } else if (cmp == 0) {
+          return SeekStatus.FOUND;
+        }
       }
 
       while (next() != null) {
@@ -537,7 +527,7 @@ public class Lucene40TermVectorsReader extends TermVectorsReader {
     private Bits liveDocs;
 
     @Override
-    public int freq() {
+    public int freq() throws IOException {
       return freq;
     }
 
@@ -583,7 +573,7 @@ public class Lucene40TermVectorsReader extends TermVectorsReader {
     private int[] endOffsets;
 
     @Override
-    public int freq() {
+    public int freq() throws IOException {
       if (positions != null) {
         return positions.length;
       } else {
@@ -669,7 +659,7 @@ public class Lucene40TermVectorsReader extends TermVectorsReader {
     }
     if (tvx != null) {
       Fields fields = new TVFields(docID);
-      if (fields.getUniqueFieldCount() == 0) {
+      if (fields.size() == 0) {
         // TODO: we can improve writer here, eg write 0 into
         // tvx file, so we know on first read from tvx that
         // this doc has no TVs
@@ -696,15 +686,7 @@ public class Lucene40TermVectorsReader extends TermVectorsReader {
       cloneTvf = (IndexInput) tvf.clone();
     }
     
-    return new Lucene40TermVectorsReader(fieldInfos, cloneTvx, cloneTvd, cloneTvf, size, numTotalDocs, format);
-  }
-  
-  public static void files(SegmentInfo info, Set<String> files) throws IOException {
-    if (info.getHasVectors()) {
-      files.add(IndexFileNames.segmentFileName(info.name, "", VECTORS_INDEX_EXTENSION));
-      files.add(IndexFileNames.segmentFileName(info.name, "", VECTORS_FIELDS_EXTENSION));
-      files.add(IndexFileNames.segmentFileName(info.name, "", VECTORS_DOCUMENTS_EXTENSION));
-    }
+    return new Lucene40TermVectorsReader(fieldInfos, cloneTvx, cloneTvd, cloneTvf, size, numTotalDocs);
   }
 }
 

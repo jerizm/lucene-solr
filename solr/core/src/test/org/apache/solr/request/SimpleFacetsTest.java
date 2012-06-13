@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,15 +17,28 @@
 
 package org.apache.solr.request;
 
+import org.apache.noggit.ObjectBuilder;
 import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.schema.SchemaField;
+import org.apache.solr.util.TimeZoneUtils;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.TimeZone;
 
 
 public class SimpleFacetsTest extends SolrTestCaseJ4 {
+
+
   @BeforeClass
   public static void beforeClass() throws Exception {
     initCore("solrconfig.xml","schema.xml");
@@ -36,7 +49,7 @@ public class SimpleFacetsTest extends SolrTestCaseJ4 {
   static int random_dupe_percent = 25;   // some duplicates in the index to create deleted docs
 
   static void randomCommit(int percent_chance) {
-    if (random.nextInt(100) <= percent_chance)
+    if (random().nextInt(100) <= percent_chance)
       assertU(commit());
   }
 
@@ -46,21 +59,24 @@ public class SimpleFacetsTest extends SolrTestCaseJ4 {
   static void add_doc(String... fieldsAndValues) {
     do {
       pendingDocs.add(fieldsAndValues);      
-    } while (random.nextInt(100) <= random_dupe_percent);
+    } while (random().nextInt(100) <= random_dupe_percent);
 
     // assertU(adoc(fieldsAndValues));
     // randomCommit(random_commit_percent);
   }
 
 
-  static void createIndex() {
+  static void createIndex() throws Exception {
+    doEmptyFacetCounts();   // try on empty index
+
     indexSimpleFacetCounts();
     indexDateFacets();
     indexFacetSingleValued();
     indexFacetPrefixMultiValued();
     indexFacetPrefixSingleValued();
-    
-   Collections.shuffle(pendingDocs, random);
+    indexSimpleGroupedFacetCounts();
+
+    Collections.shuffle(pendingDocs, random());
     for (String[] doc : pendingDocs) {
       assertU(adoc(doc));
       randomCommit(random_commit_percent);
@@ -94,6 +110,149 @@ public class SimpleFacetsTest extends SolrTestCaseJ4 {
             "text", "line up and fly directly at the enemy death cannons, clogging them with wreckage!",
             "zerolen_s","");   
   }
+
+  static void indexSimpleGroupedFacetCounts() {
+    add_doc("id", "2000", "hotel_s1", "a", "airport_s1", "ams", "duration_i1", "5");
+    add_doc("id", "2001", "hotel_s1", "a", "airport_s1", "dus", "duration_i1", "10");
+    add_doc("id", "2002", "hotel_s1", "b", "airport_s1", "ams", "duration_i1", "10");
+    add_doc("id", "2003", "hotel_s1", "b", "airport_s1", "ams", "duration_i1", "5");
+    add_doc("id", "2004", "hotel_s1", "b", "airport_s1", "ams", "duration_i1", "5");
+  }
+
+  @Test
+  public void testSimpleGroupedFacets() throws Exception {
+    assertQ(
+        "Return 5 docs with id range 1937 till 1940",
+         req("id:[2000 TO 2004]"),
+        "*[count(//doc)=5]"
+    );
+    assertQ(
+        "Return two facet counts for field airport_a",
+         req(
+             "q", "*:*",
+             "fq", "id:[2000 TO 2004]",
+             "group", "true",
+             "group.facet", "true",
+             "group.field", "hotel_s1",
+             "facet", "true",
+             "facet.field", "airport_s1"
+         ),
+        "//lst[@name='facet_fields']/lst[@name='airport_s1']",
+        "*[count(//lst[@name='airport_s1']/int)=2]",
+        "//lst[@name='airport_s1']/int[@name='ams'][.='2']",
+        "//lst[@name='airport_s1']/int[@name='dus'][.='1']"
+    );
+    assertQ(
+        "Return two facet counts for field airport_a with fq",
+         req(
+             "q", "*:*",
+             "fq", "id:[2000 TO 2004]",
+             "fq", "duration_i1:5",
+             "group", "true",
+             "group.facet", "true",
+             "group.field", "hotel_s1",
+             "facet", "true",
+             "facet.field", "airport_s1"
+         ),
+        "//lst[@name='facet_fields']/lst[@name='airport_s1']",
+        "*[count(//lst[@name='airport_s1']/int)=2]",
+        "//lst[@name='airport_s1']/int[@name='ams'][.='2']",
+        "//lst[@name='airport_s1']/int[@name='dus'][.='0']"
+    );
+    assertQ(
+        "Return one facet count for field airport_s1 with prefix a",
+         req(
+             "q", "*:*",
+             "fq", "id:[2000 TO 2004]",
+             "group", "true",
+             "group.facet", "true",
+             "group.field", "hotel_s1",
+             "facet", "true",
+             "facet.field", "airport_s1",
+             "facet.prefix", "a"
+         ),
+        "//lst[@name='facet_fields']/lst[@name='airport_s1']",
+        "*[count(//lst[@name='airport_s1']/int)=1]",
+        "//lst[@name='airport_s1']/int[@name='ams'][.='2']"
+    );
+    
+    try {
+      h.query(
+           req(
+               "q", "*:*",
+               "fq", "id:[2000 TO 2004]",
+               "group.facet", "true",
+               "facet", "true",
+               "facet.field", "airport_s1",
+               "facet.prefix", "a"
+           )
+      );
+      fail("Exception should have been thrown");
+    } catch (SolrException e) {
+      assertEquals(SolrException.ErrorCode.BAD_REQUEST.code, e.code());
+    }
+  }
+
+  @Test
+  public void testEmptyFacetCounts() throws Exception {
+    doEmptyFacetCounts();
+  }
+
+  // static so we can try both with and without an empty index
+  static void doEmptyFacetCounts() throws Exception {
+    doEmptyFacetCounts("empty_t", new String[]{null, "myprefix",""});
+    doEmptyFacetCounts("empty_i", new String[]{null});
+    doEmptyFacetCounts("empty_f", new String[]{null});
+    doEmptyFacetCounts("empty_s", new String[]{null, "myprefix",""});
+    doEmptyFacetCounts("empty_d", new String[]{null});
+  }
+  
+  static void doEmptyFacetCounts(String field, String[] prefixes) throws Exception {
+    SchemaField sf = h.getCore().getSchema().getField(field);
+
+    String response = JQ(req("q", "*:*"));
+    Map rsp = (Map) ObjectBuilder.fromJSON(response);
+    Long numFound  = (Long)(((Map)rsp.get("response")).get("numFound"));
+
+    ModifiableSolrParams params = params("q","*:*", "rows","0", "facet","true", "facet.field","{!key=myalias}"+field);
+    
+    String[] methods = {null, "fc","enum","fcs"};
+    if (sf.multiValued() || sf.getType().multiValuedFieldCache()) {
+      methods = new String[]{null, "fc","enum"};
+    }
+
+    prefixes = prefixes==null ? new String[]{null} : prefixes;
+
+
+    for (String method : methods) {
+      if (method == null) {
+        params.remove("facet.method");
+      } else {
+        params.set("facet.method", method);
+      }
+      for (String prefix : prefixes) {
+        if (prefix == null) {
+          params.remove("facet.prefix");
+        } else {
+          params.set("facet.prefix", prefix);
+        }
+
+        for (String missing : new String[] {null, "true"}) {
+          if (missing == null) {
+            params.remove("facet.missing");
+          } else {
+            params.set("facet.missing", missing);
+          }
+          
+          String expected = missing==null ? "[]" : "[null," + numFound + "]";
+          
+          assertJQ(req(params),
+              "/facet_counts/facet_fields/myalias==" + expected);
+        }
+      }
+    }
+  }
+
 
   @Test
   public void testSimpleFacetCounts() {
@@ -874,6 +1033,100 @@ public class SimpleFacetsTest extends SolrTestCaseJ4 {
             ,meta+"/int[@name='after'  ][.='4']"
             ,meta+"/int[@name='between'][.='6']"
             );
+  }
+
+  @Test
+  public void testDateFacetsWithTz() {
+    for (String field : new String[] { "a_tdt", "a_pdt"}) {
+      for (boolean rangeType : new boolean[] { true, false }) {
+        helpTestDateFacetsWithTz(field, rangeType);
+      }
+    }
+  }
+
+  private void helpTestDateFacetsWithTz(final String fieldName,
+                                        final boolean rangeMode) {
+    final String p = rangeMode ? "facet.range" : "facet.date";
+    final String b = rangeMode ? "facet_ranges" : "facet_dates";
+    final String f = fieldName;
+    final String c = (rangeMode ? "/lst[@name='counts']" : "");
+    final String pre = "//lst[@name='"+b+"']/lst[@name='"+f+"']" + c;
+    final String meta = pre + (rangeMode ? "/../" : "");
+
+    final String TZ = "America/Los_Angeles";
+    assumeTrue("Test requires JVM to know about about TZ: " + TZ,
+               TimeZoneUtils.KNOWN_TIMEZONE_IDS.contains(TZ)); 
+
+    assertQ("checking facet counts for fixed now, using TZ: " + TZ,
+            req( "q", "*:*"
+                ,"rows", "0"
+                ,"facet", "true"
+                ,"NOW", "205078333000" // 1976-07-01T14:12:13.000Z
+                ,"TZ", TZ
+                ,p, f
+                ,p+".start", "NOW/MONTH"
+                ,p+".end",   "NOW/MONTH+15DAYS"
+                ,p+".gap",   "+1DAY"
+                ,p+".other", "all"
+                ,p+".include", "lower"
+                )
+            // 15 days + pre+post+inner = 18
+            ,"*[count("+pre+"/int)="+(rangeMode ? 15 : 18)+"]"
+            ,pre+"/int[@name='1976-07-01T07:00:00Z'][.='0']"
+            ,pre+"/int[@name='1976-07-02T07:00:00Z'][.='0']"
+            ,pre+"/int[@name='1976-07-03T07:00:00Z'][.='1'  ]"
+            ,pre+"/int[@name='1976-07-04T07:00:00Z'][.='1'  ]"
+            ,pre+"/int[@name='1976-07-05T07:00:00Z'][.='1'  ]"
+            ,pre+"/int[@name='1976-07-06T07:00:00Z'][.='1'  ]"
+            ,pre+"/int[@name='1976-07-07T07:00:00Z'][.='0']"
+            ,pre+"/int[@name='1976-07-08T07:00:00Z'][.='0']"
+            ,pre+"/int[@name='1976-07-09T07:00:00Z'][.='0']"
+            ,pre+"/int[@name='1976-07-10T07:00:00Z'][.='0']"
+            ,pre+"/int[@name='1976-07-11T07:00:00Z'][.='0']"
+            ,pre+"/int[@name='1976-07-12T07:00:00Z'][.='1'  ]"
+            ,pre+"/int[@name='1976-07-13T07:00:00Z'][.='1'  ]"
+            ,pre+"/int[@name='1976-07-14T07:00:00Z'][.='0']"
+            ,pre+"/int[@name='1976-07-15T07:00:00Z'][.='1'  ]"
+            //
+            ,meta+"/int[@name='before' ][.='2']"
+            ,meta+"/int[@name='after'  ][.='1']"
+            ,meta+"/int[@name='between'][.='7']"
+            );
+
+    // NOTE: the counts should all be zero, what we really care about
+    // is that the computed lower bounds take into account DST change
+    assertQ("checking facet counts arround DST change for TZ: " + TZ,
+            req( "q", "*:*"
+                ,"rows", "0"
+                ,"facet", "true"
+                ,"NOW", "1288606136000" // 2010-11-01T10:08:56.235Z
+                ,"TZ", TZ
+                ,p, f
+                ,p+".start", "NOW/MONTH"
+                ,p+".end",   "NOW/MONTH+15DAYS"
+                ,p+".gap",   "+1DAY"
+                ,p+".other", "all"
+                ,p+".include", "lower"
+                )
+            // 15 days + pre+post+inner = 18
+            ,"*[count("+pre+"/int)="+(rangeMode ? 15 : 18)+"]"
+            ,pre+"/int[@name='2010-11-01T07:00:00Z'][.='0']"
+            ,pre+"/int[@name='2010-11-02T07:00:00Z'][.='0']"
+            ,pre+"/int[@name='2010-11-03T07:00:00Z'][.='0']"
+            ,pre+"/int[@name='2010-11-04T07:00:00Z'][.='0']"
+            ,pre+"/int[@name='2010-11-05T07:00:00Z'][.='0']"
+            ,pre+"/int[@name='2010-11-06T07:00:00Z'][.='0']"
+            ,pre+"/int[@name='2010-11-07T07:00:00Z'][.='0']"
+            ,pre+"/int[@name='2010-11-08T08:00:00Z'][.='0']" // BOOM!
+            ,pre+"/int[@name='2010-11-09T08:00:00Z'][.='0']"
+            ,pre+"/int[@name='2010-11-10T08:00:00Z'][.='0']"
+            ,pre+"/int[@name='2010-11-11T08:00:00Z'][.='0']"
+            ,pre+"/int[@name='2010-11-12T08:00:00Z'][.='0']"
+            ,pre+"/int[@name='2010-11-13T08:00:00Z'][.='0']"
+            ,pre+"/int[@name='2010-11-14T08:00:00Z'][.='0']"
+            ,pre+"/int[@name='2010-11-15T08:00:00Z'][.='0']"
+            );
+    
   }
 
   @Test

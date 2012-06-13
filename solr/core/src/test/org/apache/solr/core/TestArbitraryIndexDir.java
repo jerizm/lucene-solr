@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -71,7 +71,7 @@ public class TestArbitraryIndexDir extends AbstractSolrTestCase{
         + System.getProperty("file.separator") + "data");
     dataDir.mkdirs();
 
-    solrConfig = h.createConfig("solrconfig.xml");
+    solrConfig = TestHarness.createConfig("solrconfig.xml");
     h = new TestHarness( dataDir.getAbsolutePath(),
         solrConfig,
         "schema12.xml");
@@ -124,8 +124,8 @@ public class TestArbitraryIndexDir extends AbstractSolrTestCase{
         new IndexWriterConfig(Version.LUCENE_40, new StandardAnalyzer(Version.LUCENE_40))
     );
     Document doc = new Document();
-    doc.add(new Field("id", "2", TextField.TYPE_STORED));
-    doc.add(new Field("name", "name2", TextField.TYPE_STORED));
+    doc.add(new TextField("id", "2", Field.Store.YES));
+    doc.add(new TextField("name", "name2", Field.Store.YES));
     iw.addDocument(doc);
     iw.commit();
     iw.close();

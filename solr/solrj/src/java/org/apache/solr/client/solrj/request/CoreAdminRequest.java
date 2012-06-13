@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -53,6 +53,7 @@ public class CoreAdminRequest extends SolrRequest
     protected String collection;
     private Integer numShards;
     private String shardId;
+    private String roles;
 
     public Create() {
       action = CoreAdminAction.CREATE;
@@ -65,6 +66,7 @@ public class CoreAdminRequest extends SolrRequest
     public void setCollection(String collection) { this.collection = collection; }
     public void setNumShards(int numShards) {this.numShards = numShards;}
     public void setShardId(String shardId) {this.shardId = shardId;}
+    public void setRoles(String roles) {this.roles = roles;}
     
     public String getInstanceDir() { return instanceDir; }
     public String getSchemaName()  { return schemaName; }
@@ -72,6 +74,7 @@ public class CoreAdminRequest extends SolrRequest
     public String getDataDir() { return dataDir; }
     public String getCollection() { return collection; }
     public String getShardId() { return shardId; }
+    public String getRoles() { return roles; }
     
     @Override
     public SolrParams getParams() {
@@ -102,18 +105,24 @@ public class CoreAdminRequest extends SolrRequest
         params.set( ZkStateReader.NUM_SHARDS_PROP, numShards);
       }
       if (shardId != null) {
-        params.set( ZkStateReader.SHARD_ID_PROP, shardId);
+        params.set( CoreAdminParams.SHARD, shardId);
+      }
+      if (roles != null) {
+        params.set( CoreAdminParams.ROLES, roles);
       }
       return params;
     }
 
   }
   
-  public static class PrepRecovery extends CoreAdminRequest {
+  public static class WaitForState extends CoreAdminRequest {
     protected String nodeName;
     protected String coreNodeName;
-
-    public PrepRecovery() {
+    protected String state;
+    protected Boolean checkLive;
+    protected Integer pauseFor;
+    
+    public WaitForState() {
       action = CoreAdminAction.PREPRECOVERY;
     }
     
@@ -133,6 +142,30 @@ public class CoreAdminRequest extends SolrRequest
       this.coreNodeName = coreNodeName;
     }
     
+    public String getState() {
+      return state;
+    }
+
+    public void setState(String state) {
+      this.state = state;
+    }
+
+    public Boolean getCheckLive() {
+      return checkLive;
+    }
+
+    public void setCheckLive(Boolean checkLive) {
+      this.checkLive = checkLive;
+    }
+    
+    public Integer getPauseFor() {
+      return pauseFor;
+    }
+
+    public void setPauseFor(Integer pauseFor) {
+      this.pauseFor = pauseFor;
+    }
+    
     @Override
     public SolrParams getParams() {
       if( action == null ) {
@@ -149,6 +182,18 @@ public class CoreAdminRequest extends SolrRequest
       
       if (coreNodeName != null) {
         params.set( "coreNodeName", coreNodeName);
+      }
+      
+      if (state != null) {
+        params.set( "state", state);
+      }
+      
+      if (checkLive != null) {
+        params.set( "checkLive", checkLive);
+      }
+      
+      if (pauseFor != null) {
+        params.set( "pauseFor", pauseFor);
       }
 
       return params;
@@ -371,15 +416,6 @@ public class CoreAdminRequest extends SolrRequest
     req.setCoreName(coreName);
     req.setOtherCoreName(newName);
     req.setAction( CoreAdminAction.RENAME );
-    return req.process( server );
-  }
-
-  public static CoreAdminResponse aliasCore(String coreName, String newName, SolrServer server ) throws SolrServerException, IOException
-  {
-    CoreAdminRequest req = new CoreAdminRequest();
-    req.setCoreName(coreName);
-    req.setOtherCoreName(newName);
-    req.setAction( CoreAdminAction.ALIAS );
     return req.process( server );
   }
 

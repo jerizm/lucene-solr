@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,8 +23,7 @@ import java.util.Set;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util._TestUtil;
@@ -42,15 +41,15 @@ public class TestNeverDelete extends LuceneTestCase {
     // them.  This is still worth running on Windows since
     // some files the IR opens and closes.
     d.setNoDeleteOpenFile(false);
-    final RandomIndexWriter w = new RandomIndexWriter(random,
+    final RandomIndexWriter w = new RandomIndexWriter(random(),
                                                       d,
                                                       newIndexWriterConfig(TEST_VERSION_CURRENT,
-                                                                           new MockAnalyzer(random))
+                                                                           new MockAnalyzer(random()))
                                                       .setIndexDeletionPolicy(NoDeletionPolicy.INSTANCE));
-    w.w.getConfig().setMaxBufferedDocs(_TestUtil.nextInt(random, 5, 30));
+    w.w.getConfig().setMaxBufferedDocs(_TestUtil.nextInt(random(), 5, 30));
 
     w.commit();
-    Thread[] indexThreads = new Thread[random.nextInt(4)];
+    Thread[] indexThreads = new Thread[random().nextInt(4)];
     final long stopTime = System.currentTimeMillis() + atLeast(1000);
     for (int x=0; x < indexThreads.length; x++) {
       indexThreads[x] = new Thread() {
@@ -60,8 +59,8 @@ public class TestNeverDelete extends LuceneTestCase {
               int docCount = 0;
               while (System.currentTimeMillis() < stopTime) {
                 final Document doc = new Document();
-                doc.add(newField("dc", ""+docCount, StringField.TYPE_STORED));
-                doc.add(newField("field", "here is some text", TextField.TYPE_STORED));
+                doc.add(newStringField("dc", ""+docCount, Field.Store.YES));
+                doc.add(newTextField("field", "here is some text", Field.Store.YES));
                 w.addDocument(doc);
 
                 if (docCount % 13 == 0) {
@@ -80,7 +79,7 @@ public class TestNeverDelete extends LuceneTestCase {
 
     final Set<String> allFiles = new HashSet<String>();
 
-    DirectoryReader r = IndexReader.open(d);
+    DirectoryReader r = DirectoryReader.open(d);
     while(System.currentTimeMillis() < stopTime) {
       final IndexCommit ic = r.getIndexCommit();
       if (VERBOSE) {

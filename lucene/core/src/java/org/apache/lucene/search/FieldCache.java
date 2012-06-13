@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,7 +22,10 @@ import java.io.PrintStream;
 import java.text.DecimalFormat;
 
 import org.apache.lucene.analysis.NumericTokenStream; // for javadocs
-import org.apache.lucene.document.NumericField; // for javadocs
+import org.apache.lucene.document.IntField; // for javadocs
+import org.apache.lucene.document.FloatField; // for javadocs
+import org.apache.lucene.document.LongField; // for javadocs
+import org.apache.lucene.document.DoubleField; // for javadocs
 import org.apache.lucene.index.DocTermOrds;
 import org.apache.lucene.index.AtomicReader;
 import org.apache.lucene.index.TermsEnum;
@@ -118,12 +121,9 @@ public interface FieldCache {
     public byte parseByte(BytesRef term) {
       // TODO: would be far better to directly parse from
       // UTF8 bytes... but really users should use
-      // NumericField, instead, which already decodes
+      // IntField, instead, which already decodes
       // directly from byte[]
       return Byte.parseByte(term.utf8ToString());
-    }
-    protected Object readResolve() {
-      return DEFAULT_BYTE_PARSER;
     }
     @Override
     public String toString() { 
@@ -136,12 +136,9 @@ public interface FieldCache {
     public short parseShort(BytesRef term) {
       // TODO: would be far better to directly parse from
       // UTF8 bytes... but really users should use
-      // NumericField, instead, which already decodes
+      // IntField, instead, which already decodes
       // directly from byte[]
       return Short.parseShort(term.utf8ToString());
-    }
-    protected Object readResolve() {
-      return DEFAULT_SHORT_PARSER;
     }
     @Override
     public String toString() { 
@@ -154,12 +151,9 @@ public interface FieldCache {
     public int parseInt(BytesRef term) {
       // TODO: would be far better to directly parse from
       // UTF8 bytes... but really users should use
-      // NumericField, instead, which already decodes
+      // IntField, instead, which already decodes
       // directly from byte[]
       return Integer.parseInt(term.utf8ToString());
-    }
-    protected Object readResolve() {
-      return DEFAULT_INT_PARSER;
     }
     @Override
     public String toString() { 
@@ -172,12 +166,9 @@ public interface FieldCache {
     public float parseFloat(BytesRef term) {
       // TODO: would be far better to directly parse from
       // UTF8 bytes... but really users should use
-      // NumericField, instead, which already decodes
+      // FloatField, instead, which already decodes
       // directly from byte[]
       return Float.parseFloat(term.utf8ToString());
-    }
-    protected Object readResolve() {
-      return DEFAULT_FLOAT_PARSER;
     }
     @Override
     public String toString() { 
@@ -190,12 +181,9 @@ public interface FieldCache {
     public long parseLong(BytesRef term) {
       // TODO: would be far better to directly parse from
       // UTF8 bytes... but really users should use
-      // NumericField, instead, which already decodes
+      // LongField, instead, which already decodes
       // directly from byte[]
       return Long.parseLong(term.utf8ToString());
-    }
-    protected Object readResolve() {
-      return DEFAULT_LONG_PARSER;
     }
     @Override
     public String toString() { 
@@ -208,12 +196,9 @@ public interface FieldCache {
     public double parseDouble(BytesRef term) {
       // TODO: would be far better to directly parse from
       // UTF8 bytes... but really users should use
-      // NumericField, instead, which already decodes
+      // DoubleField, instead, which already decodes
       // directly from byte[]
       return Double.parseDouble(term.utf8ToString());
-    }
-    protected Object readResolve() {
-      return DEFAULT_DOUBLE_PARSER;
     }
     @Override
     public String toString() { 
@@ -223,16 +208,13 @@ public interface FieldCache {
 
   /**
    * A parser instance for int values encoded by {@link NumericUtils}, e.g. when indexed
-   * via {@link NumericField}/{@link NumericTokenStream}.
+   * via {@link IntField}/{@link NumericTokenStream}.
    */
   public static final IntParser NUMERIC_UTILS_INT_PARSER=new IntParser(){
     public int parseInt(BytesRef term) {
       if (NumericUtils.getPrefixCodedIntShift(term) > 0)
         throw new FieldCacheImpl.StopFillCacheException();
       return NumericUtils.prefixCodedToInt(term);
-    }
-    protected Object readResolve() {
-      return NUMERIC_UTILS_INT_PARSER;
     }
     @Override
     public String toString() { 
@@ -242,16 +224,13 @@ public interface FieldCache {
 
   /**
    * A parser instance for float values encoded with {@link NumericUtils}, e.g. when indexed
-   * via {@link NumericField}/{@link NumericTokenStream}.
+   * via {@link FloatField}/{@link NumericTokenStream}.
    */
   public static final FloatParser NUMERIC_UTILS_FLOAT_PARSER=new FloatParser(){
     public float parseFloat(BytesRef term) {
       if (NumericUtils.getPrefixCodedIntShift(term) > 0)
         throw new FieldCacheImpl.StopFillCacheException();
       return NumericUtils.sortableIntToFloat(NumericUtils.prefixCodedToInt(term));
-    }
-    protected Object readResolve() {
-      return NUMERIC_UTILS_FLOAT_PARSER;
     }
     @Override
     public String toString() { 
@@ -261,16 +240,13 @@ public interface FieldCache {
 
   /**
    * A parser instance for long values encoded by {@link NumericUtils}, e.g. when indexed
-   * via {@link NumericField}/{@link NumericTokenStream}.
+   * via {@link LongField}/{@link NumericTokenStream}.
    */
   public static final LongParser NUMERIC_UTILS_LONG_PARSER = new LongParser(){
     public long parseLong(BytesRef term) {
       if (NumericUtils.getPrefixCodedLongShift(term) > 0)
         throw new FieldCacheImpl.StopFillCacheException();
       return NumericUtils.prefixCodedToLong(term);
-    }
-    protected Object readResolve() {
-      return NUMERIC_UTILS_LONG_PARSER;
     }
     @Override
     public String toString() { 
@@ -280,16 +256,13 @@ public interface FieldCache {
 
   /**
    * A parser instance for double values encoded with {@link NumericUtils}, e.g. when indexed
-   * via {@link NumericField}/{@link NumericTokenStream}.
+   * via {@link DoubleField}/{@link NumericTokenStream}.
    */
   public static final DoubleParser NUMERIC_UTILS_DOUBLE_PARSER = new DoubleParser(){
     public double parseDouble(BytesRef term) {
       if (NumericUtils.getPrefixCodedLongShift(term) > 0)
         throw new FieldCacheImpl.StopFillCacheException();
       return NumericUtils.sortableLongToDouble(NumericUtils.prefixCodedToLong(term));
-    }
-    protected Object readResolve() {
-      return NUMERIC_UTILS_DOUBLE_PARSER;
     }
     @Override
     public String toString() { 
@@ -521,7 +494,7 @@ public interface FieldCache {
    *  faster lookups (default is "true").  Note that the
    *  first call for a given reader and field "wins",
    *  subsequent calls will share the same cache entry. */
-  public DocTerms getTerms (AtomicReader reader, String field, boolean fasterButMoreRAM)
+  public DocTerms getTerms (AtomicReader reader, String field, float acceptableOverheadRatio)
   throws IOException;
 
   /** Returned by {@link #getTermsIndex} */
@@ -598,7 +571,7 @@ public interface FieldCache {
    *  faster lookups (default is "true").  Note that the
    *  first call for a given reader and field "wins",
    *  subsequent calls will share the same cache entry. */
-  public DocTermsIndex getTermsIndex (AtomicReader reader, String field, boolean fasterButMoreRAM)
+  public DocTermsIndex getTermsIndex (AtomicReader reader, String field, float acceptableOverheadRatio)
   throws IOException;
 
   /**
@@ -628,22 +601,16 @@ public interface FieldCache {
     protected final void setEstimatedSize(String size) {
       this.size = size;
     }
-    /** 
-     * @see #estimateSize(RamUsageEstimator)
-     */
-    public void estimateSize() {
-      estimateSize(new RamUsageEstimator(false)); // doesn't check for interned
-    }
+
     /** 
      * Computes (and stores) the estimated size of the cache Value 
      * @see #getEstimatedSize
      */
-    public void estimateSize(RamUsageEstimator ramCalc) {
-      long size = ramCalc.estimateRamUsage(getValue());
-      setEstimatedSize(RamUsageEstimator.humanReadableUnits
-                       (size, new DecimalFormat("0.#")));
-                        
+    public void estimateSize() {
+      long size = RamUsageEstimator.sizeOf(getValue());
+      setEstimatedSize(RamUsageEstimator.humanReadableUnits(size));
     }
+
     /**
      * The most recently estimated size of the value, null unless 
      * estimateSize has been called.

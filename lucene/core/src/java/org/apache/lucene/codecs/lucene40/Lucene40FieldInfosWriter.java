@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.lucene40;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -27,8 +27,12 @@ import org.apache.lucene.index.FieldInfo.IndexOptions;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexOutput;
+import org.apache.lucene.util.CodecUtil;
 
 /**
+ * Lucene 4.0 FieldInfos writer.
+ * 
+ * @see Lucene40FieldInfosFormat
  * @lucene.experimental
  */
 public class Lucene40FieldInfosWriter extends FieldInfosWriter {
@@ -36,10 +40,8 @@ public class Lucene40FieldInfosWriter extends FieldInfosWriter {
   /** Extension of field infos */
   static final String FIELD_INFOS_EXTENSION = "fnm";
   
-  // per-field codec support, records index values for fields
-  static final int FORMAT_START = -4;
-
-  // whenever you add a new format, make it 1 smaller (negative version logic)!
+  static final String CODEC_NAME = "Lucene40FieldInfos";
+  static final int FORMAT_START = 0;
   static final int FORMAT_CURRENT = FORMAT_START;
   
   static final byte IS_INDEXED = 0x1;
@@ -55,24 +57,27 @@ public class Lucene40FieldInfosWriter extends FieldInfosWriter {
     final String fileName = IndexFileNames.segmentFileName(segmentName, "", FIELD_INFOS_EXTENSION);
     IndexOutput output = directory.createOutput(fileName, context);
     try {
-      output.writeVInt(FORMAT_CURRENT);
+      CodecUtil.writeHeader(output, CODEC_NAME, FORMAT_CURRENT);
       output.writeVInt(infos.size());
       for (FieldInfo fi : infos) {
-        assert fi.indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0 || !fi.storePayloads;
+        IndexOptions indexOptions = fi.getIndexOptions();
         byte bits = 0x0;
-        if (fi.isIndexed) bits |= IS_INDEXED;
-        if (fi.storeTermVector) bits |= STORE_TERMVECTOR;
-        if (fi.omitNorms) bits |= OMIT_NORMS;
-        if (fi.storePayloads) bits |= STORE_PAYLOADS;
-        if (fi.indexOptions == IndexOptions.DOCS_ONLY) {
-          bits |= OMIT_TERM_FREQ_AND_POSITIONS;
-        } else if (fi.indexOptions == IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) {
-          bits |= STORE_OFFSETS_IN_POSTINGS;
-        } else if (fi.indexOptions == IndexOptions.DOCS_AND_FREQS) {
-          bits |= OMIT_POSITIONS;
+        if (fi.hasVectors()) bits |= STORE_TERMVECTOR;
+        if (fi.omitsNorms()) bits |= OMIT_NORMS;
+        if (fi.hasPayloads()) bits |= STORE_PAYLOADS;
+        if (fi.isIndexed()) {
+          bits |= IS_INDEXED;
+          assert indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0 || !fi.hasPayloads();
+          if (indexOptions == IndexOptions.DOCS_ONLY) {
+            bits |= OMIT_TERM_FREQ_AND_POSITIONS;
+          } else if (indexOptions == IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) {
+            bits |= STORE_OFFSETS_IN_POSTINGS;
+          } else if (indexOptions == IndexOptions.DOCS_AND_FREQS) {
+            bits |= OMIT_POSITIONS;
+          }
         }
         output.writeString(fi.name);
-        output.writeInt(fi.number);
+        output.writeVInt(fi.number);
         output.writeByte(bits);
 
         // pack the DV types in one byte
@@ -81,6 +86,7 @@ public class Lucene40FieldInfosWriter extends FieldInfosWriter {
         assert (dv & (~0xF)) == 0 && (nrm & (~0x0F)) == 0;
         byte val = (byte) (0xff & ((nrm << 4) | dv));
         output.writeByte(val);
+        output.writeStringStringMap(fi.attributes());
       }
     } finally {
       output.close();

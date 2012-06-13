@@ -1,6 +1,6 @@
 package org.apache.solr.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,11 +20,12 @@ package org.apache.solr.analysis;
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.en.KStemFilter;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
  * Factory for {@link KStemFilter}
  */
-public class KStemFilterFactory extends BaseTokenFilterFactory {
+public class KStemFilterFactory extends TokenFilterFactory {
 
   public TokenFilter create(TokenStream input) {
     return new KStemFilter(input);

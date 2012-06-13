@@ -2,7 +2,7 @@ package org.apache.lucene.util.automaton;
 
 import org.apache.lucene.util.LuceneTestCase;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -26,7 +26,7 @@ public class TestSpecialOperations extends LuceneTestCase {
   public void testIsFinite() {
     int num = atLeast(200);
     for (int i = 0; i < num; i++) {
-      Automaton a = AutomatonTestUtil.randomAutomaton(random);
+      Automaton a = AutomatonTestUtil.randomAutomaton(random());
       Automaton b = a.clone();
       assertEquals(AutomatonTestUtil.isFiniteSlow(a), SpecialOperations.isFinite(b));
     }

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -197,6 +197,6 @@ public class SolrInputField implements Iterable<Object>, Serializable
   @Override
   public String toString()
   {
-    return name + "("+boost+")={" + value + "}";
+    return name + ((boost == 1.0) ? "=" : ("("+boost+")=")) + value;
   }
 }

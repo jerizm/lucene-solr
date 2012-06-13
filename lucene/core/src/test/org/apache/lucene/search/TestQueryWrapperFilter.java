@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,8 +21,6 @@ import java.util.Set;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
@@ -35,9 +33,9 @@ public class TestQueryWrapperFilter extends LuceneTestCase {
 
   public void testBasic() throws Exception {
     Directory dir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir);
     Document doc = new Document();
-    doc.add(newField("field", "value", TextField.TYPE_UNSTORED));
+    doc.add(newTextField("field", "value", Field.Store.NO));
     writer.addDocument(doc);
     IndexReader reader = writer.getReader();
     writer.close();
@@ -87,28 +85,28 @@ public class TestQueryWrapperFilter extends LuceneTestCase {
 
   public void testRandom() throws Exception {
     final Directory d = newDirectory();
-    final RandomIndexWriter w = new RandomIndexWriter(random, d);
+    final RandomIndexWriter w = new RandomIndexWriter(random(), d);
     w.w.getConfig().setMaxBufferedDocs(17);
     final int numDocs = atLeast(100);
     final Set<String> aDocs = new HashSet<String>();
     for(int i=0;i<numDocs;i++) {
       final Document doc = new Document();
       final String v;
-      if (random.nextInt(5) == 4) {
+      if (random().nextInt(5) == 4) {
         v = "a";
         aDocs.add(""+i);
       } else {
         v = "b";
       }
-      final Field f = newField("field", v, StringField.TYPE_UNSTORED);
+      final Field f = newStringField("field", v, Field.Store.NO);
       doc.add(f);
-      doc.add(newField("id", ""+i, StringField.TYPE_STORED));
+      doc.add(newStringField("id", ""+i, Field.Store.YES));
       w.addDocument(doc);
     }
 
     final int numDelDocs = atLeast(10);
     for(int i=0;i<numDelDocs;i++) {
-      final String delID = ""+random.nextInt(numDocs);
+      final String delID = ""+random().nextInt(numDocs);
       w.deleteDocuments(new Term("id", delID));
       aDocs.remove(delID);
     }
@@ -128,10 +126,10 @@ public class TestQueryWrapperFilter extends LuceneTestCase {
   
   public void testThousandDocuments() throws Exception {
     Directory dir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir);
     for (int i = 0; i < 1000; i++) {
       Document doc = new Document();
-      doc.add(newField("field", English.intToEnglish(i), StringField.TYPE_UNSTORED));
+      doc.add(newStringField("field", English.intToEnglish(i), Field.Store.NO));
       writer.addDocument(doc);
     }
     

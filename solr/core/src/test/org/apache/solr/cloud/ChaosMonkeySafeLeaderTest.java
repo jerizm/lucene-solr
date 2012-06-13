@@ -1,6 +1,6 @@
 package org.apache.solr.cloud;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -32,7 +32,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 
-@Ignore
+@Ignore("SOLR-3126")
 public class ChaosMonkeySafeLeaderTest extends FullSolrCloudTest {
   
   @BeforeClass
@@ -50,7 +50,7 @@ public class ChaosMonkeySafeLeaderTest extends FullSolrCloudTest {
   public void setUp() throws Exception {
     super.setUp();
     // we expect this time of exception as shards go up and down...
-    ignoreException(".*");
+    //ignoreException(".*");
     
     // sometimes we cannot get the same port
     ignoreException("java\\.net\\.BindException: Address already in use");
@@ -61,6 +61,7 @@ public class ChaosMonkeySafeLeaderTest extends FullSolrCloudTest {
   @Override
   @After
   public void tearDown() throws Exception {
+    System.clearProperty("numShards");
     super.tearDown();
     resetExceptionIgnores();
   }
@@ -113,7 +114,7 @@ public class ChaosMonkeySafeLeaderTest extends FullSolrCloudTest {
     
     waitForThingsToLevelOut();
 
-    checkShardConsistency(true, false);
+    checkShardConsistency(true, true);
     
     if (VERBOSE) System.out.println("control docs:" + controlClient.query(new SolrQuery("*:*")).getResults().getNumFound() + "\n\n");
   }

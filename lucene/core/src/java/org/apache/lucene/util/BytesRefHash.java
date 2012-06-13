@@ -1,6 +1,6 @@
 package org.apache.lucene.util;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -30,7 +30,7 @@ import org.apache.lucene.util.ByteBlockPool.DirectAllocator;
 /**
  * {@link BytesRefHash} is a special purpose hash-map like data-structure
  * optimized for {@link BytesRef} instances. BytesRefHash maintains mappings of
- * byte arrays to ordinal (Map<BytesRef,int>) storing the hashed bytes
+ * byte arrays to ordinal (Map&lt;BytesRef,int&gt;) storing the hashed bytes
  * efficiently in continuous storage. The mapping to the ordinal is
  * encapsulated inside {@link BytesRefHash} and is guaranteed to be increased
  * for each added {@link BytesRef}.
@@ -500,6 +500,7 @@ public final class BytesRefHash {
     }
   }
 
+  /** Manages allocation of the per-term addresses. */
   public abstract static class BytesStartArray {
     /**
      * Initializes the BytesStartArray. This call will allocate memory
@@ -533,9 +534,9 @@ public final class BytesRefHash {
     public abstract Counter bytesUsed();
   }
   
-  /**
-   * A direct {@link BytesStartArray} that tracks all memory allocation using an {@link Counter} instance.
-   */
+  /** A simple {@link BytesStartArray} that tracks all
+   *  memory allocation using a shared {@link Counter}
+   *  instance.  */
   public static class TrackingDirectBytesStartArray extends BytesStartArray {
     protected final int initSize;
     private int[] bytesStart;
@@ -577,7 +578,14 @@ public final class BytesRefHash {
     }
   }
 
+  /** A simple {@link BytesStartArray} that tracks
+   *  memory allocation using a private {@link AtomicLong}
+   *  instance.  */
   public static class DirectBytesStartArray extends BytesStartArray {
+    // TODO: can't we just merge this w/
+    // TrackingDirectBytesStartArray...?  Just add a ctor
+    // that makes a private bytesUsed?
+
     protected final int initSize;
     private int[] bytesStart;
     private final Counter bytesUsed;
@@ -586,7 +594,6 @@ public final class BytesRefHash {
       this.bytesUsed = Counter.newCounter();
       this.initSize = initSize;
     }
-
 
     @Override
     public int[] clear() {

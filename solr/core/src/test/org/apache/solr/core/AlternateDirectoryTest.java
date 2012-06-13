@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -61,7 +61,7 @@ public class AlternateDirectoryTest extends SolrTestCaseJ4 {
     static volatile boolean newReaderCalled = false;
 
     @Override
-    public DirectoryReader newReader(Directory indexDir) throws IOException {
+    public DirectoryReader newReader(Directory indexDir, SolrCore core) throws IOException {
       TestIndexReaderFactory.newReaderCalled = true;
       return DirectoryReader.open(indexDir);
     }

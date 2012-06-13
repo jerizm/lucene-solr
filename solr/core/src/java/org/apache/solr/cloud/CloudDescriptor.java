@@ -1,6 +1,6 @@
 package org.apache.solr.cloud;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,7 +23,7 @@ public class CloudDescriptor {
   private String shardId;
   private String collectionName;
   private SolrParams params;
-  private String roles = "";
+  private String roles = null;
   private Integer numShards;
   
   public void setShardId(String shardId) {

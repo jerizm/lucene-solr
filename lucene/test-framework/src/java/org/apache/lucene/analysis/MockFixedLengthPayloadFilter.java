@@ -1,6 +1,6 @@
 package org.apache.lucene.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,19 +21,25 @@ import java.io.IOException;
 import java.util.Random;
 
 import org.apache.lucene.analysis.tokenattributes.PayloadAttribute;
-import org.apache.lucene.index.Payload;
+import org.apache.lucene.util.BytesRef;
 
+/**
+ * TokenFilter that adds random fixed-length payloads.
+ */
 public final class MockFixedLengthPayloadFilter extends TokenFilter {
   private final PayloadAttribute payloadAtt = addAttribute(PayloadAttribute.class);
   private final Random random;
   private final byte[] bytes;
-  private final Payload payload;
+  private final BytesRef payload;
 
   public MockFixedLengthPayloadFilter(Random random, TokenStream in, int length) {
     super(in);
+    if (length < 0) {
+      throw new IllegalArgumentException("length must be >= 0");
+    }
     this.random = random;
     this.bytes = new byte[length];
-    this.payload = new Payload(bytes);
+    this.payload = new BytesRef(bytes);
   }
 
   @Override

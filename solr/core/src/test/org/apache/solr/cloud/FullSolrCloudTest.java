@@ -1,6 +1,6 @@
 package org.apache.solr.cloud;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,22 +21,21 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.http.params.CoreConnectionPNames;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServer;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.embedded.JettySolrRunner;
 import org.apache.solr.client.solrj.impl.CloudSolrServer;
-import org.apache.solr.client.solrj.impl.CommonsHttpSolrServer;
+import org.apache.solr.client.solrj.impl.HttpSolrServer;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.cloud.CloudState;
@@ -60,9 +59,13 @@ import org.junit.Ignore;
  * what we test now - the default update chain
  * 
  */
-@Ignore
 public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
-  
+  @BeforeClass
+  public static void beforeFullSolrCloudTest() throws Exception {
+    // shorten the log output more for this test type
+    if (formatter != null) formatter.setShorterFormat();
+  }
+
   private static final String SHARD2 = "shard2";
   
   private boolean printLayoutOnTearDown = false;
@@ -140,7 +143,7 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    ignoreException(".*");
+    // ignoreException(".*");
     System.setProperty("numShards", Integer.toString(sliceCount));
   }
   
@@ -181,7 +184,7 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
       
       chaosMonkey = new ChaosMonkey(zkServer, zkStateReader,
           DEFAULT_COLLECTION, shardToJetty, shardToClient, shardToLeaderClient,
-          shardToLeaderJetty, random);
+          shardToLeaderJetty, random());
     }
     
     // wait until shards have started registering...
@@ -203,8 +206,9 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
           CloudSolrServer server = new CloudSolrServer(zkServer.getZkAddress());
           server.setDefaultCollection(DEFAULT_COLLECTION);
           server.getLbServer().getHttpClient().getParams()
-              .setConnectionManagerTimeout(5000);
-          server.getLbServer().getHttpClient().getParams().setSoTimeout(15000);
+              .setParameter(CoreConnectionPNames.CONNECTION_TIMEOUT, 5000);
+          server.getLbServer().getHttpClient().getParams()
+              .setParameter(CoreConnectionPNames.SO_TIMEOUT, 15000);
           cloudClient = server;
         } catch (MalformedURLException e) {
           throw new RuntimeException(e);
@@ -345,7 +349,7 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
       for (Map.Entry<String,Slice> slice : slices.entrySet()) {
         Map<String,ZkNodeProps> theShards = slice.getValue().getShards();
         for (Map.Entry<String,ZkNodeProps> shard : theShards.entrySet()) {
-          int port = new URI(((CommonsHttpSolrServer) client).getBaseURL())
+          int port = new URI(((HttpSolrServer) client).getBaseURL())
               .getPort();
           
           if (shard.getKey().contains(":" + port + "_")) {
@@ -472,7 +476,7 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
     }
     controlClient.add(doc);
     
-    CommonsHttpSolrServer client = (CommonsHttpSolrServer) clients
+    HttpSolrServer client = (HttpSolrServer) clients
         .get(serverNumber);
     
     UpdateRequest ureq = new UpdateRequest();
@@ -638,7 +642,7 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
     // new server should be part of first shard
     // how many docs are on the new shard?
     for (SolrServer client : shardToClient.get("shard1")) {
-      if (VERBOSE) System.out.println("total:"
+      if (VERBOSE) System.err.println("total:"
           + client.query(new SolrQuery("*:*")).getResults().getNumFound());
     }
     
@@ -648,7 +652,7 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
   }
   
   protected void waitForRecoveriesToFinish(boolean verbose)
-      throws KeeperException, InterruptedException {
+      throws Exception {
     super.waitForRecoveriesToFinish(DEFAULT_COLLECTION, zkStateReader, verbose);
   }
   
@@ -660,7 +664,7 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
     commit();
     
     long deadShardCount = shardToClient.get(SHARD2).get(0).query(query).getResults().getNumFound();
-    System.out.println("dsc:" + deadShardCount);
+    System.err.println("dsc:" + deadShardCount);
     
     query("q", "*:*", "sort", "n_tl1 desc");
     
@@ -693,7 +697,7 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
     
     // try to index to a living shard at shard2
     
-    // we are careful to make sure the downed node is not longer in the state,
+    // we are careful to make sure the downed node is no longer in the state,
     // because on some systems (especially freebsd w/ blackhole enabled), trying
     // to talk to a downed node causes grief
     tries = 0;
@@ -745,14 +749,14 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
     testDebugQueries();
     
     if (VERBOSE) {
-      System.out.println(controlClient.query(new SolrQuery("*:*")).getResults()
+      System.err.println(controlClient.query(new SolrQuery("*:*")).getResults()
           .getNumFound());
       
       for (SolrServer client : clients) {
         try {
           SolrQuery q = new SolrQuery("*:*");
           q.set("distrib", false);
-          System.out.println(client.query(q).getResults()
+          System.err.println(client.query(q).getResults()
               .getNumFound());
         } catch (Exception e) {
           
@@ -814,8 +818,23 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
   }
   
   private void checkQueries() throws Exception {
+
+    handle.put("_version_", SKIPVAL);
+
     query("q", "*:*", "sort", "n_tl1 desc");
-    
+
+    handle.put("response", UNORDERED);  // get?ids=a,b,c requests are unordered
+    String ids = "987654";
+    for (int i=0; i<20; i++) {
+      query("qt","/get", "id",Integer.toString(i));
+      query("qt","/get", "ids",Integer.toString(i));
+      ids = ids + ',' + Integer.toString(i);
+      query("qt","/get", "ids",ids);
+    }
+    handle.remove("response");
+
+
+
     // random value sort
     for (String f : fieldNames) {
       query("q", "*:*", "sort", f + " desc");
@@ -989,7 +1008,7 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
     long num = -1;
     long lastNum = -1;
     String failMessage = null;
-    if (verbose) System.out.println("check const of " + shard);
+    if (verbose) System.err.println("check const of " + shard);
     int cnt = 0;
     
     assertEquals(
@@ -998,17 +1017,18 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
         zkStateReader.getCloudState().getSlice(DEFAULT_COLLECTION, shard)
             .getShards().size(), solrClients.size());
 
+    SolrServer lastClient = null;
     for (SolrServer client : solrClients) {
       ZkNodeProps props = clientToInfo.get(new CloudSolrServerClient(client));
-      if (verbose) System.out.println("client" + cnt++);
-      if (verbose) System.out.println("PROPS:" + props);
+      if (verbose) System.err.println("client" + cnt++);
+      if (verbose) System.err.println("PROPS:" + props);
       
       try {
         SolrQuery query = new SolrQuery("*:*");
         query.set("distrib", false);
         num = client.query(query).getResults().getNumFound();
       } catch (SolrServerException e) {
-        if (verbose) System.out.println("error contacting client: "
+        if (verbose) System.err.println("error contacting client: "
             + e.getMessage() + "\n");
         continue;
       }
@@ -1018,23 +1038,66 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
       if (zkStateReader.getCloudState().liveNodesContain(nodeName)) {
         live = true;
       }
-      if (verbose) System.out.println(" live:" + live);
+      if (verbose) System.err.println(" live:" + live);
       
-      if (verbose) System.out.println(" num:" + num + "\n");
+      if (verbose) System.err.println(" num:" + num + "\n");
       
       boolean active = props.get(ZkStateReader.STATE_PROP).equals(
           ZkStateReader.ACTIVE);
       if (active && live) {
         if (lastNum > -1 && lastNum != num && failMessage == null) {
-          failMessage = shard + " is not consistent, expected:" + lastNum
-              + " and got:" + num;
+          failMessage = shard + " is not consistent.  Got " + lastNum + " from " + lastClient + "lastClient"
+              + " and got " + num + " from " + client;
+
+          if (verbose || true) {
+            System.err.println("######" + failMessage);
+            SolrQuery query = new SolrQuery("*:*");
+            query.set("distrib", false);
+            query.set("fl","id,_version_");
+            query.set("rows","1000");
+            query.set("sort","id asc");
+
+            SolrDocumentList lst1 = lastClient.query(query).getResults();
+            SolrDocumentList lst2 = client.query(query).getResults();
+
+            showDiff(lst1, lst2, lastClient.toString(), client.toString());
+          }
+
         }
         lastNum = num;
+        lastClient = client;
       }
     }
-    
     return failMessage;
     
+  }
+  
+  void showDiff(SolrDocumentList a, SolrDocumentList b, String aName, String bName) {
+    System.err.println("######"+aName+ ": " + a);
+    System.err.println("######"+bName+ ": " + b);
+    System.err.println("###### sizes=" + a.size() + "," + b.size());
+    
+    Set<Map> setA = new HashSet<Map>();
+    for (SolrDocument sdoc : a) {
+      setA.add(new HashMap(sdoc));
+    }
+
+    Set<Map> setB = new HashSet<Map>();
+    for (SolrDocument sdoc : b) {
+      setB.add(new HashMap(sdoc));
+    }
+
+    Set<Map> onlyInA = new HashSet<Map>(setA);
+    onlyInA.removeAll(setB);
+    Set<Map> onlyInB = new HashSet<Map>(setB);
+    onlyInB.removeAll(setA);
+
+    if (onlyInA.size() > 0) {
+      System.err.println("###### Only in " + aName + ": " + onlyInA);
+    }
+    if (onlyInB.size() > 0) {
+      System.err.println("###### Only in " + bName + ": " + onlyInB);
+    }
   }
   
   protected void checkShardConsistency() throws Exception {
@@ -1045,7 +1108,7 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
       throws Exception {
     long docs = controlClient.query(new SolrQuery("*:*")).getResults()
         .getNumFound();
-    if (verbose) System.out.println("Control Docs:" + docs);
+    if (verbose) System.err.println("Control Docs:" + docs);
     
     updateMappingsFromZk(jettys, clients);
     
@@ -1079,9 +1142,9 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
               SolrQuery query = new SolrQuery("*:*");
               query.set("distrib", false);
               long results = client.query(query).getResults().getNumFound();
-              if (verbose) System.out.println(new ZkCoreNodeProps(props)
+              if (verbose) System.err.println(new ZkCoreNodeProps(props)
                   .getCoreUrl() + " : " + results);
-              if (verbose) System.out.println("shard:"
+              if (verbose) System.err.println("shard:"
                   + props.get(ZkStateReader.SHARD_ID_PROP));
               cnt += results;
               break;
@@ -1116,7 +1179,7 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
     // TODO: as we create the clients, we should build a map from shard to
     // node/client
     // and node/client to shard?
-    if (verbose) System.out.println("control docs:"
+    if (verbose) System.err.println("control docs:"
         + controlClient.query(new SolrQuery("*:*")).getResults().getNumFound()
         + "\n\n");
     long controlCount = controlClient.query(new SolrQuery("*:*")).getResults()
@@ -1145,11 +1208,11 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
         Map<String,ZkNodeProps> theShards = slice.getValue().getShards();
         for (Map.Entry<String,ZkNodeProps> shard : theShards.entrySet()) {
           String shardName = new URI(
-              ((CommonsHttpSolrServer) client).getBaseURL()).getPort()
+              ((HttpSolrServer) client).getBaseURL()).getPort()
               + "_solr_";
           if (verbose && shard.getKey().endsWith(shardName)) {
-            System.out.println("shard:" + slice.getKey());
-            System.out.println(shard.getValue());
+            System.err.println("shard:" + slice.getKey());
+            System.err.println(shard.getValue());
           }
         }
       }
@@ -1163,9 +1226,9 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
         count = client.query(query).getResults().getNumFound();
       }
       
-      if (verbose) System.out.println("client docs:" + count + "\n\n");
+      if (verbose) System.err.println("client docs:" + count + "\n\n");
     }
-    if (verbose) System.out.println("control docs:"
+    if (verbose) System.err.println("control docs:"
         + controlClient.query(new SolrQuery("*:*")).getResults().getNumFound()
         + "\n\n");
     SolrQuery query = new SolrQuery("*:*");
@@ -1206,7 +1269,7 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
       while (true && !stop) {
         ++i;
         
-        if (doDeletes && random.nextBoolean() && deletes.size() > 0) {
+        if (doDeletes && random().nextBoolean() && deletes.size() > 0) {
           Integer delete = deletes.remove(0);
           try {
             numDeletes++;
@@ -1229,7 +1292,7 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
           fails.incrementAndGet();
         }
         
-        if (doDeletes && random.nextBoolean()) {
+        if (doDeletes && random().nextBoolean()) {
           deletes.add(i);
         }
         
@@ -1255,9 +1318,9 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
     if (VERBOSE || printLayoutOnTearDown) {
       super.printLayout();
     }
-    ((CommonsHttpSolrServer) controlClient).shutdown();
+    ((HttpSolrServer) controlClient).shutdown();
     if (cloudClient != null) {
-      cloudClient.close();
+      cloudClient.shutdown();
     }
     if (zkStateReader != null) {
       zkStateReader.close();
@@ -1265,6 +1328,7 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
     super.tearDown();
     
     System.clearProperty("zkHost");
+    System.clearProperty("numShards");
   }
   
   protected void commit() throws Exception {
@@ -1290,9 +1354,9 @@ public class FullSolrCloudTest extends AbstractDistributedZkTestCase {
       // setup the server...
       String url = "http://localhost:" + port + context + "/"
           + DEFAULT_COLLECTION;
-      CommonsHttpSolrServer s = new CommonsHttpSolrServer(url);
-      s.setConnectionTimeout(100); // 1/10th sec
-      s.setSoTimeout(30000);
+      HttpSolrServer s = new HttpSolrServer(url);
+      s.setConnectionTimeout(DEFAULT_CONNECTION_TIMEOUT);
+      s.setSoTimeout(15000);
       s.setDefaultMaxConnectionsPerHost(100);
       s.setMaxTotalConnections(100);
       return s;

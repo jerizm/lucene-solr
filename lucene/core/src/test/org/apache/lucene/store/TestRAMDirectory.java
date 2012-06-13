@@ -1,6 +1,6 @@
 package org.apache.lucene.store;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,11 +20,12 @@ package org.apache.lucene.store;
 import java.io.File;
 import java.io.IOException;
 
+import org.apache.lucene.document.Field;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util._TestUtil;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.StringField;
+import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -51,12 +52,12 @@ public class TestRAMDirectory extends LuceneTestCase {
     
     Directory dir = newFSDirectory(indexDir);
     IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig(
-        TEST_VERSION_CURRENT, new MockAnalyzer(random)).setOpenMode(OpenMode.CREATE));
+        TEST_VERSION_CURRENT, new MockAnalyzer(random())).setOpenMode(OpenMode.CREATE));
     // add some documents
     Document doc = null;
     for (int i = 0; i < docsToAdd; i++) {
       doc = new Document();
-      doc.add(newField("content", English.intToEnglish(i).trim(), StringField.TYPE_STORED));
+      doc.add(newStringField("content", English.intToEnglish(i).trim(), Field.Store.YES));
       writer.addDocument(doc);
     }
     assertEquals(docsToAdd, writer.maxDoc());
@@ -67,7 +68,7 @@ public class TestRAMDirectory extends LuceneTestCase {
   public void testRAMDirectory () throws IOException {
     
     Directory dir = newFSDirectory(indexDir);
-    MockDirectoryWrapper ramDir = new MockDirectoryWrapper(random, new RAMDirectory(dir, newIOContext(random)));
+    MockDirectoryWrapper ramDir = new MockDirectoryWrapper(random(), new RAMDirectory(dir, newIOContext(random())));
     
     // close the underlaying directory
     dir.close();
@@ -76,7 +77,7 @@ public class TestRAMDirectory extends LuceneTestCase {
     assertEquals(ramDir.sizeInBytes(), ramDir.getRecomputedSizeInBytes());
     
     // open reader to test document count
-    IndexReader reader = IndexReader.open(ramDir);
+    IndexReader reader = DirectoryReader.open(ramDir);
     assertEquals(docsToAdd, reader.numDocs());
     
     // open search zo check if all doc's are there
@@ -98,11 +99,11 @@ public class TestRAMDirectory extends LuceneTestCase {
   public void testRAMDirectorySize() throws IOException, InterruptedException {
       
     Directory dir = newFSDirectory(indexDir);
-    final MockDirectoryWrapper ramDir = new MockDirectoryWrapper(random, new RAMDirectory(dir, newIOContext(random)));
+    final MockDirectoryWrapper ramDir = new MockDirectoryWrapper(random(), new RAMDirectory(dir, newIOContext(random())));
     dir.close();
     
     final IndexWriter writer = new IndexWriter(ramDir, new IndexWriterConfig(
-        TEST_VERSION_CURRENT, new MockAnalyzer(random)).setOpenMode(OpenMode.APPEND));
+        TEST_VERSION_CURRENT, new MockAnalyzer(random())).setOpenMode(OpenMode.APPEND));
     writer.forceMerge(1);
     
     assertEquals(ramDir.sizeInBytes(), ramDir.getRecomputedSizeInBytes());
@@ -115,7 +116,7 @@ public class TestRAMDirectory extends LuceneTestCase {
         public void run() {
           for (int j=1; j<docsPerThread; j++) {
             Document doc = new Document();
-            doc.add(newField("sizeContent", English.intToEnglish(num*docsPerThread+j).trim(), StringField.TYPE_STORED));
+            doc.add(newStringField("sizeContent", English.intToEnglish(num*docsPerThread+j).trim(), Field.Store.YES));
             try {
               writer.addDocument(doc);
             } catch (IOException e) {
@@ -148,11 +149,11 @@ public class TestRAMDirectory extends LuceneTestCase {
   // LUCENE-1196
   public void testIllegalEOF() throws Exception {
     RAMDirectory dir = new RAMDirectory();
-    IndexOutput o = dir.createOutput("out", newIOContext(random));
+    IndexOutput o = dir.createOutput("out", newIOContext(random()));
     byte[] b = new byte[1024];
     o.writeBytes(b, 0, 1024);
     o.close();
-    IndexInput i = dir.openInput("out", newIOContext(random));
+    IndexInput i = dir.openInput("out", newIOContext(random()));
     i.seek(1024);
     i.close();
     dir.close();
@@ -170,12 +171,12 @@ public class TestRAMDirectory extends LuceneTestCase {
   public void testSeekToEOFThenBack() throws Exception {
     RAMDirectory dir = new RAMDirectory();
 
-    IndexOutput o = dir.createOutput("out", newIOContext(random));
+    IndexOutput o = dir.createOutput("out", newIOContext(random()));
     byte[] bytes = new byte[3*RAMInputStream.BUFFER_SIZE];
     o.writeBytes(bytes, 0, bytes.length);
     o.close();
 
-    IndexInput i = dir.openInput("out", newIOContext(random));
+    IndexInput i = dir.openInput("out", newIOContext(random()));
     i.seek(2*RAMInputStream.BUFFER_SIZE-1);
     i.seek(3*RAMInputStream.BUFFER_SIZE);
     i.seek(RAMInputStream.BUFFER_SIZE);

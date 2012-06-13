@@ -1,6 +1,6 @@
 package org.apache.solr.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,6 +19,9 @@ package org.apache.solr.analysis;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.hi.HindiNormalizationFilter;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
  * Factory for {@link HindiNormalizationFilter}. 
@@ -31,8 +34,13 @@ import org.apache.lucene.analysis.hi.HindiNormalizationFilter;
  * &lt;/fieldType&gt;</pre>
  *
  */
-public class HindiNormalizationFilterFactory extends BaseTokenFilterFactory {
+public class HindiNormalizationFilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
   public TokenStream create(TokenStream input) {
     return new HindiNormalizationFilter(input);
+  }
+  
+  @Override
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

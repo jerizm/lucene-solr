@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -52,6 +52,11 @@ public final class CharReader extends CharStream {
   @Override
   public int read(char[] cbuf, int off, int len) throws IOException {
     return input.read(cbuf, off, len);
+  }
+
+  @Override
+  public int read() throws IOException {
+    return input.read();
   }
 
   @Override

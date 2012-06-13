@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -66,10 +66,10 @@ public abstract class FieldValueHitQueue<T extends FieldValueHitQueue.Entry> ext
     }
 
     /**
-     * Returns whether <code>a</code> is less relevant than <code>b</code>.
-     * @param a ScoreDoc
-     * @param b ScoreDoc
-     * @return <code>true</code> if document <code>a</code> should be sorted after document <code>b</code>.
+     * Returns whether <code>hitA</code> is less relevant than <code>hitB</code>.
+     * @param hitA Entry
+     * @param hitB Entry
+     * @return <code>true</code> if document <code>hitA</code> should be sorted after document <code>hitB</code>.
      */
     @Override
     protected boolean lessThan(final Entry hitA, final Entry hitB) {
@@ -129,6 +129,7 @@ public abstract class FieldValueHitQueue<T extends FieldValueHitQueue.Entry> ext
   }
   
   // prevent instantiation and extension.
+  @SuppressWarnings({"rawtypes","unchecked"})
   private FieldValueHitQueue(SortField[] fields, int size) {
     super(size);
     // When we get here, fields.length is guaranteed to be > 0, therefore no
@@ -169,7 +170,7 @@ public abstract class FieldValueHitQueue<T extends FieldValueHitQueue.Entry> ext
     }
   }
   
-  public FieldComparator[] getComparators() {
+  public FieldComparator<?>[] getComparators() {
     return comparators;
   }
 
@@ -177,15 +178,15 @@ public abstract class FieldValueHitQueue<T extends FieldValueHitQueue.Entry> ext
     return reverseMul;
   }
 
-  public void setComparator(int pos, FieldComparator comparator) {
+  public void setComparator(int pos, FieldComparator<?> comparator) {
     if (pos==0) firstComparator = comparator;
     comparators[pos] = comparator;
   }
 
   /** Stores the sort criteria being used. */
   protected final SortField[] fields;
-  protected final FieldComparator[] comparators;  // use setComparator to change this array
-  protected FieldComparator firstComparator;      // this must always be equal to comparators[0]
+  protected final FieldComparator<?>[] comparators;  // use setComparator to change this array
+  protected FieldComparator<?> firstComparator;      // this must always be equal to comparators[0]
   protected final int[] reverseMul;
 
   @Override
@@ -200,7 +201,7 @@ public abstract class FieldValueHitQueue<T extends FieldValueHitQueue.Entry> ext
    * 
    * @param entry The Entry used to create a FieldDoc
    * @return The newly created FieldDoc
-   * @see Searchable#search(Weight,Filter,int,Sort)
+   * @see IndexSearcher#search(Query,Filter,int,Sort)
    */
   FieldDoc fillFields(final Entry entry) {
     final int n = comparators.length;

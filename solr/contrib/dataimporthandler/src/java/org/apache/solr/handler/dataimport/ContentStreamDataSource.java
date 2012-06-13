@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -45,7 +45,7 @@ public class ContentStreamDataSource extends DataSource<Reader> {
 
   @Override
   public Reader getData(String query) {
-    contentStream = context.getDocBuilder().requestParameters.contentStream;
+    contentStream = context.getDocBuilder().getReqParams().getContentStream();
     if (contentStream == null)
       throw new DataImportHandlerException(SEVERE, "No stream available. The request has no body");
     try {

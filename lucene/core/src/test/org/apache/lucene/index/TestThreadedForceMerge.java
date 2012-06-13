@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -28,12 +28,13 @@ import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.util.English;
 
 import org.apache.lucene.util.LuceneTestCase;
+import org.junit.BeforeClass;
 
 import java.util.Random;
 
 public class TestThreadedForceMerge extends LuceneTestCase {
-  
-  private static final Analyzer ANALYZER = new MockAnalyzer(random, MockTokenizer.SIMPLE, true);
+
+  private static Analyzer ANALYZER;
 
   private final static int NUM_THREADS = 3;
   //private final static int NUM_THREADS = 5;
@@ -43,6 +44,11 @@ public class TestThreadedForceMerge extends LuceneTestCase {
   private final static int NUM_ITER2 = 1;
 
   private volatile boolean failed;
+
+  @BeforeClass
+  public static void setup() {
+    ANALYZER = new MockAnalyzer(random(), MockTokenizer.SIMPLE, true);
+  }
 
   private void setFailed() {
     failed = true;
@@ -123,7 +129,7 @@ public class TestThreadedForceMerge extends LuceneTestCase {
           TEST_VERSION_CURRENT, ANALYZER).setOpenMode(
           OpenMode.APPEND).setMaxBufferedDocs(2));
       
-      DirectoryReader reader = IndexReader.open(directory);
+      DirectoryReader reader = DirectoryReader.open(directory);
       assertEquals("reader=" + reader, 1, reader.getSequentialSubReaders().length);
       assertEquals(expectedDocCount, reader.numDocs());
       reader.close();
@@ -137,7 +143,7 @@ public class TestThreadedForceMerge extends LuceneTestCase {
   */
   public void testThreadedForceMerge() throws Exception {
     Directory directory = newDirectory();
-    runTest(random, directory);
+    runTest(random(), directory);
     directory.close();
   }
 }

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,6 +18,8 @@
 package org.apache.solr.spelling.suggest;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
@@ -28,9 +30,11 @@ import org.apache.lucene.analysis.Token;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.search.spell.Dictionary;
 import org.apache.lucene.search.spell.HighFrequencyDictionary;
+import org.apache.lucene.search.spell.SuggestMode;
 import org.apache.lucene.search.suggest.FileDictionary;
 import org.apache.lucene.search.suggest.Lookup;
 import org.apache.lucene.search.suggest.Lookup.LookupResult;
+import org.apache.lucene.util.CharsRef;
 
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.SolrCore;
@@ -72,6 +76,8 @@ public class Suggester extends SolrSpellChecker {
   protected Lookup lookup;
   protected String lookupImpl;
   protected SolrCore core;
+
+  private LookupFactory factory;
   
   @Override
   public String init(NamedList config, SolrCore core) {
@@ -91,7 +97,8 @@ public class Suggester extends SolrSpellChecker {
       lookupImpl = FSTLookupFactory.class.getName();
     }
 
-    LookupFactory factory = (LookupFactory) core.getResourceLoader().newInstance(lookupImpl);
+    factory = core.getResourceLoader().newInstance(lookupImpl, LookupFactory.class);
+    
     lookup = factory.create(config, core);
     String store = (String)config.get(STORE_DIR);
     if (store != null) {
@@ -104,7 +111,7 @@ public class Suggester extends SolrSpellChecker {
       } else {
         // attempt reload of the stored lookup
         try {
-          lookup.load(storeDir);
+          lookup.load(new FileInputStream(new File(storeDir, factory.storeFileName())));
         } catch (IOException e) {
           LOG.warn("Loading stored lookup data failed", e);
         }
@@ -131,8 +138,19 @@ public class Suggester extends SolrSpellChecker {
     try {
       lookup.build(dictionary);
       if (storeDir != null) {
-        lookup.store(storeDir);
+        File target = new File(storeDir, factory.storeFileName());
+        if(!lookup.store(new FileOutputStream(target))) {
+          if (sourceLocation == null) {
+            assert reader != null && field != null;
+            LOG.error("Store Lookup build from index on field: " + field + " failed reader has: " + reader.maxDoc() + " docs");
+          } else {
+            LOG.error("Store Lookup build from sourceloaction: " + sourceLocation + " failed");
+          }
+        } else {
+          LOG.info("Stored suggest data to: " + target.getAbsolutePath());
+        }
       }
+
     } catch (Exception e) {
       LOG.error("Error while building or storing Suggester data", e);
     }
@@ -143,7 +161,7 @@ public class Suggester extends SolrSpellChecker {
     LOG.info("reload()");
     if (dictionary == null && storeDir != null) {
       // this may be a firstSearcher event, try loading it
-      if (lookup.load(storeDir)) {
+      if (lookup.load(new FileInputStream(new File(storeDir, factory.storeFileName())))) {
         return;  // loaded ok
       }
       LOG.debug("load failed, need to build Lookup again");
@@ -152,11 +170,6 @@ public class Suggester extends SolrSpellChecker {
     build(core, searcher);
   }
 
-  public void add(String query, int numHits) {
-    LOG.info("add " + query + ", " + numHits);
-    lookup.add(query, new Integer(numHits));
-  }
-  
   static SpellingResult EMPTY_RESULT = new SpellingResult();
 
   @Override
@@ -167,18 +180,21 @@ public class Suggester extends SolrSpellChecker {
       return EMPTY_RESULT;
     }
     SpellingResult res = new SpellingResult();
+    CharsRef scratch = new CharsRef();
     for (Token t : options.tokens) {
-      String term = new String(t.buffer(), 0, t.length());
-      List<LookupResult> suggestions = lookup.lookup(term,
-          options.onlyMorePopular, options.count);
+      scratch.chars = t.buffer();
+      scratch.offset = 0;
+      scratch.length = t.length();
+      List<LookupResult> suggestions = lookup.lookup(scratch,
+          (options.suggestMode == SuggestMode.SUGGEST_MORE_POPULAR), options.count);
       if (suggestions == null) {
         continue;
       }
-      if (!options.onlyMorePopular) {
+      if (options.suggestMode != SuggestMode.SUGGEST_MORE_POPULAR) {
         Collections.sort(suggestions);
       }
       for (LookupResult lr : suggestions) {
-        res.add(t, lr.key, ((Number)lr.value).intValue());
+        res.add(t, lr.key.toString(), (int)lr.value);
       }
     }
     return res;

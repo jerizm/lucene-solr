@@ -77,9 +77,9 @@ public class TestStressIndexing extends LuceneTestCase {
       // Add 10 docs:
       for(int j=0; j<10; j++) {
         Document d = new Document();
-        int n = random.nextInt();
-        d.add(newField("id", Integer.toString(nextID++), StringField.TYPE_STORED));
-        d.add(newField("contents", English.intToEnglish(n), TextField.TYPE_UNSTORED));
+        int n = random().nextInt();
+        d.add(newStringField("id", Integer.toString(nextID++), Field.Store.YES));
+        d.add(newTextField("contents", English.intToEnglish(n), Field.Store.NO));
         writer.addDocument(d);
       }
 
@@ -103,7 +103,7 @@ public class TestStressIndexing extends LuceneTestCase {
     @Override
     public void doWork() throws Throwable {
       for (int i=0; i<100; i++) {
-        IndexReader ir = IndexReader.open(directory);
+        IndexReader ir = DirectoryReader.open(directory);
         IndexSearcher is = new IndexSearcher(ir);
         ir.close();
       }
@@ -117,7 +117,7 @@ public class TestStressIndexing extends LuceneTestCase {
   */
   public void runStressTest(Directory directory, MergeScheduler mergeScheduler) throws Exception {
     IndexWriter modifier = new IndexWriter(directory, newIndexWriterConfig(
-        TEST_VERSION_CURRENT, new MockAnalyzer(random))
+        TEST_VERSION_CURRENT, new MockAnalyzer(random()))
         .setOpenMode(OpenMode.CREATE).setMaxBufferedDocs(10).setMergeScheduler(
             mergeScheduler));
     modifier.commit();

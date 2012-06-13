@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -26,7 +26,6 @@ import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
@@ -46,14 +45,14 @@ public class TestMaxTermFrequency extends LuceneTestCase {
     super.setUp();
     dir = newDirectory();
     IndexWriterConfig config = newIndexWriterConfig(TEST_VERSION_CURRENT, 
-                                                    new MockAnalyzer(random, MockTokenizer.SIMPLE, true)).setMergePolicy(newLogMergePolicy());
+                                                    new MockAnalyzer(random(), MockTokenizer.SIMPLE, true)).setMergePolicy(newLogMergePolicy());
     config.setSimilarity(new TestSimilarity());
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir, config);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir, config);
     Document doc = new Document();
-    Field foo = newField("foo", "", TextField.TYPE_UNSTORED);
+    Field foo = newTextField("foo", "", Field.Store.NO);
     doc.add(foo);
     for (int i = 0; i < 100; i++) {
-      foo.setValue(addValue());
+      foo.setStringValue(addValue());
       writer.addDocument(doc);
     }
     reader = writer.getReader();
@@ -81,16 +80,16 @@ public class TestMaxTermFrequency extends LuceneTestCase {
    */
   private String addValue() {
     List<String> terms = new ArrayList<String>();
-    int maxCeiling = _TestUtil.nextInt(random, 0, 255);
+    int maxCeiling = _TestUtil.nextInt(random(), 0, 255);
     int max = 0;
     for (char ch = 'a'; ch <= 'z'; ch++) {
-      int num = _TestUtil.nextInt(random, 0, maxCeiling);
+      int num = _TestUtil.nextInt(random(), 0, maxCeiling);
       for (int i = 0; i < num; i++)
         terms.add(Character.toString(ch));
       max = Math.max(max, num);
     }
     expected.add(max);
-    Collections.shuffle(terms, random);
+    Collections.shuffle(terms, random());
     return Arrays.toString(terms.toArray(new String[terms.size()]));
   }
   

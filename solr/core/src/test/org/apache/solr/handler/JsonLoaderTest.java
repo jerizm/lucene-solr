@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,6 +21,7 @@ import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.SolrInputField;
 import org.apache.solr.common.util.ContentStreamBase;
+import org.apache.solr.handler.loader.JsonLoader;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.update.AddUpdateCommand;
@@ -29,6 +30,8 @@ import org.apache.solr.update.DeleteUpdateCommand;
 import org.apache.solr.update.processor.BufferingRequestProcessor;
 import org.junit.BeforeClass;
 import org.junit.Test;
+
+import java.util.Map;
 
 public class JsonLoaderTest extends SolrTestCaseJ4 {
   @BeforeClass
@@ -68,9 +71,9 @@ public class JsonLoaderTest extends SolrTestCaseJ4 {
       "'optimize': { 'waitSearcher':false, 'openSearcher':false },\n" +
       "\n" +
       "'delete': { 'id':'ID' },\n" +
-      "'delete': { 'id':'ID', 'commitWithin':'500' },\n" +
+      "'delete': { 'id':'ID', 'commitWithin':500 },\n" +
       "'delete': { 'query':'QUERY' },\n" +
-      "'delete': { 'query':'QUERY', 'commitWithin':'500' },\n" +
+      "'delete': { 'query':'QUERY', 'commitWithin':500 },\n" +
       "'rollback': {}\n" +
       "\n" +
       "}\n" +
@@ -82,8 +85,8 @@ public class JsonLoaderTest extends SolrTestCaseJ4 {
     SolrQueryRequest req = req();
     SolrQueryResponse rsp = new SolrQueryResponse();
     BufferingRequestProcessor p = new BufferingRequestProcessor(null);
-    JsonLoader loader = new JsonLoader( req, p );
-    loader.load(req, rsp, new ContentStreamBase.StringStream(input));
+    JsonLoader loader = new JsonLoader();
+    loader.load(req, rsp, new ContentStreamBase.StringStream(input), p);
 
     assertEquals( 2, p.addCommands.size() );
     
@@ -151,8 +154,8 @@ public class JsonLoaderTest extends SolrTestCaseJ4 {
     SolrQueryRequest req = req("commitWithin","100", "overwrite","false");
     SolrQueryResponse rsp = new SolrQueryResponse();
     BufferingRequestProcessor p = new BufferingRequestProcessor(null);
-    JsonLoader loader = new JsonLoader( req, p );
-    loader.load(req, rsp, new ContentStreamBase.StringStream(str));
+    JsonLoader loader = new JsonLoader();
+    loader.load(req, rsp, new ContentStreamBase.StringStream(str), p);
 
     assertEquals( 2, p.addCommands.size() );
 
@@ -179,8 +182,8 @@ public class JsonLoaderTest extends SolrTestCaseJ4 {
     SolrQueryRequest req = req();
     SolrQueryResponse rsp = new SolrQueryResponse();
     BufferingRequestProcessor p = new BufferingRequestProcessor(null);
-    JsonLoader loader = new JsonLoader( req, p );
-    loader.load(req, rsp, new ContentStreamBase.StringStream(str));
+    JsonLoader loader = new JsonLoader();
+    loader.load(req, rsp, new ContentStreamBase.StringStream(str), p);
 
     assertEquals( 2, p.addCommands.size() );
 
@@ -201,6 +204,31 @@ public class JsonLoaderTest extends SolrTestCaseJ4 {
     req.close();
   }
 
+  public void testExtendedFieldValues() throws Exception {
+    String str = "[{'id':'1', 'val_s':{'add':'foo'}}]".replace('\'', '"');
+    SolrQueryRequest req = req();
+    SolrQueryResponse rsp = new SolrQueryResponse();
+    BufferingRequestProcessor p = new BufferingRequestProcessor(null);
+    JsonLoader loader = new JsonLoader();
+    loader.load(req, rsp, new ContentStreamBase.StringStream(str), p);
+
+    assertEquals( 1, p.addCommands.size() );
+
+    AddUpdateCommand add = p.addCommands.get(0);
+    assertEquals(add.commitWithin, -1);
+    assertEquals(add.overwrite, true);
+    SolrInputDocument d = add.solrDoc;
+
+    SolrInputField f = d.getField( "id" );
+    assertEquals("1", f.getValue());
+
+    f = d.getField( "val_s" );
+    Map<String,Object> map = (Map<String,Object>)f.getValue();
+    assertEquals("foo",map.get("add"));
+
+    req.close();
+  }
+
   @Test
   public void testNullValues() throws Exception {
     updateJ("[{'id':'10','foo_s':null,'foo2_s':['hi',null,'there']}]".replace('\'', '"'), params("commit","true"));
@@ -208,5 +236,67 @@ public class JsonLoaderTest extends SolrTestCaseJ4 {
         ,"/response/docs/[0]=={'foo2_s':['hi','there']}"
     );
   }
+
+  // The delete syntax was both extended for simplification in 4.0
+  @Test
+  public void testDeleteSyntax() throws Exception {
+    String str = "{'delete':10"
+        +"\n ,'delete':'20'"
+        +"\n ,'delete':['30','40']"
+        +"\n ,'delete':{'id':50, '_version_':12345}"
+        +"\n ,'delete':[{'id':60, '_version_':67890}, {'id':70, '_version_':77777}, {'query':'id:80', '_version_':88888}]"
+        + "\n}\n";
+    str = str.replace('\'', '"');
+    SolrQueryRequest req = req();
+    SolrQueryResponse rsp = new SolrQueryResponse();
+    BufferingRequestProcessor p = new BufferingRequestProcessor(null);
+    JsonLoader loader = new JsonLoader();
+    loader.load(req, rsp, new ContentStreamBase.StringStream(str), p);
+
+    // DELETE COMMANDS
+    assertEquals( 8, p.deleteCommands.size() );
+    DeleteUpdateCommand delete = p.deleteCommands.get( 0 );
+    assertEquals( delete.id, "10" );
+    assertEquals( delete.query, null );
+    assertEquals( delete.commitWithin, -1);
+
+    delete = p.deleteCommands.get( 1 );
+    assertEquals( delete.id, "20" );
+    assertEquals( delete.query, null );
+    assertEquals( delete.commitWithin, -1);
+
+    delete = p.deleteCommands.get( 2 );
+    assertEquals( delete.id, "30" );
+    assertEquals( delete.query, null );
+    assertEquals( delete.commitWithin, -1);
+
+    delete = p.deleteCommands.get( 3 );
+    assertEquals( delete.id, "40" );
+    assertEquals( delete.query, null );
+    assertEquals( delete.commitWithin, -1);
+
+    delete = p.deleteCommands.get( 4 );
+    assertEquals( delete.id, "50" );
+    assertEquals( delete.query, null );
+    assertEquals( delete.getVersion(), 12345L);
+
+    delete = p.deleteCommands.get( 5 );
+    assertEquals( delete.id, "60" );
+    assertEquals( delete.query, null );
+    assertEquals( delete.getVersion(), 67890L);
+
+    delete = p.deleteCommands.get( 6 );
+    assertEquals( delete.id, "70" );
+    assertEquals( delete.query, null );
+    assertEquals( delete.getVersion(), 77777L);
+
+    delete = p.deleteCommands.get( 7 );
+    assertEquals( delete.id, null );
+    assertEquals( delete.query, "id:80" );
+    assertEquals( delete.getVersion(), 88888L);
+
+    req.close();
+  }
+
 
 }

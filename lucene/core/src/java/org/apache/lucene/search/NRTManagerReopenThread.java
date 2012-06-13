@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -181,7 +181,7 @@ public class NRTManagerReopenThread extends Thread implements NRTManager.Waiting
         lastReopenStartNS = System.nanoTime();
         try {
           //final long t0 = System.nanoTime();
-          manager.maybeReopen();
+          manager.maybeRefresh();
           //System.out.println("reopen took " + ((System.nanoTime()-t0)/1000000.0) + " msec");
         } catch (IOException ioe) {
           //System.out.println(Thread.currentThread().getName() + ": IOE");

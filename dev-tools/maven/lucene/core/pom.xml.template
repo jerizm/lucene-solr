@@ -33,8 +33,20 @@
   <description>Apache Lucene Java Core</description>
   <properties>
     <module-directory>lucene/core</module-directory>
-    <build-directory>../build/lucene-maven</build-directory>
+    <top-level>../../..</top-level>
+    <module-path>${top-level}/${module-directory}</module-path>
   </properties>
+  <scm>
+    <connection>
+      scm:svn:http://svn.apache.org/repos/asf/lucene/dev/trunk/${module-directory}
+    </connection>
+    <developerConnection>
+      scm:svn:https://svn.apache.org/repos/asf/lucene/dev/trunk/${module-directory}
+    </developerConnection>
+    <url>
+      http://svn.apache.org/viewvc/lucene/dev/trunk/${module-directory}
+    </url>
+  </scm>
   <dependencies>
     <dependency>
       <groupId>junit</groupId>
@@ -51,24 +63,26 @@
       <artifactId>ant-junit</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>com.carrotsearch.randomizedtesting</groupId>
+      <artifactId>randomizedtesting-runner</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
   <build>
-    <directory>${build-directory}</directory>
-    <outputDirectory>${build-directory}/classes/java</outputDirectory>
-    <testOutputDirectory>${build-directory}/classes/test</testOutputDirectory>
-    <sourceDirectory>src/java</sourceDirectory>
+    <sourceDirectory>${module-path}/src/java</sourceDirectory>
     <resources>
       <resource>
-        <directory>src/resources</directory>
+        <directory>${module-path}/src/resources</directory>
       </resource>
     </resources>
-    <testSourceDirectory>src/test</testSourceDirectory>
+    <testSourceDirectory>${module-path}/src/test</testSourceDirectory>
     <testResources>
       <testResource>
-        <directory>../test-framework/src/resources</directory>
+        <directory>${top-level}/lucene/test-framework/src/resources</directory>
       </testResource>
       <testResource>
-        <directory>../test-framework/src/java</directory>
+        <directory>${top-level}/lucene/test-framework/src/java</directory>
         <excludes>
           <exclude>**/*.java</exclude>
         </excludes>
@@ -136,7 +150,7 @@
             </goals>
             <configuration>
               <sources>
-                <source>../test-framework/src/java</source>
+                <source>${top-level}/lucene/test-framework/src/java</source>
               </sources>
             </configuration>
           </execution>

@@ -28,11 +28,11 @@ import org.apache.lucene.analysis.tokenattributes.PayloadAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.Payload;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.TermQuery;
@@ -43,6 +43,7 @@ import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.LockObtainFailedException;
+import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 
 public class TestPayloadSpans extends LuceneTestCase {
@@ -56,7 +57,7 @@ public class TestPayloadSpans extends LuceneTestCase {
   public void setUp() throws Exception {
     super.setUp();
     PayloadHelper helper = new PayloadHelper();
-    searcher = helper.setUp(random, similarity, 1000);
+    searcher = helper.setUp(random(), similarity, 1000);
     indexReader = searcher.getIndexReader();
   }
 
@@ -106,11 +107,11 @@ public class TestPayloadSpans extends LuceneTestCase {
 
 
     Directory directory = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, directory,
+    RandomIndexWriter writer = new RandomIndexWriter(random(), directory,
                                                      newIndexWriterConfig(TEST_VERSION_CURRENT, new PayloadAnalyzer()).setSimilarity(similarity));
 
     Document doc = new Document();
-    doc.add(newField(PayloadHelper.FIELD, "one two three one four three", TextField.TYPE_STORED));
+    doc.add(newTextField(PayloadHelper.FIELD, "one two three one four three", Field.Store.YES));
     writer.addDocument(doc);
     IndexReader reader = writer.getReader();
     writer.close();
@@ -250,11 +251,11 @@ public class TestPayloadSpans extends LuceneTestCase {
   public void testShrinkToAfterShortestMatch() throws CorruptIndexException,
       LockObtainFailedException, IOException {
     Directory directory = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, directory,
+    RandomIndexWriter writer = new RandomIndexWriter(random(), directory,
                                                      newIndexWriterConfig(TEST_VERSION_CURRENT, new TestPayloadAnalyzer()));
 
     Document doc = new Document();
-    doc.add(new TextField("content", new StringReader("a b c d e f g h i j a k")));
+    doc.add(new TextField("content", new StringReader("a b c d e f g h i j a k"), Field.Store.NO));
     writer.addDocument(doc);
 
     IndexReader reader = writer.getReader();
@@ -288,11 +289,11 @@ public class TestPayloadSpans extends LuceneTestCase {
   public void testShrinkToAfterShortestMatch2() throws CorruptIndexException,
       LockObtainFailedException, IOException {
     Directory directory = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, directory,
+    RandomIndexWriter writer = new RandomIndexWriter(random(), directory,
                                                      newIndexWriterConfig(TEST_VERSION_CURRENT, new TestPayloadAnalyzer()));
 
     Document doc = new Document();
-    doc.add(new TextField("content", new StringReader("a b a d k f a h i k a k")));
+    doc.add(new TextField("content", new StringReader("a b a d k f a h i k a k"), Field.Store.NO));
     writer.addDocument(doc);
     IndexReader reader = writer.getReader();
     IndexSearcher is = newSearcher(reader);
@@ -324,11 +325,11 @@ public class TestPayloadSpans extends LuceneTestCase {
   public void testShrinkToAfterShortestMatch3() throws CorruptIndexException,
       LockObtainFailedException, IOException {
     Directory directory = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, directory,
+    RandomIndexWriter writer = new RandomIndexWriter(random(), directory,
                                                      newIndexWriterConfig(TEST_VERSION_CURRENT, new TestPayloadAnalyzer()));
 
     Document doc = new Document();
-    doc.add(new TextField("content", new StringReader("j k a l f k k p a t a k l k t a")));
+    doc.add(new TextField("content", new StringReader("j k a l f k k p a t a k l k t a"), Field.Store.NO));
     writer.addDocument(doc);
     IndexReader reader = writer.getReader();
     IndexSearcher is = newSearcher(reader);
@@ -365,11 +366,11 @@ public class TestPayloadSpans extends LuceneTestCase {
   
   public void testPayloadSpanUtil() throws Exception {
     Directory directory = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, directory,
+    RandomIndexWriter writer = new RandomIndexWriter(random(), directory,
                                                      newIndexWriterConfig(TEST_VERSION_CURRENT, new PayloadAnalyzer()).setSimilarity(similarity));
 
     Document doc = new Document();
-    doc.add(newField(PayloadHelper.FIELD,"xx rr yy mm  pp", TextField.TYPE_STORED));
+    doc.add(newTextField(PayloadHelper.FIELD, "xx rr yy mm  pp", Field.Store.YES));
     writer.addDocument(doc);
   
     IndexReader reader = writer.getReader();
@@ -425,14 +426,14 @@ public class TestPayloadSpans extends LuceneTestCase {
   private IndexSearcher getSearcher() throws Exception {
     directory = newDirectory();
     String[] docs = new String[]{"xx rr yy mm  pp","xx yy mm rr pp", "nopayload qq ss pp np", "one two three four five six seven eight nine ten eleven", "nine one two three four five six seven eight eleven ten"};
-    RandomIndexWriter writer = new RandomIndexWriter(random, directory,
+    RandomIndexWriter writer = new RandomIndexWriter(random(), directory,
                                                      newIndexWriterConfig(TEST_VERSION_CURRENT, new PayloadAnalyzer()).setSimilarity(similarity));
 
     Document doc = null;
     for(int i = 0; i < docs.length; i++) {
       doc = new Document();
       String docText = docs[i];
-      doc.add(newField(PayloadHelper.FIELD,docText, TextField.TYPE_STORED));
+      doc.add(newTextField(PayloadHelper.FIELD, docText, Field.Store.YES));
       writer.addDocument(doc);
     }
 
@@ -505,9 +506,9 @@ public class TestPayloadSpans extends LuceneTestCase {
 
         if (!nopayload.contains(token)) {
           if (entities.contains(token)) {
-            payloadAtt.setPayload(new Payload((token + ":Entity:"+ pos ).getBytes()));
+            payloadAtt.setPayload(new BytesRef((token + ":Entity:"+ pos ).getBytes()));
           } else {
-            payloadAtt.setPayload(new Payload((token + ":Noise:" + pos ).getBytes()));
+            payloadAtt.setPayload(new BytesRef((token + ":Noise:" + pos ).getBytes()));
           }
         }
         pos += posIncrAtt.getPositionIncrement();

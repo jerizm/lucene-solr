@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -32,17 +32,12 @@ import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
-import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
-import org.apache.lucene.search.FieldCache;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.search.similarities.DefaultSimilarity;
-import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util._TestUtil;
 
@@ -51,7 +46,7 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
   public void testReopen() throws Exception {
     final Directory dir1 = newDirectory();
     
-    createIndex(random, dir1, false);
+    createIndex(random(), dir1, false);
     performDefaultTests(new TestReopen() {
 
       @Override
@@ -69,7 +64,7 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
     
     final Directory dir2 = newDirectory();
     
-    createIndex(random, dir2, true);
+    createIndex(random(), dir2, true);
     performDefaultTests(new TestReopen() {
 
       @Override
@@ -93,12 +88,12 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
   // try this once with reopen once recreate, on both RAMDir and FSDir.
   public void testCommitReopen () throws IOException {
     Directory dir = newDirectory();
-    doTestReopenWithCommit(random, dir, true);
+    doTestReopenWithCommit(random(), dir, true);
     dir.close();
   }
   public void testCommitRecreate () throws IOException {
     Directory dir = newDirectory();
-    doTestReopenWithCommit(random, dir, false);
+    doTestReopenWithCommit(random(), dir, false);
     dir.close();
   }
 
@@ -222,9 +217,9 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
   public void testThreadSafety() throws Exception {
     final Directory dir = newDirectory();
     // NOTE: this also controls the number of threads!
-    final int n = _TestUtil.nextInt(random, 20, 40);
+    final int n = _TestUtil.nextInt(random(), 20, 40);
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(
-        TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+        TEST_VERSION_CURRENT, new MockAnalyzer(random())));
     for (int i = 0; i < n; i++) {
       writer.addDocument(createDocument(i, 3));
     }
@@ -235,7 +230,7 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
       @Override
       protected void modifyIndex(int i) throws IOException {
        IndexWriter modifier = new IndexWriter(dir, new IndexWriterConfig(
-         TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+         TEST_VERSION_CURRENT, new MockAnalyzer(random())));
        modifier.addDocument(createDocument(n + i, 6));
        modifier.close();
       }
@@ -249,7 +244,6 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
     final List<ReaderCouple> readers = Collections.synchronizedList(new ArrayList<ReaderCouple>());
     DirectoryReader firstReader = DirectoryReader.open(dir);
     DirectoryReader reader = firstReader;
-    final Random rnd = random;
     
     ReaderThread[] threads = new ReaderThread[n];
     final Set<DirectoryReader> readersToClose = Collections.synchronizedSet(new HashSet<DirectoryReader>());
@@ -273,6 +267,7 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
           
           @Override
           public void run() throws Exception {
+            Random rnd = LuceneTestCase.random();
             while (!stopped) {
               if (index % 2 == 0) {
                 // refresh reader synchronized
@@ -301,7 +296,7 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
                 }
               }
               synchronized(this) {
-                wait(_TestUtil.nextInt(random, 1, 100));
+                wait(_TestUtil.nextInt(random(), 1, 100));
               }
             }
           }
@@ -311,6 +306,7 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
         task = new ReaderThreadTask() {
           @Override
           public void run() throws Exception {
+            Random rnd = LuceneTestCase.random();
             while (!stopped) {
               int numReaders = readers.size();
               if (numReaders > 0) {
@@ -319,7 +315,7 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
               }
               
               synchronized(this) {
-                wait(_TestUtil.nextInt(random, 1, 100));
+                wait(_TestUtil.nextInt(random(), 1, 100));
               }
             }
           }
@@ -490,13 +486,13 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
     customType2.setOmitNorms(true);
     FieldType customType3 = new FieldType();
     customType3.setStored(true);
-    doc.add(new Field("field1", sb.toString(), TextField.TYPE_STORED));
+    doc.add(new TextField("field1", sb.toString(), Field.Store.YES));
     doc.add(new Field("fielda", sb.toString(), customType2));
     doc.add(new Field("fieldb", sb.toString(), customType3));
     sb.append(" b");
     sb.append(n);
     for (int i = 1; i < numFields; i++) {
-      doc.add(new Field("field" + (i+1), sb.toString(), TextField.TYPE_STORED));
+      doc.add(new TextField("field" + (i+1), sb.toString(), Field.Store.YES));
     }
     return doc;
   }
@@ -507,20 +503,20 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
         if (VERBOSE) {
           System.out.println("TEST: modify index");
         }
-        IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+        IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
         w.deleteDocuments(new Term("field2", "a11"));
         w.deleteDocuments(new Term("field2", "b30"));
         w.close();
         break;
       }
       case 1: {
-        IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+        IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
         w.forceMerge(1);
         w.close();
         break;
       }
       case 2: {
-        IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+        IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
         w.addDocument(createDocument(101, 4));
         w.forceMerge(1);
         w.addDocument(createDocument(102, 4));
@@ -529,7 +525,7 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
         break;
       }
       case 3: {
-        IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+        IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
         w.addDocument(createDocument(101, 4));
         w.close();
         break;
@@ -587,14 +583,14 @@ public class TestDirectoryReaderReopen extends LuceneTestCase {
     Directory dir = newDirectory();
     IndexWriter writer = new IndexWriter(
         dir,
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).
             setIndexDeletionPolicy(new KeepAllCommits()).
             setMaxBufferedDocs(-1).
             setMergePolicy(newLogMergePolicy(10))
     );
     for(int i=0;i<4;i++) {
       Document doc = new Document();
-      doc.add(newField("id", ""+i, StringField.TYPE_UNSTORED));
+      doc.add(newStringField("id", ""+i, Field.Store.NO));
       writer.addDocument(doc);
       Map<String,String> data = new HashMap<String,String>();
       data.put("index", i+"");

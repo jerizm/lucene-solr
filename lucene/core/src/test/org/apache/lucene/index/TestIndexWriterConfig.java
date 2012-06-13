@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -25,10 +25,13 @@ import java.util.Set;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.codecs.Codec;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.index.DocumentsWriterPerThread.IndexingChain;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.similarities.DefaultSimilarity;
+import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.InfoStream;
 import org.apache.lucene.util.LuceneTestCase;
 import org.junit.Test;
@@ -51,7 +54,7 @@ public class TestIndexWriterConfig extends LuceneTestCase {
 
   @Test
   public void testDefaults() throws Exception {
-    IndexWriterConfig conf = new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random));
+    IndexWriterConfig conf = new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
     assertEquals(MockAnalyzer.class, conf.getAnalyzer().getClass());
     assertNull(conf.getIndexCommit());
     assertEquals(KeepOnlyLastCommitDeletionPolicy.class, conf.getIndexDeletionPolicy().getClass());
@@ -138,7 +141,7 @@ public class TestIndexWriterConfig extends LuceneTestCase {
 
   @Test
   public void testToString() throws Exception {
-    String str = new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).toString();
+    String str = new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).toString();
     for (Field f : IndexWriterConfig.class.getDeclaredFields()) {
       int modifiers = f.getModifiers();
       if (Modifier.isStatic(modifiers) && Modifier.isFinal(modifiers)) {
@@ -149,14 +152,17 @@ public class TestIndexWriterConfig extends LuceneTestCase {
         // toString.
         continue;
       }
+      if (f.getName().equals("inUseByIndexWriter")) {
+        continue;
+      }
       assertTrue(f.getName() + " not found in toString", str.indexOf(f.getName()) != -1);
     }
   }
 
   @Test
   public void testClone() throws Exception {
-    IndexWriterConfig conf = new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random));
-    IndexWriterConfig clone = (IndexWriterConfig) conf.clone();
+    IndexWriterConfig conf = new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
+    IndexWriterConfig clone = conf.clone();
 
     // Clone is shallow since not all parameters are cloneable.
     assertTrue(conf.getIndexDeletionPolicy() == clone.getIndexDeletionPolicy());
@@ -167,7 +173,7 @@ public class TestIndexWriterConfig extends LuceneTestCase {
 
   @Test
   public void testInvalidValues() throws Exception {
-    IndexWriterConfig conf = new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random));
+    IndexWriterConfig conf = new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
 
     // Test IndexDeletionPolicy
     assertEquals(KeepOnlyLastCommitDeletionPolicy.class, conf.getIndexDeletionPolicy().getClass());
@@ -268,5 +274,55 @@ public class TestIndexWriterConfig extends LuceneTestCase {
     assertEquals(LogDocMergePolicy.class, conf.getMergePolicy().getClass());
     conf.setMergePolicy(null);
     assertEquals(LogByteSizeMergePolicy.class, conf.getMergePolicy().getClass());
+  }
+
+  public void testReuse() throws Exception {
+    IndexWriterConfig iwc = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
+    Directory dir = newDirectory();
+    Document doc = new Document();
+    doc.add(newTextField("foo", "bar", Store.YES));
+    RandomIndexWriter riw = new RandomIndexWriter(random(), dir, iwc);
+    riw.addDocument(doc);
+    riw.close();
+
+    // Sharing IWC should be fine:
+    riw = new RandomIndexWriter(random(), dir, iwc);
+    riw.addDocument(doc);
+    riw.close();
+
+    dir.close();
+  }
+
+  public void testIWCClone() throws Exception {
+    IndexWriterConfig iwc = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
+    Directory dir = newDirectory();
+    RandomIndexWriter riw = new RandomIndexWriter(random(), dir, iwc);
+
+    // Cannot clone IW's private IWC clone:
+    try {
+      riw.w.getConfig().clone();
+      fail("did not hit expected exception");
+    } catch (IllegalStateException ise) {
+      // expected
+    }
+    riw.close();
+    dir.close();
+  }
+
+  public void testIWCInvalidReuse() throws Exception {
+    IndexWriterConfig iwc = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
+    Directory dir = newDirectory();
+    RandomIndexWriter riw = new RandomIndexWriter(random(), dir, iwc);
+    IndexWriterConfig privateIWC = riw.w.getConfig();
+    riw.close();
+
+    // Cannot clone IW's private IWC clone:
+    try {
+      new RandomIndexWriter(random(), dir, privateIWC);
+      fail("did not hit expected exception");
+    } catch (IllegalStateException ise) {
+      // expected
+    }
+    dir.close();
   }
 }

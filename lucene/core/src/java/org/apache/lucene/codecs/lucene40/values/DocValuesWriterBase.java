@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.lucene40.values;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.Comparator;
 
 import org.apache.lucene.codecs.DocValuesConsumer;
+import org.apache.lucene.codecs.PerDocProducerBase;
 import org.apache.lucene.codecs.PerDocConsumer;
 import org.apache.lucene.codecs.lucene40.values.Writer;
 import org.apache.lucene.index.FieldInfo;
@@ -30,6 +31,7 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Counter;
+import org.apache.lucene.util.packed.PackedInts;
 
 /**
  * Abstract base class for PerDocConsumer implementations
@@ -40,7 +42,7 @@ public abstract class DocValuesWriterBase extends PerDocConsumer {
   protected final String segmentName;
   private final Counter bytesUsed;
   protected final IOContext context;
-  private final boolean fasterButMoreRam;
+  private final float acceptableOverheadRatio;
 
   /**
    * Filename extension for index files
@@ -56,20 +58,22 @@ public abstract class DocValuesWriterBase extends PerDocConsumer {
    * @param state The state to initiate a {@link PerDocConsumer} instance
    */
   protected DocValuesWriterBase(PerDocWriteState state) {
-    this(state, true);
+    this(state, PackedInts.FAST);
   }
 
   /**
    * @param state The state to initiate a {@link PerDocConsumer} instance
-   * @param fasterButMoreRam whether packed ints for docvalues should be optimized for speed by rounding up the bytes
-   *                         used for a value to either 8, 16, 32 or 64 bytes. This option is only applicable for
-   *                         docvalues of type {@link Type#BYTES_FIXED_SORTED} and {@link Type#BYTES_VAR_SORTED}.
+   * @param acceptableOverheadRatio
+   *          how to trade space for speed. This option is only applicable for
+   *          docvalues of type {@link Type#BYTES_FIXED_SORTED} and
+   *          {@link Type#BYTES_VAR_SORTED}.
+   * @see PackedInts#getReader(org.apache.lucene.store.DataInput)
    */
-  protected DocValuesWriterBase(PerDocWriteState state, boolean fasterButMoreRam) {
-    this.segmentName = state.segmentName;
+  protected DocValuesWriterBase(PerDocWriteState state, float acceptableOverheadRatio) {
+    this.segmentName = state.segmentInfo.name;
     this.bytesUsed = state.bytesUsed;
     this.context = state.context;
-    this.fasterButMoreRam = fasterButMoreRam;
+    this.acceptableOverheadRatio = acceptableOverheadRatio;
   }
 
   protected abstract Directory getDirectory() throws IOException;
@@ -81,14 +85,10 @@ public abstract class DocValuesWriterBase extends PerDocConsumer {
   @Override
   public DocValuesConsumer addValuesField(Type valueType, FieldInfo field) throws IOException {
     return Writer.create(valueType,
-        docValuesId(segmentName, field.number), 
-        getDirectory(), getComparator(), bytesUsed, context, fasterButMoreRam);
+        PerDocProducerBase.docValuesId(segmentName, field.number), 
+        getDirectory(), getComparator(), bytesUsed, context, acceptableOverheadRatio);
   }
 
-  public static String docValuesId(String segmentsName, int fieldId) {
-    return segmentsName + "_" + fieldId;
-  }
-  
   
   public Comparator<BytesRef> getComparator() throws IOException {
     return BytesRef.getUTF8SortedAsUnicodeComparator();

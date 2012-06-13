@@ -1,6 +1,6 @@
 package org.apache.lucene.search.spans;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -60,6 +60,7 @@ public class SpanMultiTermQueryWrapper<Q extends MultiTermQuery> extends SpanQue
    * Be sure to not change the rewrite method on the wrapped query afterwards! Doing so will
    * throw {@link UnsupportedOperationException} on rewriting this query!
    */
+  @SuppressWarnings({"rawtypes","unchecked"})
   public SpanMultiTermQueryWrapper(Q query) {
     this.query = query;
     
@@ -123,6 +124,7 @@ public class SpanMultiTermQueryWrapper<Q extends MultiTermQuery> extends SpanQue
   }
 
   @Override
+  @SuppressWarnings({"rawtypes","unchecked"})
   public boolean equals(Object obj) {
     if (this == obj) return true;
     if (obj == null) return false;
@@ -170,11 +172,6 @@ public class SpanMultiTermQueryWrapper<Q extends MultiTermQuery> extends SpanQue
     @Override
     public SpanQuery rewrite(IndexReader reader, MultiTermQuery query) throws IOException {
       return delegate.rewrite(reader, query);
-    }
-
-    // Make sure we are still a singleton even after deserializing
-    protected Object readResolve() {
-      return SCORING_SPAN_QUERY_REWRITE;
     }
   };
   

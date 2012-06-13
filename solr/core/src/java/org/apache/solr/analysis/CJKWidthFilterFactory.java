@@ -1,6 +1,6 @@
 package org.apache.solr.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,6 +19,9 @@ package org.apache.solr.analysis;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.cjk.CJKWidthFilter;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
  * Factory for {@link CJKWidthFilter}.
@@ -33,10 +36,15 @@ import org.apache.lucene.analysis.cjk.CJKWidthFilter;
  * &lt;/fieldType&gt;</pre>
  */
 
-public class CJKWidthFilterFactory extends BaseTokenFilterFactory {
+public class CJKWidthFilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
   
   @Override
   public TokenStream create(TokenStream input) {
     return new CJKWidthFilter(input);
+  }
+  
+  @Override
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

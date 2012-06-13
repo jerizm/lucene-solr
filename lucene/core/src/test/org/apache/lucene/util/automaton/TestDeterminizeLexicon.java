@@ -1,6 +1,6 @@
 package org.apache.lucene.util.automaton;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -38,7 +38,7 @@ public class TestDeterminizeLexicon extends LuceneTestCase {
       automata.clear();
       terms.clear();
       for (int j = 0; j < 5000; j++) {
-        String randomString = _TestUtil.randomUnicodeString(random);
+        String randomString = _TestUtil.randomUnicodeString(random());
         terms.add(randomString);
         automata.add(BasicAutomata.makeString(randomString));
       }
@@ -47,7 +47,7 @@ public class TestDeterminizeLexicon extends LuceneTestCase {
   }
   
   public void assertLexicon() throws Exception {
-    Collections.shuffle(automata, random);
+    Collections.shuffle(automata, random());
     final Automaton lex = BasicOperations.union(automata);
     lex.determinize();
     assertTrue(SpecialOperations.isFinite(lex));

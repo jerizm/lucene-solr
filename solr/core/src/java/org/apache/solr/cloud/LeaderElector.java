@@ -1,6 +1,6 @@
 package org.apache.solr.cloud;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -30,6 +30,7 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.common.cloud.ZkCmdExecutor;
 import org.apache.solr.common.cloud.ZooKeeperException;
+import org.apache.solr.core.SolrCore;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.KeeperException.ConnectionLossException;
@@ -74,8 +75,7 @@ public  class LeaderElector {
    * If it is, set the leaderId on the leader zk node. If it is not, start
    * watching the candidate that is in line before this one - if it goes down, check
    * if this candidate is the leader again.
-   * @param leaderSeqPath 
-   * 
+   *
    * @param seq
    * @param context 
    * @param replacement has someone else been the leader already?
@@ -84,7 +84,7 @@ public  class LeaderElector {
    * @throws IOException 
    * @throws UnsupportedEncodingException
    */
-  private void checkIfIamLeader(final String leaderSeqPath, final int seq, final ElectionContext context, boolean replacement) throws KeeperException,
+  private void checkIfIamLeader(final int seq, final ElectionContext context, boolean replacement) throws KeeperException,
       InterruptedException, IOException {
     // get all other numbers...
     final String holdElectionPath = context.electionPath + ELECTION_NODE;
@@ -93,7 +93,7 @@ public  class LeaderElector {
     sortSeqs(seqs);
     List<Integer> intSeqs = getSeqs(seqs);
     if (seq <= intSeqs.get(0)) {
-      runIamLeaderProcess(leaderSeqPath, context, replacement);
+      runIamLeaderProcess(context, replacement);
     } else {
       // I am not the leader - watch the node below me
       int i = 1;
@@ -117,7 +117,7 @@ public  class LeaderElector {
               public void process(WatchedEvent event) {
                 // am I the next leader?
                 try {
-                  checkIfIamLeader(leaderSeqPath, seq, context, true);
+                  checkIfIamLeader(seq, context, true);
                 } catch (InterruptedException e) {
                   // Restore the interrupted status
                   Thread.currentThread().interrupt();
@@ -135,16 +135,15 @@ public  class LeaderElector {
       } catch (KeeperException e) {
         // we couldn't set our watch - the node before us may already be down?
         // we need to check if we are the leader again
-        checkIfIamLeader(leaderSeqPath, seq, context, true);
+        checkIfIamLeader(seq, context, true);
       }
     }
   }
 
   // TODO: get this core param out of here
-  protected void runIamLeaderProcess(String leaderSeqPath, final ElectionContext context, boolean weAreReplacement) throws KeeperException,
+  protected void runIamLeaderProcess(final ElectionContext context, boolean weAreReplacement) throws KeeperException,
       InterruptedException, IOException {
-
-    context.runLeaderProcess(leaderSeqPath, weAreReplacement);
+    context.runLeaderProcess(weAreReplacement);
   }
   
   /**
@@ -217,6 +216,7 @@ public  class LeaderElector {
       try {
         leaderSeqPath = zkClient.create(shardsElectZkPath + "/" + id + "-n_", null,
             CreateMode.EPHEMERAL_SEQUENTIAL, false);
+        context.leaderSeqPath = leaderSeqPath;
         cont = false;
       } catch (ConnectionLossException e) {
         // we don't know if we made our node or not...
@@ -247,7 +247,7 @@ public  class LeaderElector {
       }
     }
     int seq = getSeq(leaderSeqPath);
-    checkIfIamLeader(leaderSeqPath, seq, context, false);
+    checkIfIamLeader(seq, context, false);
     
     return seq;
   }

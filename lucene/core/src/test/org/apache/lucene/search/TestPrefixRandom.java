@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,10 +21,8 @@ import java.io.IOException;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.MockTokenizer;
-import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.StringField;
 import org.apache.lucene.index.FilteredTermsEnum;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
@@ -51,20 +49,17 @@ public class TestPrefixRandom extends LuceneTestCase {
   public void setUp() throws Exception {
     super.setUp();
     dir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir, 
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random, MockTokenizer.KEYWORD, false))
-        .setMaxBufferedDocs(_TestUtil.nextInt(random, 50, 1000)));
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir, 
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random(), MockTokenizer.KEYWORD, false))
+        .setMaxBufferedDocs(_TestUtil.nextInt(random(), 50, 1000)));
     
     Document doc = new Document();
-    Field field = newField("field", "", StringField.TYPE_UNSTORED);
+    Field field = newStringField("field", "", Field.Store.NO);
     doc.add(field);
 
-    // we generate aweful prefixes: good for testing.
-    // but for preflex codec, the test can be very slow, so use less iterations.
-    final String codec = Codec.getDefault().getName();
-    int num = codec.equals("Lucene3x") ? 200 * RANDOM_MULTIPLIER : atLeast(1000);
+    int num = atLeast(1000);
     for (int i = 0; i < num; i++) {
-      field.setValue(_TestUtil.randomUnicodeString(random, 10));
+      field.setStringValue(_TestUtil.randomUnicodeString(random(), 10));
       writer.addDocument(doc);
     }
     reader = writer.getReader();
@@ -118,7 +113,7 @@ public class TestPrefixRandom extends LuceneTestCase {
   public void testPrefixes() throws Exception {
       int num = atLeast(100);
       for (int i = 0; i < num; i++)
-        assertSame(_TestUtil.randomUnicodeString(random, 5));
+        assertSame(_TestUtil.randomUnicodeString(random(), 5));
   }
   
   /** check that the # of hits is the same as from a very

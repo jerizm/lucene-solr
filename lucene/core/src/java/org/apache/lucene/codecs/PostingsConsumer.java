@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -28,19 +28,29 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.FixedBitSet;
 
 /**
+ * Abstract API that consumes postings for an individual term.
+ * <p>
+ * The lifecycle is:
+ * <ol>
+ *    <li>PostingsConsumer is returned for each term by
+ *        {@link TermsConsumer#startTerm(BytesRef)}. 
+ *    <li>{@link #startDoc(int, int)} is called for each
+ *        document where the term occurs, specifying id 
+ *        and term frequency for that document.
+ *    <li>If positions are enabled for the field, then
+ *        {@link #addPosition(int, BytesRef, int, int)}
+ *        will be called for each occurrence in the 
+ *        document.
+ *    <li>{@link #finishDoc()} is called when the producer
+ *        is done adding positions to the document.
+ * </ol>
+ * 
  * @lucene.experimental
  */
-
 public abstract class PostingsConsumer {
 
   /** Adds a new doc in this term. */
-  public abstract void startDoc(int docID, int termDocFreq) throws IOException;
-
-  public static class PostingsMergeState {
-    DocsEnum docsEnum;
-    int[] docMap;
-    int docBase;
-  }
+  public abstract void startDoc(int docID, int freq) throws IOException;
 
   /** Add a new position & payload, and start/end offset.  A
    *  null payload means no payload; a non-null payload with
@@ -60,7 +70,8 @@ public abstract class PostingsConsumer {
     int df = 0;
     long totTF = 0;
 
-    if (mergeState.fieldInfo.indexOptions == IndexOptions.DOCS_ONLY) {
+    IndexOptions indexOptions = mergeState.fieldInfo.getIndexOptions();
+    if (indexOptions == IndexOptions.DOCS_ONLY) {
       while(true) {
         final int doc = postings.nextDoc();
         if (doc == DocIdSetIterator.NO_MORE_DOCS) {
@@ -72,7 +83,7 @@ public abstract class PostingsConsumer {
         df++;
       }
       totTF = -1;
-    } else if (mergeState.fieldInfo.indexOptions == IndexOptions.DOCS_AND_FREQS) {
+    } else if (indexOptions == IndexOptions.DOCS_AND_FREQS) {
       while(true) {
         final int doc = postings.nextDoc();
         if (doc == DocIdSetIterator.NO_MORE_DOCS) {
@@ -85,7 +96,7 @@ public abstract class PostingsConsumer {
         df++;
         totTF += freq;
       }
-    } else if (mergeState.fieldInfo.indexOptions == IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) {
+    } else if (indexOptions == IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) {
       final DocsAndPositionsEnum postingsEnum = (DocsAndPositionsEnum) postings;
       while(true) {
         final int doc = postingsEnum.nextDoc();
@@ -110,7 +121,7 @@ public abstract class PostingsConsumer {
         df++;
       }
     } else {
-      assert mergeState.fieldInfo.indexOptions == IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS;
+      assert indexOptions == IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS;
       final DocsAndPositionsEnum postingsEnum = (DocsAndPositionsEnum) postings;
       while(true) {
         final int doc = postingsEnum.nextDoc();

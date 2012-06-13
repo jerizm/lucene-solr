@@ -8,9 +8,29 @@ HTTP data sources quick and easy.
 
 
 $Id$
-==================  4.0.0-dev ==============
+==================  5.0.0 ==============
 
-(No Changes)
+ (No changes)
+
+==================  4.0.0-ALPHA ==============
+Bug Fixes
+----------------------
+* SOLR-3430: Added a new test against a real SQL database.  Fixed problems revealed by this new test
+             related to  the expanded cache support added to 3.6/SOLR-2382 (James Dyer)
+
+Other Changes
+----------------------
+* SOLR-3262: The "threads" feature is removed (deprecated in Solr 3.6) (James Dyer)
+
+* SOLR-3422: Refactored internal data classes. 
+             All entities in data-config.xml must have a name (James Dyer)
+
+==================  3.6.1 ==================
+
+Bug Fixes
+----------------------
+* SOLR-3336: SolrEntityProcessor substitutes most variables at query time
+             (Michael Kroh, Lance Norskog, via Martijn van Groningen)
 
 ==================  3.6.0 ==================
 
@@ -18,6 +38,22 @@ New Features
 ----------------------
 * SOLR-1499: Added SolrEntityProcessor that imports data from another Solr core or instance based on a specified query.
              (Lance Norskog, Erik Hatcher, Pulkit Singhal, Ahmet Arslan, Luca Cavanna, Martijn van Groningen)
+             Additional Work:
+             SOLR-3190: Minor improvements to SolrEntityProcessor. Add more consistency between solr parameters
+             and parameters used in SolrEntityProcessor and ability to specify a custom HttpClient instance.
+             (Luca Cavanna via Martijn van Groningen)
+* SOLR-2382: Added pluggable cache support so that any Entity can be made cache-able by adding the "cacheImpl" parameter.
+             Include "SortedMapBackedCache" to provide in-memory caching (as previously this was the only option when
+             using CachedSqlEntityProcessor).  Users can provide their own implementations of DIHCache for other
+             caching strategies.  Deprecate CachedSqlEntityProcessor in favor of specifing "cacheImpl" with
+             SqlEntityProcessor.  Make SolrWriter implement DIHWriter and allow the possibility of pluggable Writers
+             (DIH writing to something other than Solr).  (James Dyer, Noble Paul)
+
+Changes in Runtime Behavior
+----------------------
+* SOLR-3142: Imports no longer default optimize to true, instead false. If you want to force all segments to be merged
+             into one, you can specify this parameter yourself. NOTE: this can be very expensive operation and usually
+             does not make sense for delta-imports.  (Robert MUir)
 
 ==================  3.5.0 ==================
 

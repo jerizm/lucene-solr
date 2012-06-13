@@ -1,6 +1,6 @@
 package org.apache.solr.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -37,7 +37,7 @@ import org.slf4j.LoggerFactory;
  * <queryParser name="surround"
  * class="org.apache.solr.search.SurroundQParserPlugin" />
  * 
- * Examples of query syntax can be found in modules/queryparser/docs/surround
+ * Examples of query syntax can be found in lucene/queryparser/docs/surround
  * 
  * Note that the query string is not analyzed in any way
  * 

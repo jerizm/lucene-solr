@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -230,6 +230,4 @@ class EmptyRequestHandler extends RequestHandlerBase
 
   @Override public String getDescription() { return null; }
   @Override public String getSource() { return null; }
-  @Override public String getSourceId() { return null; }
-  @Override public String getVersion() { return null; }
 }

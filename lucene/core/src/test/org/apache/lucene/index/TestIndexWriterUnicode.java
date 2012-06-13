@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -26,8 +26,6 @@ import java.util.Set;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CharsRef;
@@ -64,7 +62,7 @@ public class TestIndexWriterUnicode extends LuceneTestCase {
   };
   
   private int nextInt(int lim) {
-    return random.nextInt(lim);
+    return random().nextInt(lim);
   }
 
   private int nextInt(int start, int end) {
@@ -98,7 +96,7 @@ public class TestIndexWriterUnicode extends LuceneTestCase {
       else if (5 == t && i < len-1) {
         // Illegal unpaired surrogate
         if (nextInt(10) == 7) {
-          if (random.nextBoolean())
+          if (random().nextBoolean())
             buffer[i] = (char) nextInt(0xd800, 0xdc00);
           else
             buffer[i] = (char) nextInt(0xdc00, 0xe000);
@@ -235,12 +233,12 @@ public class TestIndexWriterUnicode extends LuceneTestCase {
   
   public void testEmbeddedFFFF() throws Throwable {
     Directory d = newDirectory();
-    IndexWriter w = new IndexWriter(d, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+    IndexWriter w = new IndexWriter(d, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random())));
     Document doc = new Document();
-    doc.add(newField("field", "a a\uffffb", TextField.TYPE_UNSTORED));
+    doc.add(newTextField("field", "a a\uffffb", Field.Store.NO));
     w.addDocument(doc);
     doc = new Document();
-    doc.add(newField("field", "a", TextField.TYPE_UNSTORED));
+    doc.add(newTextField("field", "a", Field.Store.NO));
     w.addDocument(doc);
     IndexReader r = w.getReader();
     assertEquals(1, r.docFreq(new Term("field", "a\uffffb")));
@@ -257,11 +255,11 @@ public class TestIndexWriterUnicode extends LuceneTestCase {
 
     final int count = utf8Data.length/2;
     for(int i=0;i<count;i++)
-      doc.add(newField("f" + i, utf8Data[2*i], TextField.TYPE_STORED));
+      doc.add(newTextField("f" + i, utf8Data[2*i], Field.Store.YES));
     w.addDocument(doc);
     w.close();
 
-    IndexReader ir = IndexReader.open(dir);
+    IndexReader ir = DirectoryReader.open(dir);
     Document doc2 = ir.document(0);
     for(int i=0;i<count;i++) {
       assertEquals("field " + i + " was not indexed correctly", 1, ir.docFreq(new Term("f"+i, utf8Data[2*i+1])));
@@ -274,12 +272,12 @@ public class TestIndexWriterUnicode extends LuceneTestCase {
   // Make sure terms, including ones with surrogate pairs,
   // sort in codepoint sort order by default
   public void testTermUTF16SortOrder() throws Throwable {
-    Random rnd = random;
+    Random rnd = random();
     Directory dir = newDirectory();
     RandomIndexWriter writer = new RandomIndexWriter(rnd, dir);
     Document d = new Document();
     // Single segment
-    Field f = newField("f", "", StringField.TYPE_UNSTORED);
+    Field f = newStringField("f", "", Field.Store.NO);
     d.add(f);
     char[] chars = new char[2];
     final Set<String> allTerms = new HashSet<String>();
@@ -306,7 +304,7 @@ public class TestIndexWriterUnicode extends LuceneTestCase {
         s = new String(chars, 0, 2);
       }
       allTerms.add(s);
-      f.setValue(s);
+      f.setStringValue(s);
 
       writer.addDocument(d);
 

@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,6 +20,7 @@ package org.apache.lucene.search;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,18 +30,20 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.ConcurrentMergeScheduler;
+import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.ThreadedIndexingAndSearchingTestCase;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.util.LuceneTestCase.UseNoMemoryExpensiveCodec;
+import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
 import org.apache.lucene.util.NamedThreadFactory;
 import org.apache.lucene.util._TestUtil;
 
-@UseNoMemoryExpensiveCodec
+@SuppressCodecs({ "SimpleText", "Memory" })
 public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
 
   boolean warmCalled;
@@ -48,7 +51,7 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
   private SearcherLifetimeManager.Pruner pruner;
 
   public void testSearcherManager() throws Exception {
-    pruner = new SearcherLifetimeManager.PruneByAge(TEST_NIGHTLY ? _TestUtil.nextInt(random, 1, 20) : 1);
+    pruner = new SearcherLifetimeManager.PruneByAge(TEST_NIGHTLY ? _TestUtil.nextInt(random(), 1, 20) : 1);
     runTest("TestSearcherManager");
   }
 
@@ -77,7 +80,7 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
         return s;
       }
     };
-    if (random.nextBoolean()) {
+    if (random().nextBoolean()) {
       // TODO: can we randomize the applyAllDeletes?  But
       // somehow for final searcher we must apply
       // deletes...
@@ -88,8 +91,8 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
       writer.commit();
       mgr = new SearcherManager(dir, factory);
       isNRT = false;
+      assertMergedSegmentsWarmed = false;
     }
-    
 
     lifetimeMGR = new SearcherLifetimeManager();
   }
@@ -102,10 +105,14 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
       public void run() {
         try {
           while(System.currentTimeMillis() < stopTime) {
-            Thread.sleep(_TestUtil.nextInt(random, 1, 100));
+            Thread.sleep(_TestUtil.nextInt(random(), 1, 100));
             writer.commit();
-            Thread.sleep(_TestUtil.nextInt(random, 1, 5));
-            if (mgr.maybeRefresh()) {
+            Thread.sleep(_TestUtil.nextInt(random(), 1, 5));
+            boolean block = random().nextBoolean();
+            if (block) {
+              mgr.maybeRefreshBlocking();
+              lifetimeMGR.prune(pruner);
+            } else if (mgr.maybeRefresh()) {
               lifetimeMGR.prune(pruner);
             }
           }
@@ -129,7 +136,7 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
 
   @Override
   protected IndexSearcher getCurrentSearcher() throws Exception {
-    if (random.nextInt(10) == 7) {
+    if (random().nextInt(10) == 7) {
       // NOTE: not best practice to call maybeReopen
       // synchronous to your search threads, but still we
       // test as apps will presumably do this for
@@ -142,12 +149,12 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
     IndexSearcher s = null;
 
     synchronized(pastSearchers) {
-      while (pastSearchers.size() != 0 && random.nextDouble() < 0.25) {
+      while (pastSearchers.size() != 0 && random().nextDouble() < 0.25) {
         // 1/4 of the time pull an old searcher, ie, simulate
         // a user doing a follow-on action on a previous
         // search (drilling down/up, clicking next/prev page,
         // etc.)
-        final Long token = pastSearchers.get(random.nextInt(pastSearchers.size()));
+        final Long token = pastSearchers.get(random().nextInt(pastSearchers.size()));
         s = lifetimeMGR.acquire(token);
         if (s == null) {
           // Searcher was pruned
@@ -187,18 +194,18 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
     mgr.close();
     lifetimeMGR.close();
   }
-  
+
   public void testIntermediateClose() throws IOException, InterruptedException {
     Directory dir = newDirectory();
     // Test can deadlock if we use SMS:
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(
-                                                                   TEST_VERSION_CURRENT, new MockAnalyzer(random)).setMergeScheduler(new ConcurrentMergeScheduler()));
+        TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMergeScheduler(new ConcurrentMergeScheduler()));
     writer.addDocument(new Document());
     writer.commit();
     final CountDownLatch awaitEnterWarm = new CountDownLatch(1);
     final CountDownLatch awaitClose = new CountDownLatch(1);
     final AtomicBoolean triedReopen = new AtomicBoolean(false);
-    final ExecutorService es = random.nextBoolean() ? null : Executors.newCachedThreadPool(new NamedThreadFactory("testIntermediateClose"));
+    final ExecutorService es = random().nextBoolean() ? null : Executors.newCachedThreadPool(new NamedThreadFactory("testIntermediateClose"));
     final SearcherFactory factory = new SearcherFactory() {
       @Override
       public IndexSearcher newSearcher(IndexReader r) throws IOException {
@@ -213,9 +220,9 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
         return new IndexSearcher(r, es);
       }
     };
-    final SearcherManager searcherManager = random.nextBoolean() 
+    final SearcherManager searcherManager = random().nextBoolean() 
         ? new SearcherManager(dir, factory) 
-        : new SearcherManager(writer, random.nextBoolean(), factory);
+        : new SearcherManager(writer, random().nextBoolean(), factory);
     if (VERBOSE) {
       System.out.println("sm created");
     }
@@ -314,6 +321,66 @@ public class TestSearcherManager extends ThreadedIndexingAndSearchingTestCase {
     } catch (AlreadyClosedException e) {
       // ok
     }
+    dir.close();
+  }
+
+  public void testEvilSearcherFactory() throws Exception {
+    final Random random = random();
+    final Directory dir = newDirectory();
+    final RandomIndexWriter w = new RandomIndexWriter(random, dir);
+    w.commit();
+
+    final IndexReader other = DirectoryReader.open(dir);
+
+    final SearcherFactory theEvilOne = new SearcherFactory() {
+      @Override
+      public IndexSearcher newSearcher(IndexReader ignored) throws IOException {
+        return new IndexSearcher(other);
+      }
+      };
+
+    try {
+      new SearcherManager(dir, theEvilOne);
+    } catch (IllegalStateException ise) {
+      // expected
+    }
+    try {
+      new SearcherManager(w.w, random.nextBoolean(), theEvilOne);
+    } catch (IllegalStateException ise) {
+      // expected
+    }
+    w.close();
+    other.close();
+    dir.close();
+  }
+  
+  public void testMaybeRefreshBlockingLock() throws Exception {
+    // make sure that maybeRefreshBlocking releases the lock, otherwise other
+    // threads cannot obtain it.
+    final Directory dir = newDirectory();
+    final RandomIndexWriter w = new RandomIndexWriter(random(), dir);
+    w.close();
+    
+    final SearcherManager sm = new SearcherManager(dir, null);
+    
+    Thread t = new Thread() {
+      @Override
+      public void run() {
+        try {
+          // this used to not release the lock, preventing other threads from obtaining it.
+          sm.maybeRefreshBlocking();
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+    };
+    t.start();
+    t.join();
+    
+    // if maybeRefreshBlocking didn't release the lock, this will fail.
+    assertTrue("failde to obtain the refreshLock!", sm.maybeRefresh());
+    
+    sm.close();
     dir.close();
   }
   

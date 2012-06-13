@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,6 +17,8 @@ package org.apache.lucene.index;
  * limitations under the License.
  */
 
+import java.io.IOException;
+
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.util.AttributeSource;
 
@@ -29,8 +31,9 @@ public abstract class DocsEnum extends DocIdSetIterator {
 
   /** Returns term frequency in the current document.  Do
    *  not call this before {@link #nextDoc} is first called,
-   *  nor after {@link #nextDoc} returns NO_MORE_DOCS. */
-  public abstract int freq();
+   *  nor after {@link #nextDoc} returns NO_MORE_DOCS. 
+   **/
+  public abstract int freq() throws IOException;
   
   /** Returns the related attributes. */
   public AttributeSource attributes() {

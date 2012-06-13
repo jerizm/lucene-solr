@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,15 +17,15 @@
 
 package org.apache.solr.response;
 
-import org.apache.commons.csv.CSVPrinter;
-import org.apache.commons.csv.CSVStrategy;
+import org.apache.solr.internal.csv.CSVPrinter;
+import org.apache.solr.internal.csv.CSVStrategy;
 import org.apache.lucene.index.IndexableField;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.DateUtil;
-import org.apache.solr.common.util.FastWriter;
+import org.apache.solr.util.FastWriter;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.schema.FieldType;
@@ -258,6 +258,10 @@ class CSVWriter extends TextResponseWriter {
     CSVSharedBufPrinter csvPrinterMV = new CSVSharedBufPrinter(mvWriter, mvStrategy);
 
     for (String field : fields) {
+       if (!returnFields.wantsField(field)) {
+         continue;
+       }
+
       if (field.equals("score")) {
         CSVField csvField = new CSVField();
         csvField.name = "score";

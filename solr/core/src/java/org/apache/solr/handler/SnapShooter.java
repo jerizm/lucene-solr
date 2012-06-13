@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -58,7 +58,7 @@ public class SnapShooter {
     if (location == null) snapDir = core.getDataDir();
     else  {
       File base = new File(core.getCoreDescriptor().getInstanceDir());
-      snapDir = org.apache.solr.common.util.FileUtils.resolvePath(base, location).getAbsolutePath();
+      snapDir = org.apache.solr.util.FileUtils.resolvePath(base, location).getAbsolutePath();
       File dir = new File(snapDir);
       if (!dir.exists())  dir.mkdirs();
     }
@@ -135,7 +135,7 @@ public class SnapShooter {
     Collections.sort(dirs);
     int i=1;
     for(OldBackupDirectory dir : dirs) {
-      if( i > numberToKeep-1 ) {
+      if( i++ > numberToKeep-1 ) {
         SnapPuller.delTree(dir.dir);
       }
     }   
@@ -165,7 +165,7 @@ public class SnapShooter {
   }
 
   public static final String SNAP_DIR = "snapDir";
-  public static final String DATE_FMT = "yyyyMMddHHmmss";
+  public static final String DATE_FMT = "yyyyMMddHHmmssSSS";
   
 
   private class FileCopier {

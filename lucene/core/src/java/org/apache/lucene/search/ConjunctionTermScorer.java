@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -49,7 +49,7 @@ class ConjunctionTermScorer extends Scorer {
 
   private int doNext(int doc) throws IOException {
     do {
-      if (lead.doc == DocsEnum.NO_MORE_DOCS) {
+      if (lead.doc == DocIdSetIterator.NO_MORE_DOCS) {
         return NO_MORE_DOCS;
       }
       advanceHead: do {

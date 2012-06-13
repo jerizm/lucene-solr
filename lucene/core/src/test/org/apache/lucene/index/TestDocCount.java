@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,9 +17,8 @@ package org.apache.lucene.index;
  * limitations under the License.
  */
 
-import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.FixedBitSet;
@@ -31,10 +30,8 @@ import org.apache.lucene.util._TestUtil;
  */
 public class TestDocCount extends LuceneTestCase {
   public void testSimple() throws Exception {
-    assumeFalse("PreFlex codec does not support docCount statistic!", 
-        "Lucene3x".equals(Codec.getDefault().getName()));
     Directory dir = newDirectory();
-    RandomIndexWriter iw = new RandomIndexWriter(random, dir);
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir);
     int numDocs = atLeast(100);
     for (int i = 0; i < numDocs; i++) {
       iw.addDocument(doc());
@@ -52,9 +49,9 @@ public class TestDocCount extends LuceneTestCase {
   
   private Document doc() {
     Document doc = new Document();
-    int numFields = _TestUtil.nextInt(random, 1, 10);
+    int numFields = _TestUtil.nextInt(random(), 1, 10);
     for (int i = 0; i < numFields; i++) {
-      doc.add(newField("" + _TestUtil.nextInt(random, 'a', 'z'), "" + _TestUtil.nextInt(random, 'a', 'z'), StringField.TYPE_UNSTORED));
+      doc.add(newStringField("" + _TestUtil.nextInt(random(), 'a', 'z'), "" + _TestUtil.nextInt(random(), 'a', 'z'), Field.Store.NO));
     }
     return doc;
   }
@@ -75,7 +72,7 @@ public class TestDocCount extends LuceneTestCase {
       FixedBitSet visited = new FixedBitSet(ir.maxDoc());
       TermsEnum te = terms.iterator(null);
       while (te.next() != null) {
-        DocsEnum de = _TestUtil.docs(random, te, null, null, false);
+        DocsEnum de = _TestUtil.docs(random(), te, null, null, false);
         while (de.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
           visited.set(de.docID());
         }

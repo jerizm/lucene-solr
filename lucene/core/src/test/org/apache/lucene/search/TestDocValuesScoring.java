@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,14 +19,11 @@ package org.apache.lucene.search;
 
 import java.io.IOException;
 
-import org.apache.lucene.codecs.Codec;
-import org.apache.lucene.document.DocValuesField;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.TextField;
+import org.apache.lucene.document.FloatDocValuesField;
 import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.index.DocValues.Source;
-import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.FieldInvertState;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Norm;
@@ -47,27 +44,24 @@ import org.apache.lucene.util.LuceneTestCase;
 public class TestDocValuesScoring extends LuceneTestCase {
   private static final float SCORE_EPSILON = 0.001f; /* for comparing floats */
 
-  public void testSimple() throws Exception {
-    assumeFalse("PreFlex codec cannot work with DocValues!", 
-        "Lucene3x".equals(Codec.getDefault().getName()));
-    
+  public void testSimple() throws Exception {    
     Directory dir = newDirectory();
-    RandomIndexWriter iw = new RandomIndexWriter(random, dir);
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir);
     Document doc = new Document();
-    Field field = newField("foo", "", TextField.TYPE_UNSTORED);
+    Field field = newTextField("foo", "", Field.Store.NO);
     doc.add(field);
-    DocValuesField dvField = new DocValuesField("foo_boost", 0.0f, DocValues.Type.FLOAT_32);
+    Field dvField = new FloatDocValuesField("foo_boost", 0.0f);
     doc.add(dvField);
-    Field field2 = newField("bar", "", TextField.TYPE_UNSTORED);
+    Field field2 = newTextField("bar", "", Field.Store.NO);
     doc.add(field2);
     
-    field.setValue("quick brown fox");
-    field2.setValue("quick brown fox");
-    dvField.setValue(2f); // boost x2
+    field.setStringValue("quick brown fox");
+    field2.setStringValue("quick brown fox");
+    dvField.setFloatValue(2f); // boost x2
     iw.addDocument(doc);
-    field.setValue("jumps over lazy brown dog");
-    field2.setValue("jumps over lazy brown dog");
-    dvField.setValue(4f); // boost x4
+    field.setStringValue("jumps over lazy brown dog");
+    field2.setStringValue("jumps over lazy brown dog");
+    dvField.setFloatValue(4f); // boost x4
     iw.addDocument(doc);
     IndexReader ir = iw.getReader();
     iw.close();
@@ -98,8 +92,8 @@ public class TestDocValuesScoring extends LuceneTestCase {
     
     // in this case, we searched on field "foo". first document should have 2x the score.
     TermQuery tq = new TermQuery(new Term("foo", "quick"));
-    QueryUtils.check(random, tq, searcher1);
-    QueryUtils.check(random, tq, searcher2);
+    QueryUtils.check(random(), tq, searcher1);
+    QueryUtils.check(random(), tq, searcher2);
     
     TopDocs noboost = searcher1.search(tq, 10);
     TopDocs boost = searcher2.search(tq, 10);
@@ -111,8 +105,8 @@ public class TestDocValuesScoring extends LuceneTestCase {
     
     // this query matches only the second document, which should have 4x the score.
     tq = new TermQuery(new Term("foo", "jumps"));
-    QueryUtils.check(random, tq, searcher1);
-    QueryUtils.check(random, tq, searcher2);
+    QueryUtils.check(random(), tq, searcher1);
+    QueryUtils.check(random(), tq, searcher2);
     
     noboost = searcher1.search(tq, 10);
     boost = searcher2.search(tq, 10);
@@ -124,8 +118,8 @@ public class TestDocValuesScoring extends LuceneTestCase {
     // search on on field bar just for kicks, nothing should happen, since we setup
     // our sim provider to only use foo_boost for field foo.
     tq = new TermQuery(new Term("bar", "quick"));
-    QueryUtils.check(random, tq, searcher1);
-    QueryUtils.check(random, tq, searcher2);
+    QueryUtils.check(random(), tq, searcher1);
+    QueryUtils.check(random(), tq, searcher2);
     
     noboost = searcher1.search(tq, 10);
     boost = searcher2.search(tq, 10);

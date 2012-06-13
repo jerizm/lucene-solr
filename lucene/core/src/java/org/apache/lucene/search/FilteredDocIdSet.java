@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -28,7 +28,7 @@ import org.apache.lucene.util.Bits;
  * <p/>
  *
  * Technically, this same functionality could be achieved
- * with ChainedFilter (under contrib/misc), however the
+ * with ChainedFilter (under queries/), however the
  * benefit of this class is it never materializes the full
  * bitset for the filter.  Instead, the {@link #match}
  * method is invoked on-demand, per docID visited during
@@ -84,7 +84,11 @@ public abstract class FilteredDocIdSet extends DocIdSet {
    */
   @Override
   public DocIdSetIterator iterator() throws IOException {
-    return new FilteredDocIdSetIterator(_innerSet.iterator()) {
+    final DocIdSetIterator iterator = _innerSet.iterator();
+    if (iterator == null) {
+      return null;
+    }
+    return new FilteredDocIdSetIterator(iterator) {
       @Override
       protected boolean match(int docid) {
         return FilteredDocIdSet.this.match(docid);

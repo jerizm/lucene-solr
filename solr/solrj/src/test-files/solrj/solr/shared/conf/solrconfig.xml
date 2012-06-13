@@ -22,7 +22,7 @@
 -->
 <config>
   <luceneMatchVersion>${tests.luceneMatchVersion:LUCENE_CURRENT}</luceneMatchVersion>
-  <dataDir>${solr.solr.home}/data/${l10n}-${version}</dataDir>
+  <dataDir>${tempDir}/data/${l10n:}-${version:}</dataDir>
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
 
   <updateHandler class="solr.DirectUpdateHandler2" />
@@ -32,7 +32,7 @@
   </requestDispatcher>
   
   <requestHandler name="standard" class="solr.StandardRequestHandler" default="true" />
-  <requestHandler name="/update" class="solr.XmlUpdateRequestHandler" />
+  <requestHandler name="/update" class="solr.UpdateRequestHandler"  />
   <requestHandler name="/admin/" class="org.apache.solr.handler.admin.AdminHandlers" />
       
   <!-- config for the admin interface --> 

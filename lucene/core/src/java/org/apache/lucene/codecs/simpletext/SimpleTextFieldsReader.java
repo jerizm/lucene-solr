@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.simpletext;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -269,7 +269,7 @@ class SimpleTextFieldsReader extends FieldsProducer {
     }
 
     @Override
-    public int freq() {
+    public int freq() throws IOException {
       assert !omitTF;
       return tf;
     }
@@ -370,7 +370,7 @@ class SimpleTextFieldsReader extends FieldsProducer {
     }
 
     @Override
-    public int freq() {
+    public int freq() throws IOException {
       return tf;
     }
 
@@ -514,7 +514,7 @@ class SimpleTextFieldsReader extends FieldsProducer {
 
     public SimpleTextTerms(String field, long termsStart) throws IOException {
       this.termsStart = termsStart;
-      indexOptions = fieldInfos.fieldInfo(field).indexOptions;
+      indexOptions = fieldInfos.fieldInfo(field).getIndexOptions();
       loadTerms();
     }
 
@@ -596,7 +596,7 @@ class SimpleTextFieldsReader extends FieldsProducer {
     }
 
     @Override
-    public long getUniqueTermCount() {
+    public long size() {
       return (long) termCount;
     }
 
@@ -641,7 +641,7 @@ class SimpleTextFieldsReader extends FieldsProducer {
   }
 
   @Override
-  public int getUniqueFieldCount() {
+  public int size() {
     return -1;
   }
 

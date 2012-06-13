@@ -1,6 +1,6 @@
 package org.apache.lucene.search.spans;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -140,7 +140,7 @@ public class SpanNearQuery extends SpanQuery implements Cloneable {
       SpanQuery query = (SpanQuery) c.rewrite(reader);
       if (query != c) {                     // clause rewrote: must clone
         if (clone == null)
-          clone = (SpanNearQuery) this.clone();
+          clone = this.clone();
         clone.clauses.set(i,query);
       }
     }
@@ -152,7 +152,7 @@ public class SpanNearQuery extends SpanQuery implements Cloneable {
   }
   
   @Override
-  public Object clone() {
+  public SpanNearQuery clone() {
     int sz = clauses.size();
     SpanQuery[] newClauses = new SpanQuery[sz];
 

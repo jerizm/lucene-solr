@@ -1,6 +1,6 @@
 package org.apache.solr.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,7 +23,7 @@ import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 
-import org.apache.solr.common.ResourceLoader;
+import org.apache.lucene.analysis.util.ResourceLoader;
 
 class StringMockSolrResourceLoader implements ResourceLoader {
   String text;
@@ -36,7 +36,7 @@ class StringMockSolrResourceLoader implements ResourceLoader {
     return Arrays.asList(text.split("\n"));
   }
 
-  public Object newInstance(String cname, String... subpackages) {
+  public <T> T newInstance(String cname, Class<T> expectedType, String... subpackages) {
     return null;
   }
 

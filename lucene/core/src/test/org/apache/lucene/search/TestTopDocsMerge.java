@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,15 +22,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.NumericField;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.FloatField;
+import org.apache.lucene.document.IntField;
 import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.index.CompositeReaderContext;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.RandomIndexWriter;
-import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
@@ -77,7 +76,7 @@ public class TestTopDocsMerge extends LuceneTestCase {
 
     {
       dir = newDirectory();
-      final RandomIndexWriter w = new RandomIndexWriter(random, dir);
+      final RandomIndexWriter w = new RandomIndexWriter(random(), dir);
       // w.setDoRandomForceMerge(false);
 
       // w.w.getConfig().setMaxBufferedDocs(atLeast(100));
@@ -86,27 +85,27 @@ public class TestTopDocsMerge extends LuceneTestCase {
 
       for(int contentIDX=0;contentIDX<content.length;contentIDX++) {
         final StringBuilder sb = new StringBuilder();
-        final int numTokens = _TestUtil.nextInt(random, 1, 10);
+        final int numTokens = _TestUtil.nextInt(random(), 1, 10);
         for(int tokenIDX=0;tokenIDX<numTokens;tokenIDX++) {
-          sb.append(tokens[random.nextInt(tokens.length)]).append(' ');
+          sb.append(tokens[random().nextInt(tokens.length)]).append(' ');
         }
         content[contentIDX] = sb.toString();
       }
 
       for(int docIDX=0;docIDX<numDocs;docIDX++) {
         final Document doc = new Document();
-        doc.add(newField("string", _TestUtil.randomRealisticUnicodeString(random), StringField.TYPE_UNSTORED));
-        doc.add(newField("text", content[random.nextInt(content.length)], TextField.TYPE_UNSTORED));
-        doc.add(new NumericField("float", random.nextFloat()));
+        doc.add(newStringField("string", _TestUtil.randomRealisticUnicodeString(random()), Field.Store.NO));
+        doc.add(newTextField("text", content[random().nextInt(content.length)], Field.Store.NO));
+        doc.add(new FloatField("float", random().nextFloat(), Field.Store.NO));
         final int intValue;
-        if (random.nextInt(100) == 17) {
+        if (random().nextInt(100) == 17) {
           intValue = Integer.MIN_VALUE;
-        } else if (random.nextInt(100) == 17) {
+        } else if (random().nextInt(100) == 17) {
           intValue = Integer.MAX_VALUE;
         } else {
-          intValue = random.nextInt();
+          intValue = random().nextInt();
         }
-        doc.add(new NumericField("int", intValue));
+        doc.add(new IntField("int", intValue, Field.Store.NO));
         if (VERBOSE) {
           System.out.println("  doc=" + doc);
         }
@@ -157,21 +156,21 @@ public class TestTopDocsMerge extends LuceneTestCase {
     for(int iter=0;iter<1000*RANDOM_MULTIPLIER;iter++) {
 
       // TODO: custom FieldComp...
-      final Query query = new TermQuery(new Term("text", tokens[random.nextInt(tokens.length)]));
+      final Query query = new TermQuery(new Term("text", tokens[random().nextInt(tokens.length)]));
 
       final Sort sort;
-      if (random.nextInt(10) == 4) {
+      if (random().nextInt(10) == 4) {
         // Sort by score
         sort = null;
       } else {
-        final SortField[] randomSortFields = new SortField[_TestUtil.nextInt(random, 1, 3)];
+        final SortField[] randomSortFields = new SortField[_TestUtil.nextInt(random(), 1, 3)];
         for(int sortIDX=0;sortIDX<randomSortFields.length;sortIDX++) {
-          randomSortFields[sortIDX] = sortFields.get(random.nextInt(sortFields.size()));
+          randomSortFields[sortIDX] = sortFields.get(random().nextInt(sortFields.size()));
         }
         sort = new Sort(randomSortFields);
       }
 
-      final int numHits = _TestUtil.nextInt(random, 1, numDocs+5);
+      final int numHits = _TestUtil.nextInt(random(), 1, numDocs+5);
       //final int numHits = 5;
       
       if (VERBOSE) {
@@ -183,7 +182,7 @@ public class TestTopDocsMerge extends LuceneTestCase {
       if (sort == null) {
         topHits = searcher.search(query, numHits);
       } else {
-        final TopFieldCollector c = TopFieldCollector.create(sort, numHits, true, true, true, random.nextBoolean());
+        final TopFieldCollector c = TopFieldCollector.create(sort, numHits, true, true, true, random().nextBoolean());
         searcher.search(query, c);
         topHits = c.topDocs(0, numHits);
       }
@@ -208,7 +207,7 @@ public class TestTopDocsMerge extends LuceneTestCase {
         if (sort == null) {
           subHits = subSearcher.search(w, numHits);
         } else {
-          final TopFieldCollector c = TopFieldCollector.create(sort, numHits, true, true, true, random.nextBoolean());
+          final TopFieldCollector c = TopFieldCollector.create(sort, numHits, true, true, true, random().nextBoolean());
           subSearcher.search(w, c);
           subHits = c.topDocs(0, numHits);
         }

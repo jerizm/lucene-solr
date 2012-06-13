@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,6 +18,8 @@
 package org.apache.solr.analysis;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.pattern.PatternReplaceFilter;
+import org.apache.lucene.analysis.util.InitializationException;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -36,7 +38,7 @@ import java.util.regex.PatternSyntaxException;
  *
  * @see PatternReplaceFilter
  */
-public class PatternReplaceFilterFactory extends BaseTokenFilterFactory {
+public class PatternReplaceFilterFactory extends TokenFilterFactory {
   Pattern p;
   String replacement;
   boolean all = true;
@@ -44,14 +46,7 @@ public class PatternReplaceFilterFactory extends BaseTokenFilterFactory {
   @Override
   public void init(Map<String, String> args) {
     super.init(args);
-    try {
-      p = Pattern.compile(args.get("pattern"));
-    } catch (PatternSyntaxException e) {
-      throw new RuntimeException
-        ("Configuration Error: 'pattern' can not be parsed in " +
-         this.getClass().getName(), e);
-    }
-    
+    p = getPattern("pattern");
     replacement = args.get("replacement");
     
     String r = args.get("replace");
@@ -62,7 +57,7 @@ public class PatternReplaceFilterFactory extends BaseTokenFilterFactory {
         if (r.equals("first")) {
           all = false;
         } else {
-          throw new RuntimeException
+          throw new InitializationException
             ("Configuration Error: 'replace' must be 'first' or 'all' in "
              + this.getClass().getName());
         }

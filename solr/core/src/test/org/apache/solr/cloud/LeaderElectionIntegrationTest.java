@@ -1,6 +1,6 @@
 package org.apache.solr.cloud;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,6 +21,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -74,6 +75,9 @@ public class LeaderElectionIntegrationTest extends SolrTestCaseJ4 {
   public void setUp() throws Exception {
     super.setUp();
     createTempDir();
+    ignoreException("No UpdateLog found - cannot sync");
+    ignoreException("No UpdateLog found - cannot recover");
+    
     System.setProperty("zkClientTimeout", "3000");
     
     zkDir = dataDir.getAbsolutePath() + File.separator
@@ -84,27 +88,50 @@ public class LeaderElectionIntegrationTest extends SolrTestCaseJ4 {
     AbstractZkTestCase.buildZooKeeper(zkServer.getZkHost(),
         zkServer.getZkAddress(), "solrconfig.xml", "schema.xml");
     
-    log.info("####SETUP_START " + getName());
+    log.info("####SETUP_START " + getTestName());
     
     // set some system properties for use by tests
     System.setProperty("solr.test.sys.prop1", "propone");
     System.setProperty("solr.test.sys.prop2", "proptwo");
     
     for (int i = 7000; i < 7000 + NUM_SHARD_REPLICAS; i++) {
-      setupContainer(i, "shard1");
+      try {
+        setupContainer(i, "shard1");
+      } catch (Throwable t) {
+        log.error("!!!Could not start container:" + i + " The exception thrown was: " + t.getClass() + " " + t.getMessage());
+        fail("Could not start container:" + i + ". Reason:" + t.getClass() + " " + t.getMessage());
+      }
     }
-    
-    setupContainer(3333, "shard2");
+    try {
+      setupContainer(3333, "shard2");
+    } catch (Throwable t) {
+      log.error("!!!Could not start container 3333. The exception thrown was: " + t.getClass() + " " + t.getMessage());
+      fail("Could not start container: 3333");
+    }
     
     zkClient = new SolrZkClient(zkServer.getZkAddress(),
         AbstractZkTestCase.TIMEOUT);
-    
+        
     reader = new ZkStateReader(zkClient); 
     reader.createClusterStateWatchersAndUpdate();
-    log.info("####SETUP_END " + getName());
-    
+    boolean initSuccessful = false;
+    for (int i = 0; i < 30; i++) {
+      List<String> liveNodes = zkClient.getChildren("/live_nodes", null, true);
+      if (liveNodes.size() == NUM_SHARD_REPLICAS + 1) {
+        // all nodes up
+        initSuccessful = true;
+        break;
+      }
+      Thread.sleep(1000);
+      log.info("Waiting for more nodes to come up, now: " + liveNodes.size()
+          + "/" + (NUM_SHARD_REPLICAS + 1));
+    }
+    if (!initSuccessful) {
+      fail("Init was not successful!");
+    }
+    log.info("####SETUP_END " + getTestName());
   }
-  
+     
   private void setupContainer(int port, String shard) throws IOException,
       ParserConfigurationException, SAXException {
     File data = new File(dataDir + File.separator + "data_" + port);
@@ -122,6 +149,8 @@ public class LeaderElectionIntegrationTest extends SolrTestCaseJ4 {
     }
     ports.add(port);
     CoreContainer container = init.initialize();
+    assertTrue("Container " + port + " has no cores!", container.getCores()
+        .size() > 0);
     containerMap.put(port, container);
     System.clearProperty("solr.solr.home");
     System.clearProperty("hostPort");
@@ -168,6 +197,7 @@ public class LeaderElectionIntegrationTest extends SolrTestCaseJ4 {
       }
       
       if (leaderPort == newLeaderPort) {
+        zkClient.printLayoutToStdOut();
         fail("We didn't find a new leader! " + leaderPort + " was shutdown, but it's still showing as the leader");
       }
       
@@ -268,6 +298,12 @@ public class LeaderElectionIntegrationTest extends SolrTestCaseJ4 {
   @AfterClass
   public static void afterClass() throws InterruptedException {
     System.clearProperty("solrcloud.skip.autorecovery");
+    System.clearProperty("zkClientTimeout");
+    System.clearProperty("zkHost");
+    System.clearProperty("shard");
+    System.clearProperty("solr.data.dir");
+    System.clearProperty("solr.solr.home");
+    resetExceptionIgnores();
     // wait just a bit for any zk client threads to outlast timeout
     Thread.sleep(2000);
   }

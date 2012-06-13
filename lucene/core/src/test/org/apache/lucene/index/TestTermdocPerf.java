@@ -25,8 +25,9 @@ import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
+import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
@@ -86,7 +87,7 @@ public class TestTermdocPerf extends LuceneTestCase {
 
     Document doc = new Document();
     
-    doc.add(newField(field,val, StringField.TYPE_UNSTORED));
+    doc.add(newStringField(field, val, Field.Store.NO));
     IndexWriter writer = new IndexWriter(
         dir,
         newIndexWriterConfig(TEST_VERSION_CURRENT, analyzer).
@@ -108,11 +109,11 @@ public class TestTermdocPerf extends LuceneTestCase {
     Directory dir = newDirectory();
 
     long start = System.currentTimeMillis();
-    addDocs(random, dir, ndocs, "foo", "val", maxTF, percentDocs);
+    addDocs(random(), dir, ndocs, "foo", "val", maxTF, percentDocs);
     long end = System.currentTimeMillis();
     if (VERBOSE) System.out.println("milliseconds for creation of " + ndocs + " docs = " + (end-start));
 
-    IndexReader reader = IndexReader.open(dir);
+    IndexReader reader = DirectoryReader.open(dir);
 
     TermsEnum tenum = MultiFields.getTerms(reader, "foo").iterator(null);
 
@@ -120,10 +121,11 @@ public class TestTermdocPerf extends LuceneTestCase {
 
     int ret=0;
     DocsEnum tdocs = null;
+    final Random random = new Random(random().nextLong());
     for (int i=0; i<iter; i++) {
       tenum.seekCeil(new BytesRef("val"));
       tdocs = _TestUtil.docs(random, tenum, MultiFields.getLiveDocs(reader), tdocs, false);
-      while (tdocs.nextDoc() != DocsEnum.NO_MORE_DOCS) {
+      while (tdocs.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
         ret += tdocs.docID();
       }
     }

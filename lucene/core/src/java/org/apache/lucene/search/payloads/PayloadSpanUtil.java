@@ -1,6 +1,6 @@
 package org.apache.lucene.search.payloads;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -135,7 +135,8 @@ public class PayloadSpanUtil {
           }
         }
 
-        @SuppressWarnings("unchecked") final List<Query>[] disjunctLists = new List[maxPosition + 1];
+        @SuppressWarnings({"rawtypes","unchecked"}) final List<Query>[] disjunctLists =
+            new List[maxPosition + 1];
         int distinctPositions = 0;
 
         for (int i = 0; i < termArrays.size(); ++i) {

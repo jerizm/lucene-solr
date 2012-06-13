@@ -1,5 +1,5 @@
 package org.apache.solr.analysis;
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,9 +22,10 @@ import org.apache.lucene.analysis.payloads.PayloadEncoder;
 import org.apache.lucene.analysis.payloads.FloatEncoder;
 import org.apache.lucene.analysis.payloads.IntegerEncoder;
 import org.apache.lucene.analysis.payloads.IdentityEncoder;
-import org.apache.solr.common.ResourceLoader;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.util.plugin.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.InitializationException;
+import org.apache.lucene.analysis.util.ResourceLoader;
+import org.apache.lucene.analysis.util.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 import java.util.Map;
 
@@ -42,7 +43,7 @@ import java.util.Map;
  *
  * 
  */
-public class DelimitedPayloadTokenFilterFactory extends BaseTokenFilterFactory implements ResourceLoaderAware {
+public class DelimitedPayloadTokenFilterFactory extends TokenFilterFactory implements ResourceLoaderAware {
   public static final String ENCODER_ATTR = "encoder";
   public static final String DELIMITER_ATTR = "delimiter";
 
@@ -67,7 +68,7 @@ public class DelimitedPayloadTokenFilterFactory extends BaseTokenFilterFactory i
     } else if (encoderClass.equals("identity")){
       encoder = new IdentityEncoder();
     } else {
-      encoder = (PayloadEncoder) loader.newInstance(encoderClass);
+      encoder = loader.newInstance(encoderClass, PayloadEncoder.class);
     }
 
     String delim = args.get(DELIMITER_ATTR);
@@ -75,7 +76,7 @@ public class DelimitedPayloadTokenFilterFactory extends BaseTokenFilterFactory i
       if (delim.length() == 1) {
         delimiter = delim.charAt(0);
       } else{
-        throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Delimiter must be one character only");
+        throw new InitializationException("Delimiter must be one character only");
       }
     }
   }

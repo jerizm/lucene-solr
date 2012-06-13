@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -48,34 +48,5 @@ public class TestSolrQueryParser extends SolrTestCaseJ4 {
     assertQ(req("q","text_np:now-cow", "indent","true")
         ,"//*[@numFound='2']"
     );
-  }
-
-  @Test
-  public void testReturnFields() {
-    ReturnFields rf = new ReturnFields( req("fl", "id,score") );
-    assertTrue( rf.wantsScore() );
-    assertTrue( rf.wantsField( "score" ) );
-    assertTrue( rf.wantsField( "id" ) );
-    assertFalse( rf.wantsField( "xxx" ) );
-    assertTrue( rf.getTransformer() instanceof ScoreAugmenter );
-    
-    rf = new ReturnFields( req("fl", "*") );
-    assertFalse( rf.wantsScore() );
-    assertTrue( rf.wantsField( "xxx" ) );
-    assertTrue( rf.wantsAllFields() );
-    assertNull( rf.getTransformer() );
-    
-    rf = new ReturnFields( req("fl", "[explain]") );
-    assertFalse( rf.wantsScore() );
-    assertFalse( rf.wantsField( "id" ) );
-    assertEquals( "[explain]", rf.getTransformer().getName() );
-
-    // Check that we want wildcards
-    rf = new ReturnFields( req("fl", "id,aaa*,*bbb") );
-    assertTrue( rf.wantsField( "id" ) );
-    assertTrue( rf.wantsField( "aaaa" ) );
-    assertTrue( rf.wantsField( "xxxbbb" ) );
-    assertFalse( rf.wantsField( "aa" ) );
-    assertFalse( rf.wantsField( "bb" ) );
   }
 }

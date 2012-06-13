@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.lucene40.values;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -25,6 +25,7 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Counter;
+import org.apache.lucene.util.packed.PackedInts;
 
 /**
  * Abstract API for per-document stored primitive values of type <tt>byte[]</tt>
@@ -40,6 +41,7 @@ import org.apache.lucene.util.Counter;
  */
 abstract class Writer extends DocValuesConsumer {
   protected final Counter bytesUsed;
+  protected Type type;
 
   /**
    * Creates a new {@link Writer}.
@@ -49,9 +51,19 @@ abstract class Writer extends DocValuesConsumer {
    *          internally allocated memory. All tracked bytes must be released
    *          once {@link #finish(int)} has been called.
    */
-  protected Writer(Counter bytesUsed) {
+  protected Writer(Counter bytesUsed, Type type) {
     this.bytesUsed = bytesUsed;
+    this.type = type;
   }
+  
+  
+
+  @Override
+  protected Type getType() {
+    return type;
+  }
+
+
 
   /**
    * Factory method to create a {@link Writer} instance for a given type. This
@@ -66,14 +78,16 @@ abstract class Writer extends DocValuesConsumer {
    *          the {@link Directory} to create the files from.
    * @param bytesUsed
    *          a byte-usage tracking reference
-   * @param fasterButMoreRam Whether the space used for packed ints should be rounded up for higher lookup performance.
-   *                         Currently this parameter only applies for types {@link Type#BYTES_VAR_SORTED}
-   *                         and {@link Type#BYTES_FIXED_SORTED}.
+   * @param acceptableOverheadRatio
+   *          how to trade space for speed. This option is only applicable for
+   *          docvalues of type {@link Type#BYTES_FIXED_SORTED} and
+   *          {@link Type#BYTES_VAR_SORTED}.
    * @return a new {@link Writer} instance for the given {@link Type}
    * @throws IOException
+   * @see PackedInts#getReader(org.apache.lucene.store.DataInput, float)
    */
   public static DocValuesConsumer create(Type type, String id, Directory directory,
-      Comparator<BytesRef> comp, Counter bytesUsed, IOContext context, boolean fasterButMoreRam) throws IOException {
+      Comparator<BytesRef> comp, Counter bytesUsed, IOContext context, float acceptableOverheadRatio) throws IOException {
     if (comp == null) {
       comp = BytesRef.getUTF8SortedAsUnicodeComparator();
     }
@@ -90,22 +104,22 @@ abstract class Writer extends DocValuesConsumer {
       return Floats.getWriter(directory, id, bytesUsed, context, type);
     case BYTES_FIXED_STRAIGHT:
       return Bytes.getWriter(directory, id, Bytes.Mode.STRAIGHT, true, comp,
-          bytesUsed, context, fasterButMoreRam);
+          bytesUsed, context, acceptableOverheadRatio);
     case BYTES_FIXED_DEREF:
       return Bytes.getWriter(directory, id, Bytes.Mode.DEREF, true, comp,
-          bytesUsed, context, fasterButMoreRam);
+          bytesUsed, context, acceptableOverheadRatio);
     case BYTES_FIXED_SORTED:
       return Bytes.getWriter(directory, id, Bytes.Mode.SORTED, true, comp,
-          bytesUsed, context, fasterButMoreRam);
+          bytesUsed, context, acceptableOverheadRatio);
     case BYTES_VAR_STRAIGHT:
       return Bytes.getWriter(directory, id, Bytes.Mode.STRAIGHT, false, comp,
-          bytesUsed, context, fasterButMoreRam);
+          bytesUsed, context, acceptableOverheadRatio);
     case BYTES_VAR_DEREF:
       return Bytes.getWriter(directory, id, Bytes.Mode.DEREF, false, comp,
-          bytesUsed, context, fasterButMoreRam);
+          bytesUsed, context, acceptableOverheadRatio);
     case BYTES_VAR_SORTED:
       return Bytes.getWriter(directory, id, Bytes.Mode.SORTED, false, comp,
-          bytesUsed, context, fasterButMoreRam);
+          bytesUsed, context, acceptableOverheadRatio);
     default:
       throw new IllegalArgumentException("Unknown Values: " + type);
     }

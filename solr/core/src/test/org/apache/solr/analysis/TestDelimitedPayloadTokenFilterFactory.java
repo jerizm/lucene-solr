@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,16 +21,17 @@ import java.io.StringReader;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.lucene.analysis.BaseTokenStreamTestCase;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.payloads.DelimitedPayloadTokenFilter;
 import org.apache.lucene.analysis.payloads.FloatEncoder;
 import org.apache.lucene.analysis.payloads.PayloadHelper;
 import org.apache.lucene.analysis.tokenattributes.PayloadAttribute;
-import org.apache.solr.common.ResourceLoader;
+import org.apache.lucene.analysis.util.ResourceLoader;
 import org.apache.solr.core.SolrResourceLoader;
 
-public class TestDelimitedPayloadTokenFilterFactory extends BaseTokenTestCase {
+public class TestDelimitedPayloadTokenFilterFactory extends BaseTokenStreamTestCase {
 
   public void testEncoder() throws Exception {
     Map<String,String> args = new HashMap<String, String>();
@@ -46,7 +47,7 @@ public class TestDelimitedPayloadTokenFilterFactory extends BaseTokenTestCase {
     while (tf.incrementToken()){
       PayloadAttribute payAttr = tf.getAttribute(PayloadAttribute.class);
       assertTrue("payAttr is null and it shouldn't be", payAttr != null);
-      byte[] payData = payAttr.getPayload().getData();
+      byte[] payData = payAttr.getPayload().bytes;
       assertTrue("payData is null and it shouldn't be", payData != null);
       assertTrue("payData is null and it shouldn't be", payData != null);
       float payFloat = PayloadHelper.decodeFloat(payData);
@@ -69,7 +70,7 @@ public class TestDelimitedPayloadTokenFilterFactory extends BaseTokenTestCase {
     while (tf.incrementToken()){
       PayloadAttribute payAttr = tf.getAttribute(PayloadAttribute.class);
       assertTrue("payAttr is null and it shouldn't be", payAttr != null);
-      byte[] payData = payAttr.getPayload().getData();
+      byte[] payData = payAttr.getPayload().bytes;
       assertTrue("payData is null and it shouldn't be", payData != null);
       float payFloat = PayloadHelper.decodeFloat(payData);
       assertTrue(payFloat + " does not equal: " + 0.1f, payFloat == 0.1f);

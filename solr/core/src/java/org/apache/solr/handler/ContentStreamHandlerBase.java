@@ -1,5 +1,5 @@
 package org.apache.solr.handler;
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,22 +20,37 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.params.UpdateParams;
 import org.apache.solr.common.util.ContentStream;
+import org.apache.solr.common.util.NamedList;
+import org.apache.solr.handler.loader.ContentStreamLoader;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.update.processor.UpdateRequestProcessor;
 import org.apache.solr.update.processor.UpdateRequestProcessorChain;
-import org.apache.solr.util.SolrPluginUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
 /**
- * Shares common code between various handlers that manipulate {@link org.apache.solr.common.util.ContentStream} objects.
- *
- **/
+ * Shares common code between various handlers that manipulate 
+ * {@link org.apache.solr.common.util.ContentStream} objects.
+ */
 public abstract class ContentStreamHandlerBase extends RequestHandlerBase {
-  public static Logger log = LoggerFactory.getLogger(XmlUpdateRequestHandler.class);
+  public static Logger log = LoggerFactory.getLogger(ContentStreamHandlerBase.class);
 
+  @Override
+  public void init(NamedList args) {
+    super.init(args);
+
+    // Caching off by default
+    httpCaching = false;
+    if (args != null) {
+      Object caching = args.get("httpCaching");
+      if(caching!=null) {
+        httpCaching = Boolean.parseBoolean(caching.toString());
+      }
+    }
+  }
+  
   @Override
   public void handleRequestBody(SolrQueryRequest req, SolrQueryResponse rsp) throws Exception {
     SolrParams params = req.getParams();
@@ -56,7 +71,7 @@ public abstract class ContentStreamHandlerBase extends RequestHandlerBase {
       } else {
 
         for (ContentStream stream : streams) {
-          documentLoader.load(req, rsp, stream);
+          documentLoader.load(req, rsp, stream, processor);
         }
 
         // Perhaps commit from the parameters

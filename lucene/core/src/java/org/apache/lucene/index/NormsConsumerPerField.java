@@ -1,5 +1,5 @@
 package org.apache.lucene.index;
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,13 +18,10 @@ package org.apache.lucene.index;
 import java.io.IOException;
 
 import org.apache.lucene.codecs.DocValuesConsumer;
-import org.apache.lucene.document.DocValuesField;
-import org.apache.lucene.document.Field;
 import org.apache.lucene.index.DocValues.Type;
 import org.apache.lucene.search.similarities.Similarity;
-import org.apache.lucene.util.BytesRef;
 
-public class NormsConsumerPerField extends InvertedDocEndConsumerPerField implements Comparable<NormsConsumerPerField> {
+final class NormsConsumerPerField extends InvertedDocEndConsumerPerField implements Comparable<NormsConsumerPerField> {
   private final FieldInfo fieldInfo;
   private final DocumentsWriterPerThread.DocState docState;
   private final Similarity similarity;
@@ -50,7 +47,7 @@ public class NormsConsumerPerField extends InvertedDocEndConsumerPerField implem
 
   @Override
   void finish() throws IOException {
-    if (fieldInfo.isIndexed && !fieldInfo.omitNorms) {
+    if (fieldInfo.isIndexed() && !fieldInfo.omitsNorms()) {
       similarity.computeNorm(fieldState, norm);
       
       if (norm.type() != null) {
@@ -72,7 +69,8 @@ public class NormsConsumerPerField extends InvertedDocEndConsumerPerField implem
   
   private DocValuesConsumer getConsumer(Type type) throws IOException {
     if (consumer == null) {
-      fieldInfo.setNormValueType(type, false);
+      assert fieldInfo.getNormType() == null || fieldInfo.getNormType() == type;
+      fieldInfo.setNormValueType(type);
       consumer = parent.newConsumer(docState.docWriter.newPerDocWriteState(""), fieldInfo, type);
       this.initType = type;
     }

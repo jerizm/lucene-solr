@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,27 +19,27 @@
 package org.apache.solr.util;
 
 
-import org.apache.lucene.util.LuceneTestCase;
-import org.apache.solr.SolrTestCaseJ4;
-import org.apache.solr.core.SolrConfig;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.SolrInputDocument;
-import org.apache.solr.common.SolrInputField;
-import org.apache.solr.common.params.CommonParams;
-import org.apache.solr.common.util.XML;
-import org.apache.solr.request.*;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
+import java.io.*;
+import java.util.*;
 
-import org.xml.sax.SAXException;
-import org.slf4j.LoggerFactory;
-import org.slf4j.Logger;
 import javax.xml.xpath.XPathExpressionException;
 
-import java.io.*;
-import java.util.HashSet;
-import java.util.List;
-import java.util.ArrayList;
+import org.apache.lucene.util.LuceneTestCase;
+import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.common.*;
+import org.apache.solr.common.params.CommonParams;
+import org.apache.solr.common.util.XML;
+import org.apache.solr.core.SolrConfig;
+import org.apache.solr.request.SolrQueryRequest;
+import org.junit.*;
+import org.junit.rules.RuleChain;
+import org.junit.rules.TestRule;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.xml.sax.SAXException;
+
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeaks;
+import com.carrotsearch.randomizedtesting.rules.SystemPropertiesRestoreRule;
 
 /**
  * An Abstract base class that makes writing Solr JUnit tests "easier"
@@ -55,7 +55,8 @@ import java.util.ArrayList;
  * @see #tearDown
  */
 public abstract class AbstractSolrTestCase extends LuceneTestCase {
-    protected SolrConfig solrConfig;
+  protected SolrConfig solrConfig;
+
   /**
    * Harness initialized by initTestHarness.
    *
@@ -64,6 +65,7 @@ public abstract class AbstractSolrTestCase extends LuceneTestCase {
    * </p>
    */
   protected TestHarness h;
+
   /**
    * LocalRequestFactory initialized by initTestHarness using sensible
    * defaults.
@@ -94,6 +96,14 @@ public abstract class AbstractSolrTestCase extends LuceneTestCase {
     return SolrTestCaseJ4.TEST_HOME();
   }
   
+  @ClassRule
+  public static TestRule solrClassRules = 
+    RuleChain.outerRule(new SystemPropertiesRestoreRule());
+
+  @Rule
+  public TestRule solrTestRules = 
+    RuleChain.outerRule(new SystemPropertiesRestoreRule());
+  
   @BeforeClass
   public static void beforeClassAbstractSolrTestCase() throws Exception {
     SolrTestCaseJ4.startTrackingSearchers();
@@ -108,7 +118,11 @@ public abstract class AbstractSolrTestCase extends LuceneTestCase {
    * The directory used to story the index managed by the TestHarness h
    */
   protected File dataDir;
-    
+
+  public static Logger log = LoggerFactory.getLogger(AbstractSolrTestCase.class);
+
+  private String factoryProp;
+
   /**
    * Initializes things your test might need
    *
@@ -117,16 +131,11 @@ public abstract class AbstractSolrTestCase extends LuceneTestCase {
    * <li>initializes the TestHarness h using this data directory, and getSchemaPath()</li>
    * <li>initializes the LocalRequestFactory lrf using sensible defaults.</li>
    * </ul>
-   *
    */
-
-  public static Logger log = LoggerFactory.getLogger(AbstractSolrTestCase.class);
-
-  private String factoryProp;
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    log.info("####SETUP_START " + getName());
+    log.info("####SETUP_START " + getTestName());
     ignoreException("ignore_exception");
     factoryProp = System.getProperty("solr.directoryFactory");
     if (factoryProp == null) {
@@ -139,14 +148,14 @@ public abstract class AbstractSolrTestCase extends LuceneTestCase {
     System.setProperty("solr.solr.home", getSolrHome());
     if (configFile != null) {
 
-      solrConfig = h.createConfig(getSolrConfigFile());
+      solrConfig = TestHarness.createConfig(getSolrConfigFile());
       h = new TestHarness( dataDir.getAbsolutePath(),
               solrConfig,
               getSchemaFile());
       lrf = h.getRequestFactory
               ("standard",0,20,CommonParams.VERSION,"2.2");
     }
-    log.info("####SETUP_END " + getName());
+    log.info("####SETUP_END " + getTestName());
   }
 
     /** Causes an exception matching the regex pattern to not be logged. */
@@ -165,7 +174,7 @@ public abstract class AbstractSolrTestCase extends LuceneTestCase {
    * to log the fact that their setUp process has ended.
    */
   public void postSetUp() {
-    log.info("####POSTSETUP " + getName());
+    log.info("####POSTSETUP " + getTestName());
   }
 
 
@@ -175,7 +184,7 @@ public abstract class AbstractSolrTestCase extends LuceneTestCase {
    * tearDown method.
    */
   public void preTearDown() {
-    log.info("####PRETEARDOWN " + getName());      
+    log.info("####PRETEARDOWN " + getTestName());      
   }
 
   /**
@@ -185,7 +194,7 @@ public abstract class AbstractSolrTestCase extends LuceneTestCase {
    */
   @Override
   public void tearDown() throws Exception {
-    log.info("####TEARDOWN_START " + getName());
+    log.info("####TEARDOWN_START " + getTestName());
     if (factoryProp == null) {
       System.clearProperty("solr.directoryFactory");
     }
@@ -296,13 +305,13 @@ public abstract class AbstractSolrTestCase extends LuceneTestCase {
    * @see TestHarness#optimize
    */
   public String optimize(String... args) {
-    return h.optimize(args);
+    return TestHarness.optimize(args);
   }
   /**
    * @see TestHarness#commit
    */
   public String commit(String... args) {
-    return h.commit(args);
+    return TestHarness.commit(args);
   }
 
   /**
@@ -381,7 +390,7 @@ public abstract class AbstractSolrTestCase extends LuceneTestCase {
    * @see TestHarness#deleteById
    */
   public String delI(String id, String... args) {
-    return h.deleteById(id, args);
+    return TestHarness.deleteById(id, args);
   }
   
   /**
@@ -390,7 +399,7 @@ public abstract class AbstractSolrTestCase extends LuceneTestCase {
    * @see TestHarness#deleteByQuery
    */
   public String delQ(String q, String... args) {
-    return h.deleteByQuery(q, args);
+    return TestHarness.deleteByQuery(q, args);
   }
   
   /**
@@ -401,7 +410,7 @@ public abstract class AbstractSolrTestCase extends LuceneTestCase {
    */
   public Doc doc(String... fieldsAndValues) {
     Doc d = new Doc();
-    d.xml = h.makeSimpleDoc(fieldsAndValues).toString();
+    d.xml = TestHarness.makeSimpleDoc(fieldsAndValues).toString();
     return d;
   }
 

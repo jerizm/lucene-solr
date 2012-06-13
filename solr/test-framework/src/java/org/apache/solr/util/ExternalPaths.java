@@ -1,6 +1,6 @@
 package org.apache.solr.util;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,8 +18,6 @@ package org.apache.solr.util;
  */
 
 import java.io.File;
-
-import org.apache.solr.SolrTestCaseJ4;
 
 /**
  * Some tests need to reach outside the classpath to get certain resources (e.g. the example configuration).

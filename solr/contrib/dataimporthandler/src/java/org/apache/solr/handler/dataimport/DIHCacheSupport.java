@@ -1,9 +1,27 @@
 package org.apache.solr.handler.dataimport;
 
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import static org.apache.solr.handler.dataimport.DataImportHandlerException.wrapAndThrow;
 
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -16,7 +34,7 @@ import org.slf4j.LoggerFactory;
 public class DIHCacheSupport {
   private static final Logger log = LoggerFactory
       .getLogger(DIHCacheSupport.class);
-  private String cacheVariableName;
+  private String cacheForeignKey;
   private String cacheImplName;
   private Map<String,DIHCache> queryVsCache = new HashMap<String,DIHCache>();
   private Map<String,Iterator<Map<String,Object>>> queryVsCacheIterator;
@@ -27,10 +45,8 @@ public class DIHCacheSupport {
     this.cacheImplName = cacheImplName;
     
     String where = context.getEntityAttribute("where");
-    String cacheKey = context
-        .getEntityAttribute(DIHCacheSupport.CACHE_PRIMARY_KEY);
-    String lookupKey = context
-        .getEntityAttribute(DIHCacheSupport.CACHE_FOREIGN_KEY);
+    String cacheKey = context.getEntityAttribute(DIHCacheSupport.CACHE_PRIMARY_KEY);
+    String lookupKey = context.getEntityAttribute(DIHCacheSupport.CACHE_FOREIGN_KEY);
     if (cacheKey != null && lookupKey == null) {
       throw new DataImportHandlerException(DataImportHandlerException.SEVERE,
           "'cacheKey' is specified for the entity "
@@ -43,15 +59,16 @@ public class DIHCacheSupport {
     } else {
       if (where != null) {
         String[] splits = where.split("=");
-        cacheVariableName = splits[1].trim();
+        cacheKey = splits[0];
+        cacheForeignKey = splits[1].trim();
       } else {
-        cacheVariableName = lookupKey;
+        cacheForeignKey = lookupKey;
       }
       cacheDoKeyLookup = true;
     }
     context.setSessionAttribute(DIHCacheSupport.CACHE_PRIMARY_KEY, cacheKey,
         Context.SCOPE_ENTITY);
-    context.setSessionAttribute(DIHCacheSupport.CACHE_FOREIGN_KEY, lookupKey,
+    context.setSessionAttribute(DIHCacheSupport.CACHE_FOREIGN_KEY, cacheForeignKey,
         Context.SCOPE_ENTITY);
     context.setSessionAttribute(DIHCacheSupport.CACHE_DELETE_PRIOR_DATA,
         "true", Context.SCOPE_ENTITY);
@@ -76,6 +93,7 @@ public class DIHCacheSupport {
   }
   
   public void initNewParent(Context context) {
+    dataSourceRowCache = null;
     queryVsCacheIterator = new HashMap<String,Iterator<Map<String,Object>>>();
     for (Map.Entry<String,DIHCache> entry : queryVsCache.entrySet()) {
       queryVsCacheIterator.put(entry.getKey(), entry.getValue().iterator());
@@ -90,7 +108,7 @@ public class DIHCacheSupport {
     }
     queryVsCache = null;
     dataSourceRowCache = null;
-    cacheVariableName = null;
+    cacheForeignKey = null;
   }
   
   /**
@@ -142,26 +160,24 @@ public class DIHCacheSupport {
    */
   protected Map<String,Object> getIdCacheData(Context context, String query,
       Iterator<Map<String,Object>> rowIterator) {
-    Object key = context.resolve(cacheVariableName);
+    Object key = context.resolve(cacheForeignKey);
     if (key == null) {
       throw new DataImportHandlerException(DataImportHandlerException.WARN,
-          "The cache lookup value : " + cacheVariableName
+          "The cache lookup value : " + cacheForeignKey
               + " is resolved to be null in the entity :"
               + context.getEntityAttribute("name"));
       
     }
-    DIHCache cache = queryVsCache.get(query);
-    if (cache == null) {
-      cache = instantiateCache(context);
-      queryVsCache.put(query, cache);
-      populateCache(query, rowIterator);
-    }
     if (dataSourceRowCache == null) {
+      DIHCache cache = queryVsCache.get(query);
+      
+      if (cache == null) {        
+        cache = instantiateCache(context);        
+        queryVsCache.put(query, cache);        
+        populateCache(query, rowIterator);        
+      }
       dataSourceRowCache = cache.iterator(key);
-    }
-    if (dataSourceRowCache == null) {
-      return null;
-    }
+    }    
     return getFromRowCacheTransformed();
   }
   
@@ -175,25 +191,18 @@ public class DIHCacheSupport {
    */
   protected Map<String,Object> getSimpleCacheData(Context context,
       String query, Iterator<Map<String,Object>> rowIterator) {
-    DIHCache cache = queryVsCache.get(query);
-    if (cache == null) {
-      cache = instantiateCache(context);
-      queryVsCache.put(query, cache);
-      populateCache(query, rowIterator);
-      queryVsCacheIterator.put(query, cache.iterator());
+    if (dataSourceRowCache == null) {      
+      DIHCache cache = queryVsCache.get(query);      
+      if (cache == null) {        
+        cache = instantiateCache(context);        
+        queryVsCache.put(query, cache);        
+        populateCache(query, rowIterator);        
+        queryVsCacheIterator.put(query, cache.iterator());        
+      }      
+      Iterator<Map<String,Object>> cacheIter = queryVsCacheIterator.get(query);      
+      dataSourceRowCache = cacheIter;
     }
-    if (dataSourceRowCache == null || !dataSourceRowCache.hasNext()) {
-      dataSourceRowCache = null;
-      Iterator<Map<String,Object>> cacheIter = queryVsCacheIterator.get(query);
-      if (cacheIter.hasNext()) {
-        List<Map<String,Object>> dsrcl = new ArrayList<Map<String,Object>>(1);
-        dsrcl.add(cacheIter.next());
-        dataSourceRowCache = dsrcl.iterator();
-      }
-    }
-    if (dataSourceRowCache == null) {
-      return null;
-    }
+    
     return getFromRowCacheTransformed();
   }
   

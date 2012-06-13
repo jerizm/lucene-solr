@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -179,7 +179,7 @@ public class SolrInputDocument implements Map<String,SolrInputField>, Iterable<S
   @Override
   public String toString()
   {
-    return "SolrInputDocument["+_fields+"]";
+    return "SolrInputDocument" + _fields.values();
   }
   
 

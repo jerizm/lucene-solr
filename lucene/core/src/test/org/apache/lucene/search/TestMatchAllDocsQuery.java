@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,7 +22,7 @@ import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.TextField;
+import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.IndexReader;
@@ -35,8 +35,14 @@ import org.apache.lucene.util.LuceneTestCase;
  *
  */
 public class TestMatchAllDocsQuery extends LuceneTestCase {
-  private Analyzer analyzer = new MockAnalyzer(random);
+  private Analyzer analyzer;
   
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
+    analyzer = new MockAnalyzer(random());
+  }
+
   public void testQuery() throws Exception {
     Directory dir = newDirectory();
     IndexWriter iw = new IndexWriter(dir, newIndexWriterConfig(
@@ -44,7 +50,7 @@ public class TestMatchAllDocsQuery extends LuceneTestCase {
     addDoc("one", iw, 1f);
     addDoc("two", iw, 20f);
     addDoc("three four", iw, 300f);
-    IndexReader ir = IndexReader.open(iw, true);
+    IndexReader ir = DirectoryReader.open(iw, true);
 
     IndexSearcher is = newSearcher(ir);
     ScoreDoc[] hits;
@@ -71,7 +77,7 @@ public class TestMatchAllDocsQuery extends LuceneTestCase {
 
     iw.deleteDocuments(new Term("key", "one"));
     ir.close();
-    ir = IndexReader.open(iw, true);
+    ir = DirectoryReader.open(iw, true);
     is = newSearcher(ir);
     
     hits = is.search(new MatchAllDocsQuery(), null, 1000).scoreDocs;
@@ -92,7 +98,7 @@ public class TestMatchAllDocsQuery extends LuceneTestCase {
   
   private void addDoc(String text, IndexWriter iw, float boost) throws IOException {
     Document doc = new Document();
-    Field f = newField("key", text, TextField.TYPE_STORED);
+    Field f = newTextField("key", text, Field.Store.YES);
     f.setBoost(boost);
     doc.add(f);
     iw.addDocument(doc);

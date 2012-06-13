@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -47,7 +47,7 @@ import org.apache.lucene.index.DocumentsWriterPerThreadPool.ThreadState;
  * pending iff the global active RAM consumption is >= the configured max RAM
  * buffer.
  */
-public class FlushByRamOrCountsPolicy extends FlushPolicy {
+class FlushByRamOrCountsPolicy extends FlushPolicy {
 
   @Override
   public void onDelete(DocumentsWriterFlushControl control, ThreadState state) {

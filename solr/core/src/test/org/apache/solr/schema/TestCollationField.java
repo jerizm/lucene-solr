@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -25,7 +25,6 @@ import java.util.Locale;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
-import org.apache.lucene.codecs.Codec;
 import org.apache.solr.SolrTestCaseJ4;
 import org.junit.BeforeClass;
 
@@ -36,8 +35,6 @@ public class TestCollationField extends SolrTestCaseJ4 {
   
   @BeforeClass
   public static void beforeClass() throws Exception {
-    assumeFalse("preflex format only supports UTF-8 encoded bytes", 
-        "Lucene3x".equals(Codec.getDefault().getName()));
     String home = setupSolrHome();
     initCore("solrconfig.xml","schema.xml", home);
     // add some docs

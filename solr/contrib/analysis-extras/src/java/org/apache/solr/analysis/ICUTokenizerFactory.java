@@ -1,6 +1,6 @@
 package org.apache.solr.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,9 +21,10 @@ import java.io.Reader;
 
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.icu.segmentation.ICUTokenizer;
+import org.apache.lucene.analysis.util.TokenizerFactory;
 
 /** Factory for {@link ICUTokenizer} */
-public class ICUTokenizerFactory extends BaseTokenizerFactory {
+public class ICUTokenizerFactory extends TokenizerFactory {
   // TODO: add support for custom configs
   @Override
   public Tokenizer create(Reader input) {

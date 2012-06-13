@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,7 +23,7 @@ import java.util.Collection;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.TextField;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
@@ -70,7 +70,7 @@ public class TestCrashCausesCorruptIndex extends LuceneTestCase  {
     // NOTE: cannot use RandomIndexWriter because it
     // sometimes commits:
     IndexWriter indexWriter = new IndexWriter(crashAfterCreateOutput,
-                                              newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+                                              newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
             
     indexWriter.addDocument(getDocument());
     // writes segments_1:
@@ -103,7 +103,7 @@ public class TestCrashCausesCorruptIndex extends LuceneTestCase  {
     // it doesn't know what to do with the created but empty
     // segments_2 file
     IndexWriter indexWriter = new IndexWriter(realDirectory,
-                                              newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+                                              newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
             
     // currently the test fails above.
     // however, to test the fix, the following lines should pass as well.
@@ -121,7 +121,7 @@ public class TestCrashCausesCorruptIndex extends LuceneTestCase  {
    */
   private void searchForFleas(final int expectedTotalHits) throws IOException {
     Directory realDirectory = newFSDirectory(path);
-    IndexReader indexReader = IndexReader.open(realDirectory);
+    IndexReader indexReader = DirectoryReader.open(realDirectory);
     IndexSearcher indexSearcher = newSearcher(indexReader);
     TopDocs topDocs = indexSearcher.search(new TermQuery(new Term(TEXT_FIELD, "fleas")), 10);
     assertNotNull(topDocs);
@@ -137,7 +137,7 @@ public class TestCrashCausesCorruptIndex extends LuceneTestCase  {
    */
   private Document getDocument() {
     Document document = new Document();
-    document.add(newField(TEXT_FIELD, "my dog has fleas", TextField.TYPE_UNSTORED));
+    document.add(newTextField(TEXT_FIELD, "my dog has fleas", Field.Store.NO));
     return document;
   }
     
@@ -146,11 +146,6 @@ public class TestCrashCausesCorruptIndex extends LuceneTestCase  {
    * actual machine crash.
    */
   private static class CrashingException extends RuntimeException {
-    /**
-     * 
-     */
-    private static final long serialVersionUID = 1L;
-
     public CrashingException(String msg) {
       super(msg);
     }

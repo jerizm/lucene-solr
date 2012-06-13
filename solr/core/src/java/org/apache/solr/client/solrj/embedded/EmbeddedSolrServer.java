@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -155,6 +155,9 @@ public class EmbeddedSolrServer extends SolrServer
       
       core.execute( handler, req, rsp );
       if( rsp.getException() != null ) {
+        if(rsp.getException() instanceof SolrException) {
+          throw rsp.getException();
+        }
         throw new SolrServerException( rsp.getException() );
       }
       
@@ -219,6 +222,9 @@ public class EmbeddedSolrServer extends SolrServer
     catch( IOException iox ) {
       throw iox;
     }
+    catch( SolrException sx ) {
+      throw sx;
+    }
     catch( Exception ex ) {
       throw new SolrServerException( ex );
     }
@@ -246,6 +252,7 @@ public class EmbeddedSolrServer extends SolrServer
   /**
    * Shutdown all cores within the EmbeddedSolrServer instance
    */
+  @Override
   public void shutdown() {
     coreContainer.shutdown();
   }

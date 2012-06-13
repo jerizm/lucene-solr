@@ -1,6 +1,6 @@
 package org.apache.solr.cloud;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -46,8 +46,12 @@ public class BasicZkTest extends AbstractZkTestCase {
   
   @Test
   public void testBasic() throws Exception {
+    
     // test using ZooKeeper
     assertTrue("Not using ZooKeeper", h.getCoreContainer().isZooKeeperAware());
+    
+    // for the really slow/busy computer, we wait to make sure we have a leader before starting
+    h.getCoreContainer().getZkController().getZkStateReader().getLeaderUrl("collection1", "shard1", 30000);
     
     ZkController zkController = h.getCoreContainer().getZkController();
     
@@ -56,7 +60,7 @@ public class BasicZkTest extends AbstractZkTestCase {
 
     IndexWriter writer = ((DirectUpdateHandler2)core.getUpdateHandler()).getSolrCoreState().getIndexWriter(core);
 
-    assertEquals("Mergefactor was not picked up", ((LogMergePolicy)writer.getConfig().getMergePolicy()).getMergeFactor(), 8);
+    assertEquals("Mergefactor was not picked up", 8, ((LogMergePolicy)writer.getConfig().getMergePolicy()).getMergeFactor());
     
     lrf.args.put(CommonParams.VERSION, "2.2");
     assertQ("test query on empty index", request("qlkciyopsbgzyvkylsjhchghjrdf"),
@@ -154,6 +158,7 @@ public class BasicZkTest extends AbstractZkTestCase {
       
     }
     
+    //zkController.getZkClient().printLayoutToStdOut();
   }
   
   public SolrQueryRequest request(String... q) {

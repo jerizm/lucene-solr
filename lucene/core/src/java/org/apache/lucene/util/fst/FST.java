@@ -1,6 +1,6 @@
 package org.apache.lucene.util.fst;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -56,16 +56,21 @@ import org.apache.lucene.util.fst.Builder.UnCompiledNode;
 // dead-end state (NON_FINAL_END_NODE=0), the layers above
 // (FSTEnum, Util) have problems with this!!
 
-/** Represents an FST using a compact byte[] format.
+/** Represents an finite state machine (FST), using a
+ *  compact byte[] format.
  *  <p> The format is similar to what's used by Morfologik
  *  (http://sourceforge.net/projects/morfologik).
- *
+ *  
+ *  <p> See the {@link org.apache.lucene.util.fst package
+ *      documentation} for some simple examples.
  *  <p><b>NOTE</b>: the FST cannot be larger than ~2.1 GB
  *  because it uses int to address the byte[].
  *
  * @lucene.experimental
  */
 public final class FST<T> {
+  /** Specifies allowed range of each int input label for
+   *  this FST. */
   public static enum INPUT_TYPE {BYTE1, BYTE2, BYTE4};
   public final INPUT_TYPE inputType;
 
@@ -159,6 +164,7 @@ public final class FST<T> {
 
   private Arc<T> cachedRootArcs[];
 
+  /** Represents a single arc. */
   public final static class Arc<T> {
     public int label;
     public T output;
@@ -240,7 +246,7 @@ public final class FST<T> {
     }
   };
 
-  private final static boolean flag(int flags, int bit) {
+  private static boolean flag(int flags, int bit) {
     return (flags & bit) != 0;
   }
 
@@ -376,7 +382,7 @@ public final class FST<T> {
   }
 
   // Caches first 128 labels
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"rawtypes","unchecked"})
   private void cacheRootArcs() throws IOException {
     cachedRootArcs = (Arc<T>[]) new Arc[0x80];
     final Arc<T> arc = new Arc<T>();
@@ -749,7 +755,7 @@ public final class FST<T> {
    * 
    * @return Returns the second argument
    * (<code>arc</code>). */
-  public Arc<T> readLastTargetArc(Arc<T> follow, Arc<T> arc) throws IOException {
+  public Arc<T> readLastTargetArc(Arc<T> follow, Arc<T> arc, FST.BytesReader in) throws IOException {
     //System.out.println("readLast");
     if (!targetHasArcs(follow)) {
       //System.out.println("  end node");
@@ -760,7 +766,7 @@ public final class FST<T> {
       arc.flags = BIT_LAST_ARC;
       return arc;
     } else {
-      final BytesReader in = getBytesReader(getNodeAddress(follow.target));
+      in.pos = getNodeAddress(follow.target);
       arc.node = follow.target;
       final byte b = in.readByte();
       if (b == ARCS_AS_FIXED_ARRAY) {
@@ -816,7 +822,7 @@ public final class FST<T> {
    * 
    * @return Returns the second argument (<code>arc</code>).
    */
-  public Arc<T> readFirstTargetArc(Arc<T> follow, Arc<T> arc) throws IOException {
+  public Arc<T> readFirstTargetArc(Arc<T> follow, Arc<T> arc, BytesReader in) throws IOException {
     //int pos = address;
     //System.out.println("    readFirstTarget follow.target=" + follow.target + " isFinal=" + follow.isFinal());
     if (follow.isFinal()) {
@@ -835,11 +841,12 @@ public final class FST<T> {
       //System.out.println("    insert isFinal; nextArc=" + follow.target + " isLast=" + arc.isLast() + " output=" + outputs.outputToString(arc.output));
       return arc;
     } else {
-      return readFirstRealTargetArc(follow.target, arc, getBytesReader(0));
+      return readFirstRealTargetArc(follow.target, arc, in);
     }
   }
 
   public Arc<T> readFirstRealTargetArc(int node, Arc<T> arc, final BytesReader in) throws IOException {
+    assert in.bytes == bytes;
     final int address = getNodeAddress(node);
     in.pos = address;
     //System.out.println("  readFirstRealTargtArc address="
@@ -874,37 +881,36 @@ public final class FST<T> {
    * @return Returns <code>true</code> if <code>arc</code> points to a state in an
    * expanded array format.
    */
-  boolean isExpandedTarget(Arc<T> follow) throws IOException {
+  boolean isExpandedTarget(Arc<T> follow, FST.BytesReader in) throws IOException {
     if (!targetHasArcs(follow)) {
       return false;
     } else {
-      final BytesReader in = getBytesReader(getNodeAddress(follow.target));
+      in.pos = getNodeAddress(follow.target);
       return in.readByte() == ARCS_AS_FIXED_ARRAY;
     }
   }
 
   /** In-place read; returns the arc. */
-  public Arc<T> readNextArc(Arc<T> arc) throws IOException {
+  public Arc<T> readNextArc(Arc<T> arc, BytesReader in) throws IOException {
     if (arc.label == END_LABEL) {
       // This was a fake inserted "final" arc
       if (arc.nextArc <= 0) {
         throw new IllegalArgumentException("cannot readNextArc when arc.isLast()=true");
       }
-      return readFirstRealTargetArc(arc.nextArc, arc, getBytesReader(0));
+      return readFirstRealTargetArc(arc.nextArc, arc, in);
     } else {
-      return readNextRealArc(arc, getBytesReader(0));
+      return readNextRealArc(arc, in);
     }
   }
 
   /** Peeks at next arc's label; does not alter arc.  Do
    *  not call this if arc.isLast()! */
-  public int readNextArcLabel(Arc<T> arc) throws IOException {
+  public int readNextArcLabel(Arc<T> arc, BytesReader in) throws IOException {
     assert !arc.isLast();
 
-    final BytesReader in;
     if (arc.label == END_LABEL) {
       //System.out.println("    nextArc fake " + arc.nextArc);
-      in = getBytesReader(getNodeAddress(arc.nextArc));
+      in.pos = getNodeAddress(arc.nextArc);
       final byte b = bytes[in.pos];
       if (b == ARCS_AS_FIXED_ARRAY) {
         //System.out.println("    nextArc fake array");
@@ -920,12 +926,12 @@ public final class FST<T> {
       if (arc.bytesPerArc != 0) {
         //System.out.println("    nextArc real array");
         // arcs are at fixed entries
-        in = getBytesReader(arc.posArcsStart);
+        in.pos = arc.posArcsStart;
         in.skip((1+arc.arcIdx)*arc.bytesPerArc);
       } else {
         // arcs are packed
         //System.out.println("    nextArc real packed");
-        in = getBytesReader(arc.nextArc);
+        in.pos = arc.nextArc;
       }
     }
     // skip flags
@@ -936,6 +942,7 @@ public final class FST<T> {
   /** Never returns null, but you should never call this if
    *  arc.isLast() is true. */
   public Arc<T> readNextRealArc(Arc<T> arc, final BytesReader in) throws IOException {
+    assert in.bytes == bytes;
 
     // TODO: can't assert this because we call from readFirstArc
     // assert !flag(arc.flags, BIT_LAST_ARC);
@@ -1019,6 +1026,7 @@ public final class FST<T> {
    *  This returns null if the arc was not found, else the incoming arc. */
   public Arc<T> findTargetArc(int labelToMatch, Arc<T> follow, Arc<T> arc, BytesReader in) throws IOException {
     assert cachedRootArcs != null;
+    assert in.bytes == bytes;
 
     if (labelToMatch == END_LABEL) {
       if (follow.isFinal()) {
@@ -1214,7 +1222,7 @@ public final class FST<T> {
     }
   }
 
-  public final BytesReader getBytesReader(int pos) {
+  public BytesReader getBytesReader(int pos) {
     // TODO: maybe re-use via ThreadLocal?
     if (packed) {
       return new ForwardBytesReader(bytes, pos);
@@ -1223,19 +1231,25 @@ public final class FST<T> {
     }
   }
 
-  /** Expert */
+  /** Reads the bytes from this FST.  Use {@link
+   *  #getBytesReader(int)} to obtain an instance for this
+   *  FST; re-use across calls (but only within a single
+   *  thread) for better performance. */
   public static abstract class BytesReader extends DataInput {
-    int pos;
+    protected int pos;
+    protected final byte[] bytes;
+    protected BytesReader(byte[] bytes, int pos) {
+      this.bytes = bytes;
+      this.pos = pos;
+    }
     abstract void skip(int byteCount);
     abstract void skip(int base, int byteCount);
   }
 
   final static class ReverseBytesReader extends BytesReader {
-    final byte[] bytes;
 
     public ReverseBytesReader(byte[] bytes, int pos) {
-      this.bytes = bytes;
-      this.pos = pos;
+      super(bytes, pos);
     }
 
     @Override
@@ -1262,11 +1276,9 @@ public final class FST<T> {
   // TODO: can we use just ByteArrayDataInput...?  need to
   // add a .skipBytes to DataInput.. hmm and .setPosition
   final static class ForwardBytesReader extends BytesReader {
-    final byte[] bytes;
 
     public ForwardBytesReader(byte[] bytes, int pos) {
-      this.bytes = bytes;
-      this.pos = pos;
+      super(bytes, pos);
     }
 
     @Override

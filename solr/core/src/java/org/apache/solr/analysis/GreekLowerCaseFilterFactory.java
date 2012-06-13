@@ -1,5 +1,4 @@
-
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,8 +22,10 @@ import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.el.GreekLowerCaseFilter;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.SolrException.ErrorCode;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.InitializationException;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
  * Factory for {@link GreekLowerCaseFilter}. 
@@ -37,21 +38,24 @@ import org.apache.solr.common.SolrException.ErrorCode;
  * &lt;/fieldType&gt;</pre> 
  *
  */
-public class GreekLowerCaseFilterFactory extends BaseTokenFilterFactory 
-{
+public class GreekLowerCaseFilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
  
   @Override
   public void init(Map<String, String> args) {
     super.init(args);
     assureMatchVersion();
     if (args.containsKey("charset"))
-      throw new SolrException(ErrorCode.SERVER_ERROR,
+      throw new InitializationException(
           "The charset parameter is no longer supported.  "
           + "Please process your documents as Unicode instead.");
   }
 
   public GreekLowerCaseFilter create(TokenStream in) {
     return new GreekLowerCaseFilter(luceneMatchVersion, in);
+  }
+
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }
 

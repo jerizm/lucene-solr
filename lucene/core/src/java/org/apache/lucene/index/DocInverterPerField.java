@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,9 +18,12 @@ package org.apache.lucene.index;
  */
 
 import java.io.IOException;
+
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
+import org.apache.lucene.index.FieldInfo.IndexOptions;
+import org.apache.lucene.util.IOUtils;
 
 /**
  * Holds state for inverting all occurrences of a single
@@ -67,11 +70,22 @@ final class DocInverterPerField extends DocFieldConsumerPerField {
     for(int i=0;i<count;i++) {
 
       final IndexableField field = fields[i];
+      final IndexableFieldType fieldType = field.fieldType();
 
       // TODO FI: this should be "genericized" to querying
       // consumer if it wants to see this particular field
       // tokenized.
-      if (field.fieldType().indexed() && doInvert) {
+      if (fieldType.indexed() && doInvert) {
+        
+        // if the field omits norms, the boost cannot be indexed.
+        if (fieldType.omitNorms() && field.boost() != 1.0f) {
+          throw new UnsupportedOperationException("You cannot set an index-time boost: norms are omitted for field '" + field.name() + "'");
+        }
+        
+        // only bother checking offsets if something will consume them.
+        // TODO: after we fix analyzers, also check if termVectorOffsets will be indexed.
+        final boolean checkOffsets = fieldType.indexOptions() == IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS;
+        int lastStartOffset = 0;
 
         if (i > 0) {
           fieldState.position += docState.analyzer == null ? 0 : docState.analyzer.getPositionIncrementGap(fieldInfo.name);
@@ -80,6 +94,8 @@ final class DocInverterPerField extends DocFieldConsumerPerField {
         final TokenStream stream = field.tokenStream(docState.analyzer);
         // reset the TokenStream to the first token
         stream.reset();
+
+        boolean success2 = false;
 
         try {
           boolean hasMoreTokens = stream.incrementToken();
@@ -103,13 +119,41 @@ final class DocInverterPerField extends DocFieldConsumerPerField {
             if (!hasMoreTokens) break;
 
             final int posIncr = posIncrAttribute.getPositionIncrement();
-            fieldState.position += posIncr;
-            if (fieldState.position > 0) {
-              fieldState.position--;
+            if (posIncr < 0) {
+              throw new IllegalArgumentException("position increment must be >=0 (got " + posIncr + ")");
             }
+            if (fieldState.position == 0 && posIncr == 0) {
+              throw new IllegalArgumentException("first position increment must be > 0 (got 0)");
+            }
+            int position = fieldState.position + posIncr;
+            if (position > 0) {
+              // NOTE: confusing: this "mirrors" the
+              // position++ we do below
+              position--;
+            } else if (position < 0) {
+              throw new IllegalArgumentException("position overflow for field '" + field.name() + "'");
+            }
+            
+            // position is legal, we can safely place it in fieldState now.
+            // not sure if anything will use fieldState after non-aborting exc...
+            fieldState.position = position;
 
             if (posIncr == 0)
               fieldState.numOverlap++;
+            
+            if (checkOffsets) {
+              int startOffset = fieldState.offset + offsetAttribute.startOffset();
+              int endOffset = fieldState.offset + offsetAttribute.endOffset();
+              if (startOffset < 0 || endOffset < startOffset) {
+                throw new IllegalArgumentException("startOffset must be non-negative, and endOffset must be >= startOffset, "
+                    + "startOffset=" + startOffset + ",endOffset=" + endOffset);
+              }
+              if (startOffset < lastStartOffset) {
+                throw new IllegalArgumentException("offsets must not go backwards startOffset=" 
+                     + startOffset + " is < lastStartOffset=" + lastStartOffset);
+              }
+              lastStartOffset = startOffset;
+            }
 
             boolean success = false;
             try {
@@ -135,8 +179,13 @@ final class DocInverterPerField extends DocFieldConsumerPerField {
           stream.end();
 
           fieldState.offset += offsetAttribute.endOffset();
+          success2 = true;
         } finally {
-          stream.close();
+          if (!success2) {
+            IOUtils.closeWhileHandlingException(stream);
+          } else {
+            stream.close();
+          }
         }
 
         fieldState.offset += docState.analyzer == null ? 0 : docState.analyzer.getOffsetGap(field);

@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.lucene40.values;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -50,7 +50,9 @@ import org.apache.lucene.util.packed.PackedInts;
  */
 final class VarSortedBytesImpl {
 
-  static final String CODEC_NAME = "VarDerefBytes";
+  static final String CODEC_NAME_IDX = "VarDerefBytesIdx";
+  static final String CODEC_NAME_DAT = "VarDerefBytesDat";
+
   static final int VERSION_START = 0;
   static final int VERSION_CURRENT = VERSION_START;
 
@@ -58,17 +60,18 @@ final class VarSortedBytesImpl {
     private final Comparator<BytesRef> comp;
 
     public Writer(Directory dir, String id, Comparator<BytesRef> comp,
-        Counter bytesUsed, IOContext context, boolean fasterButMoreRam) throws IOException {
-      super(dir, id, CODEC_NAME, VERSION_CURRENT, bytesUsed, context, fasterButMoreRam);
+        Counter bytesUsed, IOContext context, float acceptableOverheadRatio) throws IOException {
+      super(dir, id, CODEC_NAME_IDX, CODEC_NAME_DAT, VERSION_CURRENT, bytesUsed, context, acceptableOverheadRatio, Type.BYTES_VAR_SORTED);
       this.comp = comp;
       size = 0;
     }
+
     @Override
     public void merge(MergeState mergeState, DocValues[] docValues)
         throws IOException {
       boolean success = false;
       try {
-        MergeContext ctx = SortedBytesMergeUtils.init(Type.BYTES_VAR_SORTED, docValues, comp, mergeState.mergedDocCount);
+        MergeContext ctx = SortedBytesMergeUtils.init(Type.BYTES_VAR_SORTED, docValues, comp, mergeState.segmentInfo.getDocCount());
         final List<SortedSourceSlice> slices = SortedBytesMergeUtils.buildSlices(mergeState.docBase, mergeState.docMaps, docValues, ctx);
         IndexOutput datOut = getOrCreateDataOut();
         
@@ -80,7 +83,7 @@ final class VarSortedBytesImpl {
         
         idxOut.writeLong(maxBytes);
         final PackedInts.Writer offsetWriter = PackedInts.getWriter(idxOut, maxOrd+1,
-            PackedInts.bitsRequired(maxBytes));
+            PackedInts.bitsRequired(maxBytes), PackedInts.DEFAULT);
         offsetWriter.add(0);
         for (int i = 0; i < maxOrd; i++) {
           offsetWriter.add(offsets[i]);
@@ -88,7 +91,7 @@ final class VarSortedBytesImpl {
         offsetWriter.finish();
         
         final PackedInts.Writer ordsWriter = PackedInts.getWriter(idxOut, ctx.docToEntry.length,
-            PackedInts.bitsRequired(maxOrd-1));
+            PackedInts.bitsRequired(maxOrd-1), PackedInts.DEFAULT);
         for (SortedSourceSlice slice : slices) {
           slice.writeOrds(ordsWriter);
         }
@@ -124,7 +127,7 @@ final class VarSortedBytesImpl {
       // total bytes of data
       idxOut.writeLong(maxBytes);
       PackedInts.Writer offsetWriter = PackedInts.getWriter(idxOut, count+1,
-          bitsRequired(maxBytes));
+          PackedInts.bitsRequired(maxBytes), PackedInts.DEFAULT);
       // first dump bytes data, recording index & write offset as
       // we go
       final BytesRef spare = new BytesRef();
@@ -153,7 +156,7 @@ final class VarSortedBytesImpl {
     Reader(Directory dir, String id, int maxDoc,
         IOContext context, Type type, Comparator<BytesRef> comparator)
         throws IOException {
-      super(dir, id, CODEC_NAME, VERSION_START, true, context, type);
+      super(dir, id, CODEC_NAME_IDX, CODEC_NAME_DAT, VERSION_START, true, context, type);
       this.comparator = comparator;
     }
 
@@ -165,7 +168,7 @@ final class VarSortedBytesImpl {
 
     @Override
     public Source getDirectSource() throws IOException {
-      return new DirectSortedSource(cloneData(), cloneIndex(), comparator, type());
+      return new DirectSortedSource(cloneData(), cloneIndex(), comparator, getType());
     }
     
   }
@@ -236,10 +239,10 @@ final class VarSortedBytesImpl {
         final long nextOffset = ordToOffsetIndex.get(1+ord);
         datIn.seek(basePointer + offset);
         final int length = (int) (nextOffset - offset);
+        bytesRef.offset = 0;
         bytesRef.grow(length);
         datIn.readBytes(bytesRef.bytes, 0, length);
         bytesRef.length = length;
-        bytesRef.offset = 0;
         return bytesRef;
       } catch (IOException ex) {
         throw new IllegalStateException("failed", ex);

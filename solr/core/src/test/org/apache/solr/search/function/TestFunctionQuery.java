@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -71,12 +71,12 @@ public class TestFunctionQuery extends SolrTestCaseJ4 {
       if (field!=null) assertU(adoc("id", s, field, s));
       else assertU(adoc("id", s));
 
-      if (random.nextInt(100) < 20) {
+      if (random().nextInt(100) < 20) {
         if (field!=null) assertU(adoc("id", s, field, s));
         else assertU(adoc("id", s));
       }
 
-      if (random.nextInt(100) < 20) {
+      if (random().nextInt(100) < 20) {
         assertU(commit());
 
       }
@@ -198,7 +198,7 @@ public class TestFunctionQuery extends SolrTestCaseJ4 {
             Arrays.asList("v1","\0:[* TO *]"),  88,12
             );
 
-    purgeFieldCache(FieldCache.DEFAULT);   // avoid FC insanity
+    FieldCache.DEFAULT.purgeAllCaches();   // avoid FC insanity
   }
 
   @Test
@@ -233,7 +233,7 @@ public class TestFunctionQuery extends SolrTestCaseJ4 {
     assertTrue(orig != FileFloatSource.onlyForTesting);
 
 
-    Random r = random;
+    Random r = random();
     for (int i=0; i<10; i++) {   // do more iterations for a thorough test
       int len = r.nextInt(ids.length+1);
       boolean sorted = r.nextBoolean();
@@ -281,7 +281,7 @@ public class TestFunctionQuery extends SolrTestCaseJ4 {
       // System.out.println("Done test "+i);
     }
 
-    purgeFieldCache(FieldCache.DEFAULT);   // avoid FC insanity    
+    FieldCache.DEFAULT.purgeAllCaches();   // avoid FC insanity    
   }
 
   @Test
@@ -421,16 +421,13 @@ public class TestFunctionQuery extends SolrTestCaseJ4 {
     );
 
 
-    purgeFieldCache(FieldCache.DEFAULT);   // avoid FC insanity
+    FieldCache.DEFAULT.purgeAllCaches();   // avoid FC insanity
   }
 
   /**
    * test collection-level term stats (new in 4.x indexes)
    */
-  public void testTotalTermFreq() throws Exception {
-    assumeFalse("PreFlex codec does not support collection-level term stats", 
-        "Lucene3x".equals(Codec.getDefault().getName()));
-    
+  public void testTotalTermFreq() throws Exception {  
     clearIndex();
     
     assertU(adoc("id","1", "a_tdt","2009-08-31T12:10:10.123Z", "b_tdt","2009-08-31T12:10:10.124Z"));
@@ -642,7 +639,7 @@ public class TestFunctionQuery extends SolrTestCaseJ4 {
     singleTest(fieldAsFunc, "sqrt(\0)");
     assertTrue(orig != FileFloatSource.onlyForTesting);
 
-    purgeFieldCache(FieldCache.DEFAULT);   // avoid FC insanity    
+    FieldCache.DEFAULT.purgeAllCaches();   // avoid FC insanity    
   }
 
   /**
@@ -669,7 +666,7 @@ public class TestFunctionQuery extends SolrTestCaseJ4 {
                100,10,  25,5,  0,0,   1,1);
     singleTest(fieldAsFunc, "log(\0)",  1,0);
 
-    purgeFieldCache(FieldCache.DEFAULT);   // avoid FC insanity    
+    FieldCache.DEFAULT.purgeAllCaches();   // avoid FC insanity    
   }
 
     @Test

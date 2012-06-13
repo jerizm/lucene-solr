@@ -1,6 +1,6 @@
 package org.apache.solr.common.util;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -43,9 +43,6 @@ package org.apache.solr.common.util;
  * </pre>
  * <p>An obvious advantage of this relationship is that you can use lookup3 if you don't have an implementation of lookup3ycs.
  * </p>
- *
- *
- * @author yonik
  */
 public class Hash {
   /**

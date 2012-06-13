@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -97,9 +97,9 @@ public abstract class Query implements Cloneable {
 
   /** Returns a clone of this query. */
   @Override
-  public Object clone() {
+  public Query clone() {
     try {
-      return super.clone();
+      return (Query)super.clone();
     } catch (CloneNotSupportedException e) {
       throw new RuntimeException("Clone not supported: " + e.getMessage());
     }

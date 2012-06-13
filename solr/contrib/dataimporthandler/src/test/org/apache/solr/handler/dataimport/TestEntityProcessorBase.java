@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -47,7 +47,7 @@ public class TestEntityProcessorBase extends AbstractDataImportHandlerTestCase {
     Map<String, Object> src = new HashMap<String, Object>();
     src.put("A", "NA");
     src.put("B", "NA");
-    EntityProcessorWrapper sep = new EntityProcessorWrapper(new SqlEntityProcessor(), null);
+    EntityProcessorWrapper sep = new EntityProcessorWrapper(new SqlEntityProcessor(), null, null);
     sep.init(context);
     Map<String, Object> res = sep.applyTransformer(src);
     assertNotNull(res.get("T1"));

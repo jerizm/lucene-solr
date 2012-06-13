@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,7 +22,7 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.ShardParams;
-import org.apache.solr.common.util.RTimer;
+import org.apache.solr.util.RTimer;
 import org.apache.solr.core.CloseHook;
 import org.apache.solr.core.PluginInfo;
 import org.apache.solr.core.SolrCore;
@@ -81,9 +81,9 @@ public class SearchHandler extends RequestHandlerBase implements SolrCoreAware ,
   }
 
   /**
-   * Initialize the components based on name.  Note, if using {@link #INIT_FIRST_COMPONENTS} or {@link #INIT_LAST_COMPONENTS},
+   * Initialize the components based on name.  Note, if using <code>INIT_FIRST_COMPONENTS</code> or <code>INIT_LAST_COMPONENTS</code>,
    * then the {@link DebugComponent} will always occur last.  If this is not desired, then one must explicitly declare all components using
-   * the {@link #INIT_COMPONENTS} syntax.
+   * the <code>INIT_COMPONENTS</code> syntax.
    */
   @SuppressWarnings("unchecked")
   public void inform(SolrCore core)
@@ -126,27 +126,28 @@ public class SearchHandler extends RequestHandlerBase implements SolrCoreAware ,
         dbgCmp = (DebugComponent) comp;
       } else {
         components.add(comp);
-        log.info("Adding  component:"+comp);
+        log.debug("Adding  component:"+comp);
       }
     }
     if (makeDebugLast == true && dbgCmp != null){
       components.add(dbgCmp);
-      log.info("Adding  debug component:" + dbgCmp);
+      log.debug("Adding  debug component:" + dbgCmp);
     }
     if(shfInfo ==null) {
       shardHandlerFactory = core.getCoreDescriptor().getCoreContainer().getShardHandlerFactory();
     } else {
       shardHandlerFactory = core.createInitInstance(shfInfo, ShardHandlerFactory.class, null, null);
+      core.addCloseHook(new CloseHook() {
+        @Override
+        public void preClose(SolrCore core) {
+          shardHandlerFactory.close();
+        }
+        @Override
+        public void postClose(SolrCore core) {
+        }
+      });
     }
-    core.addCloseHook(new CloseHook() {
-      @Override
-      public void preClose(SolrCore core) {
-        shardHandlerFactory.close();
-      }
-      @Override
-      public void postClose(SolrCore core) {
-      }
-    });
+
   }
 
   public List<SearchComponent> getComponents() {
@@ -265,7 +266,7 @@ public class SearchHandler extends RequestHandlerBase implements SolrCoreAware ,
                 // we could try and detect when this is needed, but it could be tricky
                 params.set("NOW", Long.toString(rb.requestInfo.getNOW().getTime()));
               }
-              String shardQt = req.getParams().get(ShardParams.SHARDS_QT);
+              String shardQt = params.get(ShardParams.SHARDS_QT);
               if (shardQt == null) {
                 params.remove(CommonParams.QT);
               } else {
@@ -279,18 +280,23 @@ public class SearchHandler extends RequestHandlerBase implements SolrCoreAware ,
           // now wait for replies, but if anyone puts more requests on
           // the outgoing queue, send them out immediately (by exiting
           // this loop)
+          boolean tolerant = rb.req.getParams().getBool(ShardParams.SHARDS_TOLERANT, false);
           while (rb.outgoing.size() == 0) {
-            ShardResponse srsp = shardHandler1.takeCompletedOrError();
+            ShardResponse srsp = tolerant ? 
+                shardHandler1.takeCompletedIncludingErrors():
+                shardHandler1.takeCompletedOrError();
             if (srsp == null) break;  // no more requests to wait for
 
-            // Was there an exception?  If so, abort everything and
-            // rethrow
+            // Was there an exception?  
             if (srsp.getException() != null) {
-              shardHandler1.cancelAll();
-              if (srsp.getException() instanceof SolrException) {
-                throw (SolrException)srsp.getException();
-              } else {
-                throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, srsp.getException());
+              // If things are not tolerant, abort everything and rethrow
+              if(!tolerant) {
+                shardHandler1.cancelAll();
+                if (srsp.getException() instanceof SolrException) {
+                  throw (SolrException)srsp.getException();
+                } else {
+                  throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, srsp.getException());
+                }
               }
             }
 
@@ -304,8 +310,8 @@ public class SearchHandler extends RequestHandlerBase implements SolrCoreAware ,
         }
 
         for(SearchComponent c : components) {
-            c.finishStage(rb);
-         }
+          c.finishStage(rb);
+        }
 
         // we are done when the next stage is MAX_VALUE
       } while (nextStage != Integer.MAX_VALUE);
@@ -325,16 +331,6 @@ public class SearchHandler extends RequestHandlerBase implements SolrCoreAware ,
       }
     }
     return sb.toString();
-  }
-
-  @Override
-  public String getVersion() {
-    return "$Revision$";
-  }
-
-  @Override
-  public String getSourceId() {
-    return "$Id$";
   }
 
   @Override

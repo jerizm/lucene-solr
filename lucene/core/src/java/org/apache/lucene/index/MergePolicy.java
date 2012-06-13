@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -57,7 +57,7 @@ import org.apache.lucene.util.SetOnce;
  * @lucene.experimental
  */
 
-public abstract class MergePolicy implements java.io.Closeable {
+public abstract class MergePolicy implements java.io.Closeable, Cloneable {
 
   /** OneMerge provides the information necessary to perform
    *  an individual primitive merge operation, resulting in
@@ -67,7 +67,7 @@ public abstract class MergePolicy implements java.io.Closeable {
 
   public static class OneMerge {
 
-    SegmentInfo info;               // used by IndexWriter
+    SegmentInfoPerCommit info;      // used by IndexWriter
     boolean registerDone;           // used by IndexWriter
     long mergeGen;                  // used by IndexWriter
     boolean isExternal;             // used by IndexWriter
@@ -75,20 +75,20 @@ public abstract class MergePolicy implements java.io.Closeable {
     public long estimatedMergeBytes;       // used by IndexWriter
     List<SegmentReader> readers;        // used by IndexWriter
     List<Bits> readerLiveDocs;      // used by IndexWriter
-    public final List<SegmentInfo> segments;
+    public final List<SegmentInfoPerCommit> segments;
     public final int totalDocCount;
     boolean aborted;
     Throwable error;
     boolean paused;
 
-    public OneMerge(List<SegmentInfo> segments) {
+    public OneMerge(List<SegmentInfoPerCommit> segments) {
       if (0 == segments.size())
         throw new RuntimeException("segments must include at least one segment");
       // clone the list, as the in list may be based off original SegmentInfos and may be modified
-      this.segments = new ArrayList<SegmentInfo>(segments);
+      this.segments = new ArrayList<SegmentInfoPerCommit>(segments);
       int count = 0;
-      for(SegmentInfo info : segments) {
-        count += info.docCount;
+      for(SegmentInfoPerCommit info : segments) {
+        count += info.info.getDocCount();
       }
       totalDocCount = count;
     }
@@ -156,8 +156,9 @@ public abstract class MergePolicy implements java.io.Closeable {
         if (i > 0) b.append(' ');
         b.append(segments.get(i).toString(dir, 0));
       }
-      if (info != null)
-        b.append(" into ").append(info.name);
+      if (info != null) {
+        b.append(" into ").append(info.info.name);
+      }
       if (maxNumSegments != -1)
         b.append(" [maxNumSegments=" + maxNumSegments + "]");
       if (aborted) {
@@ -172,8 +173,8 @@ public abstract class MergePolicy implements java.io.Closeable {
      * */
     public long totalBytesSize() throws IOException {
       long total = 0;
-      for (SegmentInfo info : segments) {
-        total += info.sizeInBytes();
+      for (SegmentInfoPerCommit info : segments) {
+        total += info.info.sizeInBytes();
       }
       return total;
     }
@@ -184,8 +185,8 @@ public abstract class MergePolicy implements java.io.Closeable {
      * */
     public int totalNumDocs() throws IOException {
       int total = 0;
-      for (SegmentInfo info : segments) {
-        total += info.docCount;
+      for (SegmentInfoPerCommit info : segments) {
+        total += info.info.getDocCount();
       }
       return total;
     }
@@ -253,7 +254,20 @@ public abstract class MergePolicy implements java.io.Closeable {
     }
   }
 
-  protected final SetOnce<IndexWriter> writer;
+  protected SetOnce<IndexWriter> writer;
+
+  @Override
+  public MergePolicy clone() {
+    MergePolicy clone;
+    try {
+      clone = (MergePolicy) super.clone();
+    } catch (CloneNotSupportedException e) {
+      // should not happen
+      throw new RuntimeException(e);
+    }
+    clone.writer = new SetOnce<IndexWriter>();
+    return clone;
+  }
 
   /**
    * Creates a new merge policy instance. Note that if you intend to use it
@@ -309,7 +323,7 @@ public abstract class MergePolicy implements java.io.Closeable {
    *          produced by a cascaded merge.
    */
   public abstract MergeSpecification findForcedMerges(
-          SegmentInfos segmentInfos, int maxSegmentCount, Map<SegmentInfo,Boolean> segmentsToMerge)
+          SegmentInfos segmentInfos, int maxSegmentCount, Map<SegmentInfoPerCommit,Boolean> segmentsToMerge)
       throws CorruptIndexException, IOException;
 
   /**
@@ -330,5 +344,5 @@ public abstract class MergePolicy implements java.io.Closeable {
   /**
    * Returns true if a new segment (regardless of its origin) should use the compound file format.
    */
-  public abstract boolean useCompoundFile(SegmentInfos segments, SegmentInfo newSegment) throws IOException;
+  public abstract boolean useCompoundFile(SegmentInfos segments, SegmentInfoPerCommit newSegment) throws IOException;
 }

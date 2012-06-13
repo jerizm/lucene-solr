@@ -25,6 +25,7 @@
 <config>
   <luceneMatchVersion>${tests.luceneMatchVersion:LUCENE_CURRENT}</luceneMatchVersion>
   <requestHandler name="standard" class="solr.StandardRequestHandler"></requestHandler>
+  <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
 
   <updateRequestProcessorChain name="comprehensive">
     <processor class="solr.FieldLengthUpdateProcessorFactory">
@@ -229,6 +230,23 @@
       <str name="fieldName">title</str>
       <str name="pattern">\s+</str>
       <str name="replacement">X</str>
+    </processor>
+  </updateRequestProcessorChain>
+
+  <updateRequestProcessorChain name="default-values">
+    <processor class="solr.DefaultValueUpdateProcessorFactory">
+      <str name="fieldName">processor_default_s</str>
+      <str name="value">X</str>
+    </processor>
+    <processor class="solr.DefaultValueUpdateProcessorFactory">
+      <str name="fieldName">processor_default_i</str>
+      <int name="value">42</int>
+    </processor>
+    <processor class="solr.UUIDUpdateProcessorFactory">
+      <str name="fieldName">uuid</str>
+    </processor>
+    <processor class="solr.TimestampUpdateProcessorFactory">
+      <str name="fieldName">timestamp</str>
     </processor>
   </updateRequestProcessorChain>
 

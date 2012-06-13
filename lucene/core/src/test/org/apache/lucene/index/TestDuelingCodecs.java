@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,15 +18,20 @@ package org.apache.lucene.index;
  */
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Random;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.document.Document;
+import org.apache.lucene.index.TermsEnum.SeekStatus;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.Bits;
@@ -34,7 +39,6 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.LineFileDocs;
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.lucene.util.ReaderUtil;
 import org.apache.lucene.util.automaton.AutomatonTestUtil;
 import org.apache.lucene.util.automaton.CompiledAutomaton;
 import org.apache.lucene.util.automaton.RegExp;
@@ -66,11 +70,11 @@ public class TestDuelingCodecs extends LuceneTestCase {
     // so this would make assertEquals complicated.
 
     leftCodec = Codec.forName("SimpleText");
-    rightCodec = new RandomCodec(random, false);
+    rightCodec = new RandomCodec(random());
     leftDir = newDirectory();
     rightDir = newDirectory();
 
-    long seed = random.nextLong();
+    long seed = random().nextLong();
 
     // must use same seed because of random payloads, etc
     Analyzer leftAnalyzer = new MockAnalyzer(new Random(seed));
@@ -96,9 +100,9 @@ public class TestDuelingCodecs extends LuceneTestCase {
     createRandomIndex(numdocs, leftWriter, seed);
     createRandomIndex(numdocs, rightWriter, seed);
 
-    leftReader = leftWriter.getReader();
+    leftReader = maybeWrapReader(leftWriter.getReader());
     leftWriter.close();
-    rightReader = rightWriter.getReader();
+    rightReader = maybeWrapReader(rightWriter.getReader());
     rightWriter.close();
     
     info = "left: " + leftCodec.toString() + " / right: " + rightCodec.toString();
@@ -127,6 +131,8 @@ public class TestDuelingCodecs extends LuceneTestCase {
     for (int i = 0; i < numdocs; i++) {
       writer.addDocument(lineFileDocs.nextDoc());
     }
+    
+    lineFileDocs.close();
   }
   
   /**
@@ -140,6 +146,7 @@ public class TestDuelingCodecs extends LuceneTestCase {
     assertTermVectors(leftReader, rightReader);
     assertDocValues(leftReader, rightReader);
     assertDeletedDocs(leftReader, rightReader);
+    assertFieldInfos(leftReader, rightReader);
   }
   
   /** 
@@ -181,8 +188,8 @@ public class TestDuelingCodecs extends LuceneTestCase {
    * checks that top-level statistics on Fields are the same 
    */
   public void assertFieldStatistics(Fields leftFields, Fields rightFields) throws Exception {
-    if (leftFields.getUniqueFieldCount() != -1 && rightFields.getUniqueFieldCount() != -1) {
-      assertEquals(info, leftFields.getUniqueFieldCount(), rightFields.getUniqueFieldCount());
+    if (leftFields.size() != -1 && rightFields.size() != -1) {
+      assertEquals(info, leftFields.size(), rightFields.size());
     }
     
     if (leftFields.getUniqueTermCount() != -1 && rightFields.getUniqueTermCount() != -1) {
@@ -204,12 +211,13 @@ public class TestDuelingCodecs extends LuceneTestCase {
     TermsEnum leftTermsEnum = leftTerms.iterator(null);
     TermsEnum rightTermsEnum = rightTerms.iterator(null);
     assertTermsEnum(leftTermsEnum, rightTermsEnum, true);
-    // TODO: test seeking too
+    
+    assertTermsSeeking(leftTerms, rightTerms);
     
     if (deep) {
       int numIntersections = atLeast(3);
       for (int i = 0; i < numIntersections; i++) {
-        String re = AutomatonTestUtil.randomRegexp(random);
+        String re = AutomatonTestUtil.randomRegexp(random());
         CompiledAutomaton automaton = new CompiledAutomaton(new RegExp(re, RegExp.NONE).toAutomaton());
         if (automaton.type == CompiledAutomaton.AUTOMATON_TYPE.NORMAL) {
           // TODO: test start term too
@@ -217,6 +225,71 @@ public class TestDuelingCodecs extends LuceneTestCase {
           TermsEnum rightIntersection = rightTerms.intersect(automaton, null);
           assertTermsEnum(leftIntersection, rightIntersection, rarely());
         }
+      }
+    }
+  }
+  
+  private void assertTermsSeeking(Terms leftTerms, Terms rightTerms) throws Exception {
+    TermsEnum leftEnum = null;
+    TermsEnum rightEnum = null;
+    
+    // just an upper bound
+    int numTests = atLeast(20);
+    Random random = random();
+    
+    // collect this number of terms from the left side
+    HashSet<BytesRef> tests = new HashSet<BytesRef>();
+    int numPasses = 0;
+    while (numPasses < 10 && tests.size() < numTests) {
+      leftEnum = leftTerms.iterator(leftEnum);
+      BytesRef term = null;
+      while ((term = leftEnum.next()) != null) {
+        int code = random.nextInt(10);
+        if (code == 0) {
+          // the term
+          tests.add(BytesRef.deepCopyOf(term));
+        } else if (code == 1) {
+          // truncated subsequence of term
+          term = BytesRef.deepCopyOf(term);
+          if (term.length > 0) {
+            // truncate it
+            term.length = random.nextInt(term.length);
+          }
+        } else if (code == 2) {
+          // term, but ensure a non-zero offset
+          byte newbytes[] = new byte[term.length+5];
+          System.arraycopy(term.bytes, term.offset, newbytes, 5, term.length);
+          tests.add(new BytesRef(newbytes, 5, term.length));
+        }
+      }
+      numPasses++;
+    }
+    
+    ArrayList<BytesRef> shuffledTests = new ArrayList<BytesRef>(tests);
+    Collections.shuffle(shuffledTests, random);
+    
+    for (BytesRef b : shuffledTests) {
+      leftEnum = leftTerms.iterator(leftEnum);
+      rightEnum = rightTerms.iterator(rightEnum);
+      
+      assertEquals(info, leftEnum.seekExact(b, false), rightEnum.seekExact(b, false));
+      assertEquals(info, leftEnum.seekExact(b, true), rightEnum.seekExact(b, true));
+      
+      SeekStatus leftStatus;
+      SeekStatus rightStatus;
+      
+      leftStatus = leftEnum.seekCeil(b, false);
+      rightStatus = rightEnum.seekCeil(b, false);
+      assertEquals(info, leftStatus, rightStatus);
+      if (leftStatus != SeekStatus.END) {
+        assertEquals(info, leftEnum.term(), rightEnum.term());
+      }
+      
+      leftStatus = leftEnum.seekCeil(b, true);
+      rightStatus = rightEnum.seekCeil(b, true);
+      assertEquals(info, leftStatus, rightStatus);
+      if (leftStatus != SeekStatus.END) {
+        assertEquals(info, leftEnum.term(), rightEnum.term());
       }
     }
   }
@@ -235,8 +308,8 @@ public class TestDuelingCodecs extends LuceneTestCase {
     if (leftTerms.getSumTotalTermFreq() != -1 && rightTerms.getSumTotalTermFreq() != -1) {
       assertEquals(info, leftTerms.getSumTotalTermFreq(), rightTerms.getSumTotalTermFreq());
     }
-    if (leftTerms.getUniqueTermCount() != -1 && rightTerms.getUniqueTermCount() != -1) {
-      assertEquals(info, leftTerms.getUniqueTermCount(), rightTerms.getUniqueTermCount());
+    if (leftTerms.size() != -1 && rightTerms.size() != -1) {
+      assertEquals(info, leftTerms.size(), rightTerms.size());
     }
   }
 
@@ -246,7 +319,7 @@ public class TestDuelingCodecs extends LuceneTestCase {
    */
   public void assertTermsEnum(TermsEnum leftTermsEnum, TermsEnum rightTermsEnum, boolean deep) throws Exception {
     BytesRef term;
-    Bits randomBits = new RandomBits(leftReader.maxDoc(), random.nextDouble(), random);
+    Bits randomBits = new RandomBits(leftReader.maxDoc(), random().nextDouble(), random());
     DocsAndPositionsEnum leftPositions = null;
     DocsAndPositionsEnum rightPositions = null;
     DocsEnum leftDocs = null;
@@ -380,13 +453,13 @@ public class TestDuelingCodecs extends LuceneTestCase {
     int skipInterval = 16;
 
     while (true) {
-      if (random.nextBoolean()) {
+      if (random().nextBoolean()) {
         // nextDoc()
         docid = leftDocs.nextDoc();
         assertEquals(info, docid, rightDocs.nextDoc());
       } else {
         // advance()
-        int skip = docid + (int) Math.ceil(Math.abs(skipInterval + random.nextGaussian() * averageGap));
+        int skip = docid + (int) Math.ceil(Math.abs(skipInterval + random().nextGaussian() * averageGap));
         docid = leftDocs.advance(skip);
         assertEquals(info, docid, rightDocs.advance(skip));
       }
@@ -415,13 +488,13 @@ public class TestDuelingCodecs extends LuceneTestCase {
     int skipInterval = 16;
 
     while (true) {
-      if (random.nextBoolean()) {
+      if (random().nextBoolean()) {
         // nextDoc()
         docid = leftDocs.nextDoc();
         assertEquals(info, docid, rightDocs.nextDoc());
       } else {
         // advance()
-        int skip = docid + (int) Math.ceil(Math.abs(skipInterval + random.nextGaussian() * averageGap));
+        int skip = docid + (int) Math.ceil(Math.abs(skipInterval + random().nextGaussian() * averageGap));
         docid = leftDocs.advance(skip);
         assertEquals(info, docid, rightDocs.advance(skip));
       }
@@ -479,8 +552,18 @@ public class TestDuelingCodecs extends LuceneTestCase {
       Document rightDoc = rightReader.document(i);
       
       // TODO: I think this is bogus because we don't document what the order should be
-      // from these iterators, etc. I think the codec should be free to order this stuff
+      // from these iterators, etc. I think the codec/IndexReader should be free to order this stuff
       // in whatever way it wants (e.g. maybe it packs related fields together or something)
+      // To fix this, we sort the fields in both documents by name, but
+      // we still assume that all instances with same name are in order:
+      Comparator<IndexableField> comp = new Comparator<IndexableField>() {
+        @Override
+        public int compare(IndexableField arg0, IndexableField arg1) {
+          return arg0.name().compareTo(arg1.name());
+        }        
+      };
+      Collections.sort(leftDoc.getFields(), comp);
+      Collections.sort(rightDoc.getFields(), comp);
 
       Iterator<IndexableField> leftIterator = leftDoc.iterator();
       Iterator<IndexableField> rightIterator = rightDoc.iterator();
@@ -549,7 +632,7 @@ public class TestDuelingCodecs extends LuceneTestCase {
   public void assertDocValues(DocValues leftDocValues, DocValues rightDocValues) throws Exception {
     assertNotNull(info, leftDocValues);
     assertNotNull(info, rightDocValues);
-    assertEquals(info, leftDocValues.type(), rightDocValues.type());
+    assertEquals(info, leftDocValues.getType(), rightDocValues.getType());
     assertEquals(info, leftDocValues.getValueSize(), rightDocValues.getValueSize());
     assertDocValuesSource(leftDocValues.getDirectSource(), rightDocValues.getDirectSource());
     assertDocValuesSource(leftDocValues.getSource(), rightDocValues.getSource());
@@ -559,8 +642,8 @@ public class TestDuelingCodecs extends LuceneTestCase {
    * checks source API
    */
   public void assertDocValuesSource(DocValues.Source left, DocValues.Source right) throws Exception {
-    DocValues.Type leftType = left.type();
-    assertEquals(info, leftType, right.type());
+    DocValues.Type leftType = left.getType();
+    assertEquals(info, leftType, right.getType());
     switch(leftType) {
       case VAR_INTS:
       case FIXED_INTS_8:
@@ -612,6 +695,25 @@ public class TestDuelingCodecs extends LuceneTestCase {
     for (int i = 0; i < leftReader.maxDoc(); i++) {
       assertEquals(info, leftBits.get(i), rightBits.get(i));
     }
+  }
+  
+  public void assertFieldInfos(IndexReader leftReader, IndexReader rightReader) throws Exception {
+    FieldInfos leftInfos = MultiFields.getMergedFieldInfos(leftReader);
+    FieldInfos rightInfos = MultiFields.getMergedFieldInfos(rightReader);
+    
+    // TODO: would be great to verify more than just the names of the fields!
+    TreeSet<String> left = new TreeSet<String>();
+    TreeSet<String> right = new TreeSet<String>();
+    
+    for (FieldInfo fi : leftInfos) {
+      left.add(fi.name);
+    }
+    
+    for (FieldInfo fi : rightInfos) {
+      right.add(fi.name);
+    }
+    
+    assertEquals(info, left, right);
   }
   
   

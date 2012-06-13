@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,11 +21,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
-import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
-import org.apache.lucene.util.AttributeSource;
-
-
 /** This is a DocFieldConsumer that inverts each field,
  *  separately, from a Document, and accepts a
  *  InvertedTermsConsumer to process those terms. */
@@ -37,23 +32,6 @@ final class DocInverter extends DocFieldConsumer {
 
   final DocumentsWriterPerThread.DocState docState;
 
-  final SingleTokenAttributeSource singleToken = new SingleTokenAttributeSource();
-
-  static class SingleTokenAttributeSource extends AttributeSource {
-    final CharTermAttribute termAttribute;
-    final OffsetAttribute offsetAttribute;
-
-    private SingleTokenAttributeSource() {
-      termAttribute = addAttribute(CharTermAttribute.class);
-      offsetAttribute = addAttribute(OffsetAttribute.class);
-    }
-
-    public void reinit(String stringValue, int startOffset,  int endOffset) {
-      termAttribute.setEmpty().append(stringValue);
-      offsetAttribute.setOffset(startOffset, endOffset);
-    }
-  }
-
   public DocInverter(DocumentsWriterPerThread.DocState docState, InvertedDocConsumer consumer, InvertedDocEndConsumer endConsumer) {
     this.docState = docState;
     this.consumer = consumer;
@@ -61,12 +39,12 @@ final class DocInverter extends DocFieldConsumer {
   }
 
   @Override
-  void flush(Map<FieldInfo, DocFieldConsumerPerField> fieldsToFlush, SegmentWriteState state) throws IOException {
+  void flush(Map<String, DocFieldConsumerPerField> fieldsToFlush, SegmentWriteState state) throws IOException {
 
-    Map<FieldInfo, InvertedDocConsumerPerField> childFieldsToFlush = new HashMap<FieldInfo, InvertedDocConsumerPerField>();
-    Map<FieldInfo, InvertedDocEndConsumerPerField> endChildFieldsToFlush = new HashMap<FieldInfo, InvertedDocEndConsumerPerField>();
+    Map<String, InvertedDocConsumerPerField> childFieldsToFlush = new HashMap<String, InvertedDocConsumerPerField>();
+    Map<String, InvertedDocEndConsumerPerField> endChildFieldsToFlush = new HashMap<String, InvertedDocEndConsumerPerField>();
 
-    for (Map.Entry<FieldInfo, DocFieldConsumerPerField> fieldToFlush : fieldsToFlush.entrySet()) {
+    for (Map.Entry<String, DocFieldConsumerPerField> fieldToFlush : fieldsToFlush.entrySet()) {
       DocInverterPerField perField = (DocInverterPerField) fieldToFlush.getValue();
       childFieldsToFlush.put(fieldToFlush.getKey(), perField.consumer);
       endChildFieldsToFlush.put(fieldToFlush.getKey(), perField.endConsumer);

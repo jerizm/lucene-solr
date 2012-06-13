@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -30,7 +30,6 @@ import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.search.*;
 import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.search.similarities.TFIDFSimilarity;
 import org.apache.lucene.store.Directory;
 
@@ -50,8 +49,8 @@ public class TestOmitTf extends LuceneTestCase {
     @Override public float scorePayload(int doc, int start, int end, BytesRef payload) { return 1.0f; }
   }
 
-  private static final FieldType omitType = new FieldType(TextField.TYPE_UNSTORED);
-  private static final FieldType normalType = new FieldType(TextField.TYPE_UNSTORED);
+  private static final FieldType omitType = new FieldType(TextField.TYPE_NOT_STORED);
+  private static final FieldType normalType = new FieldType(TextField.TYPE_NOT_STORED);
   
   static {
     omitType.setIndexOptions(IndexOptions.DOCS_ONLY);
@@ -61,7 +60,7 @@ public class TestOmitTf extends LuceneTestCase {
   // omitTermFreqAndPositions bit in the FieldInfo
   public void testOmitTermFreqAndPositions() throws Exception {
     Directory ram = newDirectory();
-    Analyzer analyzer = new MockAnalyzer(random);
+    Analyzer analyzer = new MockAnalyzer(random());
     IndexWriter writer = new IndexWriter(ram, newIndexWriterConfig( TEST_VERSION_CURRENT, analyzer));
     Document d = new Document();
         
@@ -93,10 +92,10 @@ public class TestOmitTf extends LuceneTestCase {
     // flush
     writer.close();
 
-    SegmentReader reader = getOnlySegmentReader(IndexReader.open(ram));
+    SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(ram));
     FieldInfos fi = reader.getFieldInfos();
-    assertEquals("OmitTermFreqAndPositions field bit should be set.", IndexOptions.DOCS_ONLY, fi.fieldInfo("f1").indexOptions);
-    assertEquals("OmitTermFreqAndPositions field bit should be set.", IndexOptions.DOCS_ONLY, fi.fieldInfo("f2").indexOptions);
+    assertEquals("OmitTermFreqAndPositions field bit should be set.", IndexOptions.DOCS_ONLY, fi.fieldInfo("f1").getIndexOptions());
+    assertEquals("OmitTermFreqAndPositions field bit should be set.", IndexOptions.DOCS_ONLY, fi.fieldInfo("f2").getIndexOptions());
         
     reader.close();
     ram.close();
@@ -106,7 +105,7 @@ public class TestOmitTf extends LuceneTestCase {
   // omitTermFreqAndPositions for the same field works
   public void testMixedMerge() throws Exception {
     Directory ram = newDirectory();
-    Analyzer analyzer = new MockAnalyzer(random);
+    Analyzer analyzer = new MockAnalyzer(random());
     IndexWriter writer = new IndexWriter(
         ram,
         newIndexWriterConfig(TEST_VERSION_CURRENT, analyzer).
@@ -145,10 +144,10 @@ public class TestOmitTf extends LuceneTestCase {
     // flush
     writer.close();
 
-    SegmentReader reader = getOnlySegmentReader(IndexReader.open(ram));
+    SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(ram));
     FieldInfos fi = reader.getFieldInfos();
-    assertEquals("OmitTermFreqAndPositions field bit should be set.", IndexOptions.DOCS_ONLY, fi.fieldInfo("f1").indexOptions);
-    assertEquals("OmitTermFreqAndPositions field bit should be set.", IndexOptions.DOCS_ONLY, fi.fieldInfo("f2").indexOptions);
+    assertEquals("OmitTermFreqAndPositions field bit should be set.", IndexOptions.DOCS_ONLY, fi.fieldInfo("f1").getIndexOptions());
+    assertEquals("OmitTermFreqAndPositions field bit should be set.", IndexOptions.DOCS_ONLY, fi.fieldInfo("f2").getIndexOptions());
         
     reader.close();
     ram.close();
@@ -159,7 +158,7 @@ public class TestOmitTf extends LuceneTestCase {
   // field, 
   public void testMixedRAM() throws Exception {
     Directory ram = newDirectory();
-    Analyzer analyzer = new MockAnalyzer(random);
+    Analyzer analyzer = new MockAnalyzer(random());
     IndexWriter writer = new IndexWriter(
         ram,
         newIndexWriterConfig(TEST_VERSION_CURRENT, analyzer).
@@ -188,10 +187,10 @@ public class TestOmitTf extends LuceneTestCase {
     // flush
     writer.close();
 
-    SegmentReader reader = getOnlySegmentReader(IndexReader.open(ram));
+    SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(ram));
     FieldInfos fi = reader.getFieldInfos();
-    assertEquals("OmitTermFreqAndPositions field bit should not be set.", IndexOptions.DOCS_AND_FREQS_AND_POSITIONS, fi.fieldInfo("f1").indexOptions);
-    assertEquals("OmitTermFreqAndPositions field bit should be set.", IndexOptions.DOCS_ONLY, fi.fieldInfo("f2").indexOptions);
+    assertEquals("OmitTermFreqAndPositions field bit should not be set.", IndexOptions.DOCS_AND_FREQS_AND_POSITIONS, fi.fieldInfo("f1").getIndexOptions());
+    assertEquals("OmitTermFreqAndPositions field bit should be set.", IndexOptions.DOCS_ONLY, fi.fieldInfo("f2").getIndexOptions());
         
     reader.close();
     ram.close();
@@ -208,7 +207,7 @@ public class TestOmitTf extends LuceneTestCase {
   // Verifies no *.prx exists when all fields omit term freq:
   public void testNoPrxFile() throws Throwable {
     Directory ram = newDirectory();
-    Analyzer analyzer = new MockAnalyzer(random);
+    Analyzer analyzer = new MockAnalyzer(random());
     IndexWriter writer = new IndexWriter(ram, newIndexWriterConfig(
                                                                    TEST_VERSION_CURRENT, analyzer).setMaxBufferedDocs(3).setMergePolicy(newLogMergePolicy()));
     LogMergePolicy lmp = (LogMergePolicy) writer.getConfig().getMergePolicy();
@@ -229,7 +228,7 @@ public class TestOmitTf extends LuceneTestCase {
     // now add some documents with positions, and check
     // there is no prox after full merge
     d = new Document();
-    f1 = newField("f1", "This field has positions", TextField.TYPE_UNSTORED);
+    f1 = newTextField("f1", "This field has positions", Field.Store.NO);
     d.add(f1);
     
     for(int i=0;i<30;i++)
@@ -247,7 +246,7 @@ public class TestOmitTf extends LuceneTestCase {
   // Test scores with one field with Term Freqs and one without, otherwise with equal content 
   public void testBasic() throws Exception {
     Directory dir = newDirectory();  
-    Analyzer analyzer = new MockAnalyzer(random);
+    Analyzer analyzer = new MockAnalyzer(random());
     IndexWriter writer = new IndexWriter(
         dir,
         newIndexWriterConfig(TEST_VERSION_CURRENT, analyzer).
@@ -279,7 +278,7 @@ public class TestOmitTf extends LuceneTestCase {
     /*
      * Verify the index
      */         
-    IndexReader reader = IndexReader.open(dir);
+    IndexReader reader = DirectoryReader.open(dir);
     IndexSearcher searcher = new IndexSearcher(reader);
     searcher.setSimilarity(new SimpleSimilarity());
         
@@ -427,10 +426,10 @@ public class TestOmitTf extends LuceneTestCase {
   /** test that when freqs are omitted, that totalTermFreq and sumTotalTermFreq are -1 */
   public void testStats() throws Exception {
     Directory dir = newDirectory();
-    RandomIndexWriter iw = new RandomIndexWriter(random, dir,
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir,
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
     Document doc = new Document();
-    FieldType ft = new FieldType(TextField.TYPE_UNSTORED);
+    FieldType ft = new FieldType(TextField.TYPE_NOT_STORED);
     ft.setIndexOptions(IndexOptions.DOCS_ONLY);
     ft.freeze();
     Field f = newField("foo", "bar", ft);

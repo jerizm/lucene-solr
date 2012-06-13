@@ -1,6 +1,6 @@
 package org.apache.solr.common.cloud;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -54,7 +54,7 @@ public class ZkStateReader {
   public static final String STATE_PROP = "state";
   public static final String CORE_NAME_PROP = "core";
   public static final String COLLECTION_PROP = "collection";
-  public static final String SHARD_ID_PROP = "shard_id";
+  public static final String SHARD_ID_PROP = "shard";
   public static final String NUM_SHARDS_PROP = "numShards";
   public static final String LEADER_PROP = "leader";
   
@@ -378,6 +378,9 @@ public class ZkStateReader {
 
 	}
   
+  /**
+   * Get shard leader url.
+   */
   public String getLeaderUrl(String collection, String shard) throws InterruptedException, KeeperException {
     return getLeaderUrl(collection, shard, 1000);
   }
@@ -389,6 +392,9 @@ public class ZkStateReader {
     return props.getCoreUrl();
   }
   
+  /**
+   * Get shard leader properties.
+   */
   public ZkNodeProps getLeaderProps(String collection, String shard) throws InterruptedException {
     return getLeaderProps(collection, shard, 1000);
   }
@@ -408,19 +414,35 @@ public class ZkStateReader {
     throw new RuntimeException("No registered leader was found, collection:" + collection + " slice:" + shard);
   }
 
+  /**
+   * Get path where shard leader properties live in zookeeper.
+   */
   public static String getShardLeadersPath(String collection, String shardId) {
     return COLLECTIONS_ZKNODE + "/" + collection + "/"
         + SHARD_LEADERS_ZKNODE + (shardId != null ? ("/" + shardId)
         : "");
   }
-  
+
+  /**
+   * Get CoreNodeName for a core. This name is unique across the collection.  
+   * @param nodeName in form: 127.0.0.1:54065_solr
+   */
+  public static String getCoreNodeName(String nodeName, String coreName) {
+    return nodeName + "_" + coreName;
+  }
+
   public List<ZkCoreNodeProps> getReplicaProps(String collection,
       String shardId, String thisNodeName, String coreName) {
     return getReplicaProps(collection, shardId, thisNodeName, coreName, null);
   }
   
   public List<ZkCoreNodeProps> getReplicaProps(String collection,
-      String shardId, String thisNodeName, String coreName, String stateFilter) {
+      String shardId, String thisNodeName, String coreName, String mustMatchStateFilter) {
+    return getReplicaProps(collection, shardId, thisNodeName, coreName, mustMatchStateFilter, null);
+  }
+  
+  public List<ZkCoreNodeProps> getReplicaProps(String collection,
+      String shardId, String thisNodeName, String coreName, String mustMatchStateFilter, String mustNotMatchStateFilter) {
     CloudState cloudState = this.cloudState;
     if (cloudState == null) {
       return null;
@@ -444,8 +466,10 @@ public class ZkStateReader {
       ZkCoreNodeProps nodeProps = new ZkCoreNodeProps(entry.getValue());
       String coreNodeName = nodeProps.getNodeName() + "_" + nodeProps.getCoreName();
       if (cloudState.liveNodesContain(nodeProps.getNodeName()) && !coreNodeName.equals(filterNodeName)) {
-        if (stateFilter == null || stateFilter.equals(nodeProps.getState())) {
-          nodes.add(nodeProps);
+        if (mustMatchStateFilter == null || mustMatchStateFilter.equals(nodeProps.getState())) {
+          if (mustNotMatchStateFilter == null || !mustNotMatchStateFilter.equals(nodeProps.getState())) {
+            nodes.add(nodeProps);
+          }
         }
       }
     }

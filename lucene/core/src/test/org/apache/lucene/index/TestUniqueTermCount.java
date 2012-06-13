@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -24,9 +24,7 @@ import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.search.similarities.DefaultSimilarity;
-import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util._TestUtil;
@@ -45,14 +43,14 @@ public class TestUniqueTermCount extends LuceneTestCase {
     super.setUp();
     dir = newDirectory();
     IndexWriterConfig config = newIndexWriterConfig(TEST_VERSION_CURRENT, 
-                                                    new MockAnalyzer(random, MockTokenizer.SIMPLE, true)).setMergePolicy(newLogMergePolicy());
+                                                    new MockAnalyzer(random(), MockTokenizer.SIMPLE, true)).setMergePolicy(newLogMergePolicy());
     config.setSimilarity(new TestSimilarity());
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir, config);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir, config);
     Document doc = new Document();
-    Field foo = newField("foo", "", TextField.TYPE_UNSTORED);
+    Field foo = newTextField("foo", "", Field.Store.NO);
     doc.add(foo);
     for (int i = 0; i < 100; i++) {
-      foo.setValue(addValue());
+      foo.setStringValue(addValue());
       writer.addDocument(doc);
     }
     reader = writer.getReader();
@@ -79,10 +77,10 @@ public class TestUniqueTermCount extends LuceneTestCase {
   private String addValue() {
     StringBuilder sb = new StringBuilder();
     HashSet<String> terms = new HashSet<String>();
-    int num = _TestUtil.nextInt(random, 0, 255);
+    int num = _TestUtil.nextInt(random(), 0, 255);
     for (int i = 0; i < num; i++) {
       sb.append(' ');
-      char term = (char) _TestUtil.nextInt(random, 'a', 'z');
+      char term = (char) _TestUtil.nextInt(random(), 'a', 'z');
       sb.append(term);
       terms.add("" + term);
     }

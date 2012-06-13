@@ -23,7 +23,15 @@ import org.apache.lucene.index.IndexableFieldType;
 import org.apache.lucene.search.NumericRangeQuery; // javadocs
 import org.apache.lucene.util.NumericUtils;
 
+/**
+ * Describes the properties of a field.
+ */
 public class FieldType implements IndexableFieldType {
+
+  /** Data type of the numeric value
+   * @since 3.2
+   */
+  public static enum NumericType {INT, LONG, FLOAT, DOUBLE}
 
   private boolean indexed;
   private boolean stored;
@@ -34,7 +42,7 @@ public class FieldType implements IndexableFieldType {
   private boolean omitNorms;
   private IndexOptions indexOptions = IndexOptions.DOCS_AND_FREQS_AND_POSITIONS;
   private DocValues.Type docValueType;
-  private NumericField.DataType numericType;
+  private NumericType numericType;
   private boolean frozen;
   private int numericPrecisionStep = NumericUtils.PRECISION_STEP_DEFAULT;
 
@@ -152,16 +160,16 @@ public class FieldType implements IndexableFieldType {
     return docValueType;
   }
 
-  public void setNumericType(NumericField.DataType type) {
+  public void setNumericType(NumericType type) {
     checkIfFrozen();
     numericType = type;
   }
 
-  /** Numeric {@link NumericField.DataType}; if
+  /** NumericDataType; if
    *  non-null then the field's value will be indexed
    *  numerically so that {@link NumericRangeQuery} can be
    *  used at search time. */
-  public NumericField.DataType numericType() {
+  public NumericType numericType() {
     return numericType;
   }
 

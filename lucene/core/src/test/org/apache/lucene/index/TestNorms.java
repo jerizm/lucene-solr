@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,6 +18,7 @@ package org.apache.lucene.index;
  */
 
 import java.io.IOException;
+import java.util.Random;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
@@ -29,14 +30,16 @@ import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.similarities.PerFieldSimilarityWrapper;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.util.LineFileDocs;
+import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
 import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.util._TestUtil;
 
 /**
  * Test that norms info is preserved during index life - including
  * separate norms, addDocument, addIndexes, forceMerge.
  */
+@SuppressCodecs({ "SimpleText", "Memory" })
 public class TestNorms extends LuceneTestCase {
   final String byteTestField = "normsTestByte";
 
@@ -60,17 +63,17 @@ public class TestNorms extends LuceneTestCase {
   // LUCENE-1260
   public void testCustomEncoder() throws Exception {
     Directory dir = newDirectory();
-    IndexWriterConfig config = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random));
+    IndexWriterConfig config = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
     config.setSimilarity(new CustomNormEncodingSimilarity());
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir, config);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir, config);
     Document doc = new Document();
-    Field foo = newField("foo", "", TextField.TYPE_UNSTORED);
-    Field bar = newField("bar", "", TextField.TYPE_UNSTORED);
+    Field foo = newTextField("foo", "", Field.Store.NO);
+    Field bar = newTextField("bar", "", Field.Store.NO);
     doc.add(foo);
     doc.add(bar);
     
     for (int i = 0; i < 100; i++) {
-      bar.setValue("singleton");
+      bar.setStringValue("singleton");
       writer.addDocument(doc);
     }
     
@@ -90,14 +93,14 @@ public class TestNorms extends LuceneTestCase {
   }
   
   public void testMaxByteNorms() throws IOException {
-    Directory dir = newDirectory();
+    Directory dir = newFSDirectory(_TestUtil.getTempDir("TestNorms.testMaxByteNorms"));
     buildIndex(dir, true);
-    AtomicReader open = SlowCompositeReaderWrapper.wrap(IndexReader.open(dir));
+    AtomicReader open = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(dir));
     DocValues normValues = open.normValues(byteTestField);
     assertNotNull(normValues);
     Source source = normValues.getSource();
     assertTrue(source.hasArray());
-    assertEquals(Type.FIXED_INTS_8, normValues.type());
+    assertEquals(Type.FIXED_INTS_8, normValues.getType());
     byte[] norms = (byte[]) source.getArray();
     for (int i = 0; i < open.maxDoc(); i++) {
       Document document = open.document(i);
@@ -115,48 +118,48 @@ public class TestNorms extends LuceneTestCase {
    * while merging fills in default values based on the Norm {@link Type}
    */
   public void testNormsNotPresent() throws IOException {
-    Directory dir = newDirectory();
-    boolean firstWriteNorm = random.nextBoolean();
+    Directory dir = newFSDirectory(_TestUtil.getTempDir("TestNorms.testNormsNotPresent.1"));
+    boolean firstWriteNorm = random().nextBoolean();
     buildIndex(dir, firstWriteNorm);
 
-    Directory otherDir = newDirectory();
-    boolean secondWriteNorm = random.nextBoolean();
+    Directory otherDir = newFSDirectory(_TestUtil.getTempDir("TestNorms.testNormsNotPresent.2"));
+    boolean secondWriteNorm = random().nextBoolean();
     buildIndex(otherDir, secondWriteNorm);
 
-    AtomicReader reader = SlowCompositeReaderWrapper.wrap(IndexReader.open(otherDir));
+    AtomicReader reader = SlowCompositeReaderWrapper.wrap(DirectoryReader.open(otherDir));
     FieldInfos fieldInfos = reader.getFieldInfos();
     FieldInfo fieldInfo = fieldInfos.fieldInfo(byteTestField);
-    assertFalse(fieldInfo.omitNorms);
-    assertTrue(fieldInfo.isIndexed);
+    assertFalse(fieldInfo.omitsNorms());
+    assertTrue(fieldInfo.isIndexed());
     if (secondWriteNorm) {
-      assertTrue(fieldInfo.normsPresent());
+      assertTrue(fieldInfo.hasNorms());
     } else {
-      assertFalse(fieldInfo.normsPresent());  
+      assertFalse(fieldInfo.hasNorms());  
     }
     
     IndexWriterConfig config = newIndexWriterConfig(TEST_VERSION_CURRENT,
-        new MockAnalyzer(random));
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir, config);
+        new MockAnalyzer(random()));
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir, config);
     writer.addIndexes(reader);
     AtomicReader mergedReader = SlowCompositeReaderWrapper.wrap(writer.getReader());
     if (!firstWriteNorm && !secondWriteNorm) {
       DocValues normValues = mergedReader.normValues(byteTestField);
       assertNull(normValues);
       FieldInfo fi = mergedReader.getFieldInfos().fieldInfo(byteTestField);
-      assertFalse(fi.omitNorms);
-      assertTrue(fi.isIndexed);
-      assertFalse(fi.normsPresent());
+      assertFalse(fi.omitsNorms());
+      assertTrue(fi.isIndexed());
+      assertFalse(fi.hasNorms());
     } else {
       FieldInfo fi = mergedReader.getFieldInfos().fieldInfo(byteTestField);
-      assertFalse(fi.omitNorms);
-      assertTrue(fi.isIndexed);
-      assertTrue(fi.normsPresent());
+      assertFalse(fi.omitsNorms());
+      assertTrue(fi.isIndexed());
+      assertTrue(fi.hasNorms());
       
       DocValues normValues = mergedReader.normValues(byteTestField);
       assertNotNull(normValues);
       Source source = normValues.getSource();
       assertTrue(source.hasArray());
-      assertEquals(Type.FIXED_INTS_8, normValues.type());
+      assertEquals(Type.FIXED_INTS_8, normValues.getType());
       byte[] norms = (byte[]) source.getArray();
       for (int i = 0; i < mergedReader.maxDoc(); i++) {
         Document document = mergedReader.document(i);
@@ -174,18 +177,18 @@ public class TestNorms extends LuceneTestCase {
 
   public void buildIndex(Directory dir, boolean writeNorms) throws IOException,
       CorruptIndexException {
+    Random random = random();
     IndexWriterConfig config = newIndexWriterConfig(TEST_VERSION_CURRENT,
-        new MockAnalyzer(random));
+        new MockAnalyzer(random()));
     Similarity provider = new MySimProvider(writeNorms);
     config.setSimilarity(provider);
     RandomIndexWriter writer = new RandomIndexWriter(random, dir, config);
-    final LineFileDocs docs = new LineFileDocs(random);
+    final LineFileDocs docs = new LineFileDocs(random, true);
     int num = atLeast(100);
     for (int i = 0; i < num; i++) {
       Document doc = docs.nextDoc();
-      int boost = writeNorms ? 1 + random.nextInt(255) : 0;
-      Field f = new Field(byteTestField, "" + boost,
-          TextField.TYPE_STORED);
+      int boost = writeNorms ? 1 + random().nextInt(255) : 0;
+      Field f = new TextField(byteTestField, "" + boost, Field.Store.YES);
       f.setBoost(boost);
       doc.add(f);
       writer.addDocument(doc);
@@ -196,6 +199,7 @@ public class TestNorms extends LuceneTestCase {
     }
     writer.commit();
     writer.close();
+    docs.close();
   }
 
 
@@ -242,6 +246,5 @@ public class TestNorms extends LuceneTestCase {
         norm.setByte((byte) (0xFF & boost));
       }
     }
-  }
- 
+  } 
 }

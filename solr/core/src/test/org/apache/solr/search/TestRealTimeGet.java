@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -25,6 +25,7 @@ import org.apache.lucene.index.*;
 import org.apache.lucene.search.*;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.Constants;
 import org.apache.noggit.ObjectBuilder;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrException;
@@ -34,6 +35,7 @@ import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.update.UpdateHandler;
 import org.apache.solr.update.UpdateLog;
 import org.apache.solr.update.VersionInfo;
+import org.apache.solr.util.TestHarness;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -46,15 +48,17 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static  org.apache.solr.core.SolrCore.verbose;
-import static org.apache.solr.update.processor.DistributedUpdateProcessor.SEEN_LEADER;
+import static org.apache.solr.update.processor.DistributingUpdateProcessorFactory.DISTRIB_UPDATE_PARAM;
+import static org.apache.solr.update.processor.DistributedUpdateProcessor.DistribPhase;
 
 public class TestRealTimeGet extends SolrTestCaseJ4 {
-  private static String SEEN_LEADER_VAL="true"; // value that means we've seen the leader and have version info (i.e. we are a non-leader replica)
 
+  // means we've seen the leader and have version info (i.e. we are a non-leader replica)
+  private static String FROM_LEADER = DistribPhase.FROMLEADER.toString(); 
 
   @BeforeClass
   public static void beforeClass() throws Exception {
-    initCore("solrconfig-tlog.xml","schema12.xml");
+    initCore("solrconfig-tlog.xml","schema15.xml");
   }
 
   @Test
@@ -147,7 +151,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
     // simulate an update from the leader
     version += 10;
-    updateJ(jsonAdd(sdoc("id","1", "_version_",Long.toString(version))), params(SEEN_LEADER,SEEN_LEADER_VAL));
+    updateJ(jsonAdd(sdoc("id","1", "_version_",Long.toString(version))), params(DISTRIB_UPDATE_PARAM,FROM_LEADER));
 
     // test version is there from rtg
     assertJQ(req("qt","/get","id","1")
@@ -155,7 +159,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
     );
 
     // simulate reordering: test that a version less than that does not take affect
-    updateJ(jsonAdd(sdoc("id","1", "_version_",Long.toString(version - 1))), params(SEEN_LEADER,SEEN_LEADER_VAL));
+    updateJ(jsonAdd(sdoc("id","1", "_version_",Long.toString(version - 1))), params(DISTRIB_UPDATE_PARAM,FROM_LEADER));
 
     // test that version hasn't changed
     assertJQ(req("qt","/get","id","1")
@@ -164,7 +168,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
     // simulate reordering: test that a delete w/ version less than that does not take affect
     // TODO: also allow passing version on delete instead of on URL?
-    updateJ(jsonDelId("1"), params(SEEN_LEADER,SEEN_LEADER_VAL, "_version_",Long.toString(version - 1)));
+    updateJ(jsonDelId("1"), params(DISTRIB_UPDATE_PARAM,FROM_LEADER, "_version_",Long.toString(version - 1)));
 
     // test that version hasn't changed
     assertJQ(req("qt","/get","id","1")
@@ -175,7 +179,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
     assertU(commit());
 
     // simulate reordering: test that a version less than that does not take affect
-    updateJ(jsonAdd(sdoc("id","1", "_version_",Long.toString(version - 1))), params(SEEN_LEADER,SEEN_LEADER_VAL));
+    updateJ(jsonAdd(sdoc("id","1", "_version_",Long.toString(version - 1))), params(DISTRIB_UPDATE_PARAM,FROM_LEADER));
 
     // test that version hasn't changed
     assertJQ(req("qt","/get","id","1")
@@ -183,7 +187,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
     );
 
     // simulate reordering: test that a delete w/ version less than that does not take affect
-    updateJ(jsonDelId("1"), params(SEEN_LEADER,SEEN_LEADER_VAL, "_version_",Long.toString(version - 1)));
+    updateJ(jsonDelId("1"), params(DISTRIB_UPDATE_PARAM,FROM_LEADER, "_version_",Long.toString(version - 1)));
 
     // test that version hasn't changed
     assertJQ(req("qt","/get","id","1")
@@ -192,10 +196,10 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
     // now simulate a normal delete from the leader
     version += 5;
-    updateJ(jsonDelId("1"), params(SEEN_LEADER,SEEN_LEADER_VAL, "_version_",Long.toString(version)));
+    updateJ(jsonDelId("1"), params(DISTRIB_UPDATE_PARAM,FROM_LEADER, "_version_",Long.toString(version)));
 
     // make sure a reordered add doesn't take affect.
-    updateJ(jsonAdd(sdoc("id","1", "_version_",Long.toString(version - 1))), params(SEEN_LEADER,SEEN_LEADER_VAL));
+    updateJ(jsonAdd(sdoc("id","1", "_version_",Long.toString(version - 1))), params(DISTRIB_UPDATE_PARAM,FROM_LEADER));
 
     // test that it's still deleted
     assertJQ(req("qt","/get","id","1")
@@ -206,7 +210,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
     assertU(commit());
 
     // make sure a reordered add doesn't take affect.
-    updateJ(jsonAdd(sdoc("id","1", "_version_",Long.toString(version - 1))), params(SEEN_LEADER,SEEN_LEADER_VAL));
+    updateJ(jsonAdd(sdoc("id","1", "_version_",Long.toString(version - 1))), params(DISTRIB_UPDATE_PARAM,FROM_LEADER));
 
     // test that it's still deleted
     assertJQ(req("qt","/get","id","1")
@@ -219,40 +223,171 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
     
   }
 
-
-
-  /***
   @Test
-  public void testGetRealtime() throws Exception {
-    SolrQueryRequest sr1 = req("q","foo");
-    IndexReader r1 = sr1.getCore().getRealtimeReader();
-
-    assertU(adoc("id","1"));
-
-    IndexReader r2 = sr1.getCore().getRealtimeReader();
-    assertNotSame(r1, r2);
-    int refcount = r2.getRefCount();
-
-    // make sure a new reader wasn't opened
-    IndexReader r3 = sr1.getCore().getRealtimeReader();
-    assertSame(r2, r3);
-    assertEquals(refcount+1, r3.getRefCount());
-
+  public void testOptimisticLocking() throws Exception {
+    clearIndex();
     assertU(commit());
 
-    // this is not critical, but currently a commit does not refresh the reader
-    // if nothing has changed
-    IndexReader r4 = sr1.getCore().getRealtimeReader();
-    assertEquals(refcount+2, r4.getRefCount());
+    long version = addAndGetVersion(sdoc("id","1") , null);
+    long version2;
 
+    try {
+      // try version added directly on doc
+      version2 = addAndGetVersion(sdoc("id","1", "_version_", Long.toString(version-1)), null);
+      fail();
+    } catch (SolrException se) {
+      assertEquals(409, se.code());
+    }
 
-    r1.decRef();
-    r2.decRef();
-    r3.decRef();
-    r4.decRef();
-    sr1.close();
+    try {
+      // try version added as a parameter on the request
+      version2 = addAndGetVersion(sdoc("id","1"), params("_version_", Long.toString(version-1)));
+      fail();
+    } catch (SolrException se) {
+      assertEquals(409, se.code());
+    }
+
+    try {
+      // try an add specifying a negative version
+      version2 = addAndGetVersion(sdoc("id","1"), params("_version_", Long.toString(-version)));
+      fail();
+    } catch (SolrException se) {
+      assertEquals(409, se.code());
+    }
+
+    try {
+      // try an add with a greater version
+      version2 = addAndGetVersion(sdoc("id","1"), params("_version_", Long.toString(version+random().nextInt(1000)+1)));
+      fail();
+    } catch (SolrException se) {
+      assertEquals(409, se.code());
+    }
+
+    //
+    // deletes
+    //
+
+    try {
+      // try a delete with version on the request
+      version2 = deleteAndGetVersion("1", params("_version_", Long.toString(version-1)));
+      fail();
+    } catch (SolrException se) {
+      assertEquals(409, se.code());
+    }
+
+    try {
+      // try a delete with a negative version
+      version2 = deleteAndGetVersion("1", params("_version_", Long.toString(-version)));
+      fail();
+    } catch (SolrException se) {
+      assertEquals(409, se.code());
+    }
+
+    try {
+      // try a delete with a greater version
+      version2 = deleteAndGetVersion("1", params("_version_", Long.toString(version+random().nextInt(1000)+1)));
+      fail();
+    } catch (SolrException se) {
+      assertEquals(409, se.code());
+    }
+
+    try {
+      // try a delete of a document that doesn't exist, specifying a specific version
+      version2 = deleteAndGetVersion("I_do_not_exist", params("_version_", Long.toString(version)));
+      fail();
+    } catch (SolrException se) {
+      assertEquals(409, se.code());
+    }
+
+    // try a delete of a document that doesn't exist, specifying that it should not
+    version2 = deleteAndGetVersion("I_do_not_exist", params("_version_", Long.toString(-1)));
+    assertTrue(version2 < 0);
+
+    // overwrite the document
+    version2 = addAndGetVersion(sdoc("id","1", "_version_", Long.toString(version)), null);
+    assertTrue(version2 > version);
+
+    try {
+      // overwriting the previous version should now fail
+      version2 = addAndGetVersion(sdoc("id","1"), params("_version_", Long.toString(version)));
+      fail();
+    } catch (SolrException se) {
+      assertEquals(409, se.code());
+    }
+
+    try {
+      // deleting the previous version should now fail
+      version2 = deleteAndGetVersion("1", params("_version_", Long.toString(version)));
+      fail();
+    } catch (SolrException se) {
+      assertEquals(409, se.code());
+    }
+
+    version = version2;
+
+    // deleting the current version should work
+    version2 = deleteAndGetVersion("1", params("_version_", Long.toString(version)));
+
+    try {
+      // overwriting the previous existing doc should now fail (since it was deleted)
+      version2 = addAndGetVersion(sdoc("id","1"), params("_version_", Long.toString(version)));
+      fail();
+    } catch (SolrException se) {
+      assertEquals(409, se.code());
+    }
+
+    try {
+      // deleting the previous existing doc should now fail (since it was deleted)
+      version2 = deleteAndGetVersion("1", params("_version_", Long.toString(version)));
+      fail();
+    } catch (SolrException se) {
+      assertEquals(409, se.code());
+    }
+
+    // overwriting a negative version should work
+    version2 = addAndGetVersion(sdoc("id","1"), params("_version_", Long.toString(-(version-1))));
+    assertTrue(version2 > version);
+    version = version2;
+
+    // sanity test that we see the right version via rtg
+    assertJQ(req("qt","/get","id","1")
+        ,"=={'doc':{'id':'1','_version_':" + version + "}}"
+    );
   }
-  ***/
+
+
+    /***
+    @Test
+    public void testGetRealtime() throws Exception {
+      SolrQueryRequest sr1 = req("q","foo");
+      IndexReader r1 = sr1.getCore().getRealtimeReader();
+
+      assertU(adoc("id","1"));
+
+      IndexReader r2 = sr1.getCore().getRealtimeReader();
+      assertNotSame(r1, r2);
+      int refcount = r2.getRefCount();
+
+      // make sure a new reader wasn't opened
+      IndexReader r3 = sr1.getCore().getRealtimeReader();
+      assertSame(r2, r3);
+      assertEquals(refcount+1, r3.getRefCount());
+
+      assertU(commit());
+
+      // this is not critical, but currently a commit does not refresh the reader
+      // if nothing has changed
+      IndexReader r4 = sr1.getCore().getRealtimeReader();
+      assertEquals(refcount+2, r4.getRefCount());
+
+
+      r1.decRef();
+      r2.decRef();
+      r3.decRef();
+      r4.decRef();
+      sr1.close();
+    }
+    ***/
 
 
   final ConcurrentHashMap<Integer,DocInfo> model = new ConcurrentHashMap<Integer,DocInfo>();
@@ -292,6 +427,22 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
     }
   }
 
+  private long badVersion(Random rand, long version) {
+    if (version > 0) {
+      // return a random number not equal to version
+      for (;;) {
+        long badVersion = rand.nextInt();
+        if (badVersion != version && badVersion != 0) return badVersion;
+      }
+    }
+
+    // if the version does not exist, then we can only specify a positive version
+    for (;;) {
+      long badVersion = rand.nextInt() & 0x7fffffff;  // mask off sign bit
+      if (badVersion != 0) return badVersion;
+    }
+  }
+
   @Test
   public void testStressGetRealtime() throws Exception {
     clearIndex();
@@ -299,19 +450,21 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
     // req().getCore().getUpdateHandler().getIndexWriterProvider().getIndexWriter(req().getCore()).setInfoStream(System.out);
 
-    final int commitPercent = 5 + random.nextInt(20);
-    final int softCommitPercent = 30+random.nextInt(75); // what percent of the commits are soft
-    final int deletePercent = 4+random.nextInt(25);
-    final int deleteByQueryPercent = 1+random.nextInt(5);
-    final int ndocs = 5 + (random.nextBoolean() ? random.nextInt(25) : random.nextInt(200));
-    int nWriteThreads = 5 + random.nextInt(25);
+    final int commitPercent = 5 + random().nextInt(20);
+    final int softCommitPercent = 30+random().nextInt(75); // what percent of the commits are soft
+    final int deletePercent = 4+random().nextInt(25);
+    final int deleteByQueryPercent = 1+random().nextInt(5);
+    final int optimisticPercent = 1+random().nextInt(50);    // percent change that an update uses optimistic locking
+    final int optimisticCorrectPercent = 25+random().nextInt(70);    // percent change that a version specified will be correct
+    final int ndocs = 5 + (random().nextBoolean() ? random().nextInt(25) : random().nextInt(200));
+    int nWriteThreads = 5 + random().nextInt(25);
 
     final int maxConcurrentCommits = nWriteThreads;   // number of committers at a time... it should be <= maxWarmingSearchers
 
         // query variables
     final int percentRealtimeQuery = 60;
     final AtomicLong operations = new AtomicLong(50000);  // number of query operations to perform in total
-    int nReadThreads = 5 + random.nextInt(25);
+    int nReadThreads = 5 + random().nextInt(25);
 
 
     verbose("commitPercent=", commitPercent);
@@ -334,7 +487,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
     for (int i=0; i<nWriteThreads; i++) {
       Thread thread = new Thread("WRITER"+i) {
-        Random rand = new Random(random.nextInt());
+        Random rand = new Random(random().nextInt());
 
         @Override
         public void run() {
@@ -355,7 +508,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
                 if (rand.nextInt(100) < softCommitPercent) {
                   verbose("softCommit start");
-                  assertU(h.commit("softCommit","true"));
+                  assertU(TestHarness.commit("softCommit","true"));
                   verbose("softCommit end");
                 } else {
                   verbose("hardCommit start");
@@ -399,14 +552,40 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
               long nextVal = Math.abs(val)+1;
 
               if (oper < commitPercent + deletePercent) {
+                boolean opt = rand.nextInt() < optimisticPercent;
+                boolean correct = opt ? rand.nextInt() < optimisticCorrectPercent : false;
+                long badVersion = correct ? 0 : badVersion(rand, info.version);
+
                 if (VERBOSE) {
-                  verbose("deleting id",id,"val=",nextVal);
+                  if (!opt) {
+                    verbose("deleting id",id,"val=",nextVal);
+                  } else {
+                    verbose("deleting id",id,"val=",nextVal, "existing_version=",info.version,  (correct ? "" : (" bad_version=" + badVersion)));
+                  }
                 }
 
                 // assertU("<delete><id>" + id + "</id></delete>");
-                Long version = deleteAndGetVersion(Integer.toString(id), null);
+                Long version = null;
 
-                model.put(id, new DocInfo(version, -nextVal));
+                if (opt) {
+                  if (correct) {
+                    version = deleteAndGetVersion(Integer.toString(id), params("_version_", Long.toString(info.version)));
+                  } else {
+                    try {
+                      version = deleteAndGetVersion(Integer.toString(id), params("_version_", Long.toString(badVersion)));
+                      fail();
+                    } catch (SolrException se) {
+                      assertEquals(409, se.code());
+                    }
+                  }
+                } else {
+                  version = deleteAndGetVersion(Integer.toString(id), null);
+                }
+
+                if (version != null) {
+                  model.put(id, new DocInfo(version, -nextVal));
+                }
+
                 if (VERBOSE) {
                   verbose("deleting id", id, "val=",nextVal,"DONE");
                 }
@@ -421,13 +600,40 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
                   verbose("deleteByQuery id",id, "val=",nextVal,"DONE");
                 }
               } else {
+                boolean opt = rand.nextInt() < optimisticPercent;
+                boolean correct = opt ? rand.nextInt() < optimisticCorrectPercent : false;
+                long badVersion = correct ? 0 : badVersion(rand, info.version);
+
                 if (VERBOSE) {
-                  verbose("adding id", id, "val=", nextVal);
+                  if (!opt) {
+                    verbose("adding id",id,"val=",nextVal);
+                  } else {
+                    verbose("adding id",id,"val=",nextVal, "existing_version=",info.version,  (correct ? "" : (" bad_version=" + badVersion)));
+                  }
                 }
 
-                // assertU(adoc("id",Integer.toString(id), field, Long.toString(nextVal)));
-                Long version = addAndGetVersion(sdoc("id", Integer.toString(id), field, Long.toString(nextVal)), null);
-                model.put(id, new DocInfo(version, nextVal));
+                Long version = null;
+                SolrInputDocument sd = sdoc("id", Integer.toString(id), field, Long.toString(nextVal));
+
+                if (opt) {
+                  if (correct) {
+                    version = addAndGetVersion(sd, params("_version_", Long.toString(info.version)));
+                  } else {
+                    try {
+                      version = addAndGetVersion(sd, params("_version_", Long.toString(badVersion)));
+                      fail();
+                    } catch (SolrException se) {
+                      assertEquals(409, se.code());
+                    }
+                  }
+                } else {
+                  version = addAndGetVersion(sd, null);
+                }
+
+
+                if (version != null) {
+                  model.put(id, new DocInfo(version, nextVal));
+                }
 
                 if (VERBOSE) {
                   verbose("adding id", id, "val=", nextVal,"DONE");
@@ -442,8 +648,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
           }
         } catch (Throwable e) {
           operations.set(-1L);
-          SolrException.log(log, e);
-          fail(e.getMessage());
+          throw new RuntimeException(e);
         }
         }
       };
@@ -454,7 +659,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
     for (int i=0; i<nReadThreads; i++) {
       Thread thread = new Thread("READER"+i) {
-        Random rand = new Random(random.nextInt());
+        Random rand = new Random(random().nextInt());
 
         @Override
         public void run() {
@@ -504,12 +709,11 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
               }
             }
           }
-          catch (Throwable e) {
-            operations.set(-1L);
-            SolrException.log(log, e);
-            fail(e.getMessage());
-          }
+        catch (Throwable e) {
+          operations.set(-1L);
+          throw new RuntimeException(e);
         }
+      }
       };
 
       threads.add(thread);
@@ -533,19 +737,21 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
     clearIndex();
     assertU(commit());
 
-    final int commitPercent = 5 + random.nextInt(20);
-    final int softCommitPercent = 30+random.nextInt(75); // what percent of the commits are soft
-    final int deletePercent = 4+random.nextInt(25);
-    final int deleteByQueryPercent = 1 + random.nextInt(5);
-    final int ndocs = 5 + (random.nextBoolean() ? random.nextInt(25) : random.nextInt(200));
-    int nWriteThreads = 5 + random.nextInt(25);
+    final int commitPercent = 5 + random().nextInt(20);
+    final int softCommitPercent = 30+random().nextInt(75); // what percent of the commits are soft
+    final int deletePercent = 4+random().nextInt(25);
+    final int deleteByQueryPercent = 1 + random().nextInt(5);
+    final int optimisticPercent = 1+random().nextInt(50);    // percent change that an update uses optimistic locking
+    final int optimisticCorrectPercent = 25+random().nextInt(70);    // percent change that a version specified will be correct
+    final int ndocs = 5 + (random().nextBoolean() ? random().nextInt(25) : random().nextInt(200));
+    int nWriteThreads = 5 + random().nextInt(25);
 
     final int maxConcurrentCommits = nWriteThreads;   // number of committers at a time... it should be <= maxWarmingSearchers
 
         // query variables
     final int percentRealtimeQuery = 75;
     final AtomicLong operations = new AtomicLong(50000);  // number of query operations to perform in total
-    int nReadThreads = 5 + random.nextInt(25);
+    int nReadThreads = 5 + random().nextInt(25);
 
 
 
@@ -557,7 +763,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
     for (int i=0; i<nWriteThreads; i++) {
       Thread thread = new Thread("WRITER"+i) {
-        Random rand = new Random(random.nextInt());
+        Random rand = new Random(random().nextInt());
 
         @Override
         public void run() {
@@ -577,7 +783,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
                 if (rand.nextInt(100) < softCommitPercent) {
                   verbose("softCommit start");
-                  assertU(h.commit("softCommit","true"));
+                  assertU(TestHarness.commit("softCommit","true"));
                   verbose("softCommit end");
                 } else {
                   verbose("hardCommit start");
@@ -678,11 +884,10 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
               lastId = id;
             }
           }
-        } catch (Throwable e) {
-          operations.set(-1L);
-          SolrException.log(log, e);
-          fail(e.getMessage());
-        }
+          } catch (Throwable e) {
+            operations.set(-1L);
+            throw new RuntimeException(e);
+          }
         }
       };
 
@@ -692,7 +897,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
     for (int i=0; i<nReadThreads; i++) {
       Thread thread = new Thread("READER"+i) {
-        Random rand = new Random(random.nextInt());
+        Random rand = new Random(random().nextInt());
 
         @Override
         public void run() {
@@ -741,11 +946,9 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
                 }
               }
             }
-          }
-          catch (Throwable e) {
+          } catch (Throwable e) {
             operations.set(-1L);
-            SolrException.log(log, e);
-            fail(e.getMessage());
+            throw new RuntimeException(e);
           }
         }
       };
@@ -770,19 +973,19 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
     clearIndex();
     assertU(commit());
 
-    final int commitPercent = 5 + random.nextInt(20);
-    final int softCommitPercent = 30+random.nextInt(75); // what percent of the commits are soft
-    final int deletePercent = 4+random.nextInt(25);
+    final int commitPercent = 5 + random().nextInt(20);
+    final int softCommitPercent = 30+random().nextInt(75); // what percent of the commits are soft
+    final int deletePercent = 4+random().nextInt(25);
     final int deleteByQueryPercent = 0;  // delete-by-query can't be reordered on replicas
-    final int ndocs = 5 + (random.nextBoolean() ? random.nextInt(25) : random.nextInt(200));
-    int nWriteThreads = 5 + random.nextInt(25);
+    final int ndocs = 5 + (random().nextBoolean() ? random().nextInt(25) : random().nextInt(200));
+    int nWriteThreads = 5 + random().nextInt(25);
 
     final int maxConcurrentCommits = nWriteThreads;   // number of committers at a time... it should be <= maxWarmingSearchers
 
         // query variables
     final int percentRealtimeQuery = 75;
     final AtomicLong operations = new AtomicLong(50000);  // number of query operations to perform in total
-    int nReadThreads = 5 + random.nextInt(25);
+    int nReadThreads = 5 + random().nextInt(25);
 
     initModel(ndocs);
 
@@ -795,7 +998,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
     for (int i=0; i<nWriteThreads; i++) {
       Thread thread = new Thread("WRITER"+i) {
-        Random rand = new Random(random.nextInt());
+        Random rand = new Random(random().nextInt());
 
         @Override
         public void run() {
@@ -815,7 +1018,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
                 if (rand.nextInt(100) < softCommitPercent) {
                   verbose("softCommit start");
-                  assertU(h.commit("softCommit","true"));
+                  assertU(TestHarness.commit("softCommit","true"));
                   verbose("softCommit end");
                 } else {
                   verbose("hardCommit start");
@@ -870,7 +1073,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
               if (oper < commitPercent + deletePercent) {
                 verbose("deleting id",id,"val=",nextVal,"version",version);
 
-                Long returnedVersion = deleteAndGetVersion(Integer.toString(id), params("_version_",Long.toString(-version), SEEN_LEADER,SEEN_LEADER_VAL));
+                Long returnedVersion = deleteAndGetVersion(Integer.toString(id), params("_version_",Long.toString(-version), DISTRIB_UPDATE_PARAM,FROM_LEADER));
 
                 // TODO: returning versions for these types of updates is redundant
                 // but if we do return, they had better be equal
@@ -892,7 +1095,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
               } else {
                 verbose("adding id", id, "val=", nextVal,"version",version);
 
-                Long returnedVersion = addAndGetVersion(sdoc("id", Integer.toString(id), field, Long.toString(nextVal), "_version_",Long.toString(version)), params(SEEN_LEADER,SEEN_LEADER_VAL));
+                Long returnedVersion = addAndGetVersion(sdoc("id", Integer.toString(id), field, Long.toString(nextVal), "_version_",Long.toString(version)), params(DISTRIB_UPDATE_PARAM,FROM_LEADER));
                 if (returnedVersion != null) {
                   assertEquals(version, returnedVersion.longValue());
                 }
@@ -916,11 +1119,10 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
               lastId = id;
             }
           }
-        } catch (Throwable e) {
-          operations.set(-1L);
-          SolrException.log(log, e);
-          fail(e.getMessage());
-        }
+          } catch (Throwable e) {
+            operations.set(-1L);
+            throw new RuntimeException(e);
+          }
         }
       };
 
@@ -930,7 +1132,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
     for (int i=0; i<nReadThreads; i++) {
       Thread thread = new Thread("READER"+i) {
-        Random rand = new Random(random.nextInt());
+        Random rand = new Random(random().nextInt());
 
         @Override
         public void run() {
@@ -979,11 +1181,9 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
                 }
               }
             }
-          }
-          catch (Throwable e) {
+          } catch (Throwable e) {
             operations.set(-1L);
-            SolrException.log(log, e);
-            fail(e.getMessage());
+            throw new RuntimeException(e);
           }
         }
       };
@@ -1002,6 +1202,12 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
   }
 
+
+
+
+
+
+
   // This points to the live model when state is ACTIVE, but a snapshot of the
   // past when recovering.
   volatile ConcurrentHashMap<Integer,DocInfo> visibleModel;
@@ -1010,22 +1216,24 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
   // and tests the ability to buffer updates and apply them later
   @Test
   public void testStressRecovery() throws Exception {
+    assumeFalse("FIXME: This test is horribly slow sometimes on Windows!", Constants.WINDOWS);
     clearIndex();
     assertU(commit());
 
-    final int commitPercent = 5 + random.nextInt(10);
-    final int softCommitPercent = 30+random.nextInt(75); // what percent of the commits are soft
-    final int deletePercent = 4+random.nextInt(25);
+    final int commitPercent = 5 + random().nextInt(10);
+    final int softCommitPercent = 30+random().nextInt(75); // what percent of the commits are soft
+    final int deletePercent = 4+random().nextInt(25);
     final int deleteByQueryPercent = 0;  // real-time get isn't currently supported with delete-by-query
-    final int ndocs = 5 + (random.nextBoolean() ? random.nextInt(25) : random.nextInt(200));
-    int nWriteThreads = 2 + random.nextInt(10);  // fewer write threads to give recovery thread more of a chance
+    final int ndocs = 5 + (random().nextBoolean() ? random().nextInt(25) : random().nextInt(200));
+    int nWriteThreads = 2 + random().nextInt(10);  // fewer write threads to give recovery thread more of a chance
 
     final int maxConcurrentCommits = nWriteThreads;   // number of committers at a time... it should be <= maxWarmingSearchers
 
         // query variables
     final int percentRealtimeQuery = 75;
+    final int percentGetLatestVersions = random().nextInt(4);
     final AtomicLong operations = new AtomicLong(atLeast(75));  // number of recovery loops to perform
-    int nReadThreads = 2 + random.nextInt(10);  // fewer read threads to give writers more of a chance
+    int nReadThreads = 2 + random().nextInt(10);  // fewer read threads to give writers more of a chance
 
     initModel(ndocs);
 
@@ -1051,7 +1259,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
       final int threadNum = i;
 
       Thread thread = new Thread("WRITER"+i) {
-        Random rand = new Random(random.nextInt());
+        Random rand = new Random(random().nextInt());
         Semaphore writePermission = writePermissions[threadNum];
 
         @Override
@@ -1078,7 +1286,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
                   if (uLog.getState() != UpdateLog.State.ACTIVE) version = -1;
                   if (rand.nextInt(100) < softCommitPercent) {
                     verbose("softCommit start");
-                    assertU(h.commit("softCommit","true"));
+                    assertU(TestHarness.commit("softCommit","true"));
                     verbose("softCommit end");
                   } else {
                     verbose("hardCommit start");
@@ -1135,7 +1343,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
               if (oper < commitPercent + deletePercent) {
                 verbose("deleting id",id,"val=",nextVal,"version",version);
 
-                Long returnedVersion = deleteAndGetVersion(Integer.toString(id), params("_version_",Long.toString(-version), SEEN_LEADER,SEEN_LEADER_VAL));
+                Long returnedVersion = deleteAndGetVersion(Integer.toString(id), params("_version_",Long.toString(-version), DISTRIB_UPDATE_PARAM,FROM_LEADER));
 
                 // TODO: returning versions for these types of updates is redundant
                 // but if we do return, they had better be equal
@@ -1157,7 +1365,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
               } else {
                 verbose("adding id", id, "val=", nextVal,"version",version);
 
-                Long returnedVersion = addAndGetVersion(sdoc("id", Integer.toString(id), field, Long.toString(nextVal), "_version_",Long.toString(version)), params(SEEN_LEADER,SEEN_LEADER_VAL));
+                Long returnedVersion = addAndGetVersion(sdoc("id", Integer.toString(id), field, Long.toString(nextVal), "_version_",Long.toString(version)), params(DISTRIB_UPDATE_PARAM,FROM_LEADER));
                 if (returnedVersion != null) {
                   assertEquals(version, returnedVersion.longValue());
                 }
@@ -1181,11 +1389,10 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
               lastId = id;
             }
           }
-        } catch (Throwable e) {
-          operations.set(-1L);
-          SolrException.log(log, e);
-          fail(e.getMessage());
-        }
+          } catch (Throwable e) {
+            operations.set(-1L);
+            throw new RuntimeException(e);
+          }
         }
       };
 
@@ -1195,7 +1402,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
     for (int i=0; i<nReadThreads; i++) {
       Thread thread = new Thread("READER"+i) {
-        Random rand = new Random(random.nextInt());
+        Random rand = new Random(random().nextInt());
 
         @Override
         public void run() {
@@ -1249,11 +1456,16 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
                 }
               }
             }
-          }
-          catch (Throwable e) {
+            
+            
+            if (rand.nextInt(100) < percentGetLatestVersions) {
+              getLatestVersions();
+              // TODO: some sort of validation that the latest version is >= to the latest version we added?
+            }
+
+          } catch (Throwable e) {
             operations.set(-1L);
-            SolrException.log(log, e);
-            fail(e.getMessage());
+            throw new RuntimeException(e);
           }
         }
       };
@@ -1282,7 +1494,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
       assertTrue(uLog.getState() == UpdateLog.State.BUFFERING);
 
       // sometimes wait for a second to allow time for writers to write something
-      if (random.nextBoolean()) Thread.sleep(random.nextInt(10)+1);
+      if (random().nextBoolean()) Thread.sleep(random().nextInt(10)+1);
 
       Future<UpdateLog.RecoveryInfo> recoveryInfoF = uLog.applyBufferedUpdates();
       if (recoveryInfoF != null) {
@@ -1292,7 +1504,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
         while (recInfo == null) {
           try {
             // wait a short period of time for recovery to complete (and to give a chance for more writers to concurrently add docs)
-            recInfo = recoveryInfoF.get(random.nextInt(100/nWriteThreads), TimeUnit.MILLISECONDS);
+            recInfo = recoveryInfoF.get(random().nextInt(100/nWriteThreads), TimeUnit.MILLISECONDS);
           } catch (TimeoutException e) {
             // idle one more write thread
             verbose("Operation",operations.get(),"Draining permits for write thread",writeThreadNumber);
@@ -1300,7 +1512,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
             if (writeThreadNumber >= nWriteThreads) {
               // if we hit the end, back up and give a few write permits
               writeThreadNumber--;
-              writePermissions[writeThreadNumber].release(random.nextInt(2) + 1);
+              writePermissions[writeThreadNumber].release(random().nextInt(2) + 1);
             }
 
             // throttle readers so they don't steal too much CPU from the recovery thread
@@ -1335,6 +1547,16 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
   }
 
 
+  List<Long> getLatestVersions() {
+    List<Long> recentVersions;
+    UpdateLog.RecentUpdates startingRecentUpdates = h.getCore().getUpdateHandler().getUpdateLog().getRecentUpdates();
+    try {
+      recentVersions = startingRecentUpdates.getVersions(100);
+    } finally {
+      startingRecentUpdates.close();
+    }
+    return recentVersions;
+  }
 
 
 
@@ -1345,19 +1567,19 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
   DirectoryReader reader;
   @Test
   public void testStressLuceneNRT() throws Exception {
-    final int commitPercent = 5 + random.nextInt(20);
-    final int softCommitPercent = 30+random.nextInt(75); // what percent of the commits are soft
-    final int deletePercent = 4+random.nextInt(25);
-    final int deleteByQueryPercent = 1+random.nextInt(5);
-    final int ndocs = 5 + (random.nextBoolean() ? random.nextInt(25) : random.nextInt(200));
-    int nWriteThreads = 5 + random.nextInt(25);
+    final int commitPercent = 5 + random().nextInt(20);
+    final int softCommitPercent = 30+random().nextInt(75); // what percent of the commits are soft
+    final int deletePercent = 4+random().nextInt(25);
+    final int deleteByQueryPercent = 1+random().nextInt(5);
+    final int ndocs = 5 + (random().nextBoolean() ? random().nextInt(25) : random().nextInt(200));
+    int nWriteThreads = 5 + random().nextInt(25);
 
     final int maxConcurrentCommits = nWriteThreads;   // number of committers at a time... it should be <= maxWarmingSearchers
 
     final AtomicLong operations = new AtomicLong(1000);  // number of query operations to perform in total - crank up if
-    int nReadThreads = 5 + random.nextInt(25);
-    final boolean tombstones = random.nextBoolean();
-    final boolean syncCommits = random.nextBoolean();
+    int nReadThreads = 5 + random().nextInt(25);
+    final boolean tombstones = random().nextBoolean();
+    final boolean syncCommits = random().nextBoolean();
 
     verbose("commitPercent=", commitPercent);
     verbose("softCommitPercent=",softCommitPercent);
@@ -1401,7 +1623,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
     Directory dir = newDirectory();
 
-    final RandomIndexWriter writer = new RandomIndexWriter(random, dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+    final RandomIndexWriter writer = new RandomIndexWriter(random(), dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
     writer.setDoRandomForceMergeAssert(false);
 
     // writer.commit();
@@ -1412,7 +1634,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
     for (int i=0; i<nWriteThreads; i++) {
       Thread thread = new Thread("WRITER"+i) {
-        Random rand = new Random(random.nextInt());
+        Random rand = new Random(random().nextInt());
 
         @Override
         public void run() {
@@ -1588,7 +1810,7 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
     for (int i=0; i<nReadThreads; i++) {
       Thread thread = new Thread("READER"+i) {
-        Random rand = new Random(random.nextInt());
+        Random rand = new Random(random().nextInt());
 
         @Override
         public void run() {
@@ -1645,11 +1867,9 @@ public class TestRealTimeGet extends SolrTestCaseJ4 {
 
               r.decRef();
             }
-          }
-          catch (Throwable e) {
+          } catch (Throwable e) {
             operations.set(-1L);
-            SolrException.log(log,e);
-            fail(e.toString());
+            throw new RuntimeException(e);
           }
         }
       };

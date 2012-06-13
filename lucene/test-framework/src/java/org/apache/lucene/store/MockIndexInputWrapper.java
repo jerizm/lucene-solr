@@ -3,7 +3,7 @@ package org.apache.lucene.store;
 import java.io.IOException;
 import java.util.Map;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -65,7 +65,7 @@ public class MockIndexInputWrapper extends IndexInput {
   }
 
   @Override
-  public Object clone() {
+  public MockIndexInputWrapper clone() {
     ensureOpen();
     dir.inputCloneCount.incrementAndGet();
     IndexInput iiclone = (IndexInput) delegate.clone();

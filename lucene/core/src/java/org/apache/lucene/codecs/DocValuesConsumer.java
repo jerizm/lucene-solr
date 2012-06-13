@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,9 +18,19 @@ package org.apache.lucene.codecs;
  */
 import java.io.IOException;
 
-import org.apache.lucene.document.DocValuesField;
+import org.apache.lucene.document.ByteDocValuesField;
+import org.apache.lucene.document.DerefBytesDocValuesField;
+import org.apache.lucene.document.DoubleDocValuesField;
 import org.apache.lucene.document.Field;
+import org.apache.lucene.document.FloatDocValuesField;
+import org.apache.lucene.document.IntDocValuesField;
+import org.apache.lucene.document.LongDocValuesField;
+import org.apache.lucene.document.PackedLongDocValuesField;
+import org.apache.lucene.document.ShortDocValuesField;
+import org.apache.lucene.document.SortedBytesDocValuesField;
+import org.apache.lucene.document.StraightBytesDocValuesField;
 import org.apache.lucene.index.DocValues.Source;
+import org.apache.lucene.index.DocValues.Type;
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.index.MergeState;
@@ -40,6 +50,7 @@ public abstract class DocValuesConsumer {
 
   protected final BytesRef spare = new BytesRef();
 
+  protected abstract Type getType();
   /**
    * Adds the given {@link IndexableField} instance to this
    * {@link DocValuesConsumer}
@@ -65,7 +76,20 @@ public abstract class DocValuesConsumer {
    * @throws IOException
    */
   public abstract void finish(int docCount) throws IOException;
-
+  
+  
+  /**
+   * Returns the value size this consumer accepts or <tt>-1</tt> iff this
+   * consumer is value size agnostic ie. accepts variable length values.
+   * <p>
+   * NOTE: the return value is undefined until the consumer has successfully
+   * consumed at least one value.
+   * 
+   * @return the value size this consumer accepts or <tt>-1</tt> iff this
+   *         consumer is value size agnostic ie. accepts variable length values.
+   */
+  public abstract int getValueSize();
+  
   /**
    * Merges the given {@link org.apache.lucene.index.MergeState} into
    * this {@link DocValuesConsumer}.
@@ -92,7 +116,7 @@ public abstract class DocValuesConsumer {
     }
     // only finish if no exception is thrown!
     if (hasMerged) {
-      finish(mergeState.mergedDocCount);
+      finish(mergeState.segmentInfo.getDocCount());
     }
   }
 
@@ -110,31 +134,50 @@ public abstract class DocValuesConsumer {
     final Source source = reader.getDirectSource();
     assert source != null;
     int docID = docBase;
-    final DocValues.Type type = reader.type();
+    final Type type = getType();
     final Field scratchField;
     switch(type) {
     case VAR_INTS:
-    case FIXED_INTS_16:
-    case FIXED_INTS_32:
-    case FIXED_INTS_64:
+      scratchField = new PackedLongDocValuesField("", (long) 0);
+      break;
     case FIXED_INTS_8:
-      scratchField = new DocValuesField("", (long) 0, type);
+      scratchField = new ByteDocValuesField("", (byte) 0);
+      break;
+    case FIXED_INTS_16:
+      scratchField = new ShortDocValuesField("", (short) 0);
+      break;
+    case FIXED_INTS_32:
+      scratchField = new IntDocValuesField("", 0);
+      break;
+    case FIXED_INTS_64:
+      scratchField = new LongDocValuesField("", (long) 0);
       break;
     case FLOAT_32:
+      scratchField = new FloatDocValuesField("", 0f);
+      break;
     case FLOAT_64:
-      scratchField = new DocValuesField("", (double) 0, type);
+      scratchField = new DoubleDocValuesField("", 0d);
       break;
     case BYTES_FIXED_STRAIGHT:
-    case BYTES_FIXED_DEREF:
-    case BYTES_FIXED_SORTED:
+      scratchField = new StraightBytesDocValuesField("", new BytesRef(), true);
+      break;
     case BYTES_VAR_STRAIGHT:
+      scratchField = new StraightBytesDocValuesField("", new BytesRef(), false);
+      break;
+    case BYTES_FIXED_DEREF:
+      scratchField = new DerefBytesDocValuesField("", new BytesRef(), true);
+      break;
     case BYTES_VAR_DEREF:
+      scratchField = new DerefBytesDocValuesField("", new BytesRef(), false);
+      break;
+    case BYTES_FIXED_SORTED:
+      scratchField = new SortedBytesDocValuesField("", new BytesRef(), true);
+      break;
     case BYTES_VAR_SORTED:
-      scratchField = new DocValuesField("", new BytesRef(), type);
+      scratchField = new SortedBytesDocValuesField("", new BytesRef(), false);
       break;
     default:
-      assert false;
-      scratchField = null;
+      throw new IllegalStateException("unknown Type: " + type);
     }
     for (int i = 0; i < docCount; i++) {
       if (liveDocs == null || liveDocs.get(i)) {
@@ -160,25 +203,35 @@ public abstract class DocValuesConsumer {
    */
   protected void mergeDoc(Field scratchField, Source source, int docID, int sourceDoc)
       throws IOException {
-    switch(source.type()) {
+    switch(getType()) {
     case BYTES_FIXED_DEREF:
     case BYTES_FIXED_SORTED:
     case BYTES_FIXED_STRAIGHT:
     case BYTES_VAR_DEREF:
     case BYTES_VAR_SORTED:
     case BYTES_VAR_STRAIGHT:
-      scratchField.setValue(source.getBytes(sourceDoc, spare));
+      scratchField.setBytesValue(source.getBytes(sourceDoc, spare));
+      break;
+    case FIXED_INTS_8:
+      scratchField.setByteValue((byte) source.getInt(sourceDoc));
       break;
     case FIXED_INTS_16:
+      scratchField.setShortValue((short) source.getInt(sourceDoc));
+      break;
     case FIXED_INTS_32:
+      scratchField.setIntValue((int) source.getInt(sourceDoc));
+      break;
     case FIXED_INTS_64:
-    case FIXED_INTS_8:
+      scratchField.setLongValue(source.getInt(sourceDoc));
+      break;
     case VAR_INTS:
-      scratchField.setValue(source.getInt(sourceDoc));
+      scratchField.setLongValue(source.getInt(sourceDoc));
       break;
     case FLOAT_32:
+      scratchField.setFloatValue((float) source.getFloat(sourceDoc));
+      break;
     case FLOAT_64:
-      scratchField.setValue(source.getFloat(sourceDoc));
+      scratchField.setDoubleValue(source.getFloat(sourceDoc));
       break;
     }
     add(docID, scratchField);

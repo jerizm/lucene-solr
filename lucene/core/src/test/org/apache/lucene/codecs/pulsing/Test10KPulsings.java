@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.pulsing;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -56,13 +56,13 @@ public class Test10KPulsings extends LuceneTestCase {
     File f = _TestUtil.getTempDir("10kpulsed");
     MockDirectoryWrapper dir = newFSDirectory(f);
     dir.setCheckIndexOnClose(false); // we do this ourselves explicitly
-    RandomIndexWriter iw = new RandomIndexWriter(random, dir, 
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setCodec(cp));
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, 
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setCodec(cp));
     
     Document document = new Document();
     FieldType ft = new FieldType(TextField.TYPE_STORED);
     
-    switch(_TestUtil.nextInt(random, 0, 2)) {
+    switch(_TestUtil.nextInt(random(), 0, 2)) {
       case 0: ft.setIndexOptions(IndexOptions.DOCS_ONLY); break;
       case 1: ft.setIndexOptions(IndexOptions.DOCS_AND_FREQS); break;
       default: ft.setIndexOptions(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS); break; 
@@ -74,7 +74,7 @@ public class Test10KPulsings extends LuceneTestCase {
     NumberFormat df = new DecimalFormat("00000", new DecimalFormatSymbols(Locale.ENGLISH));
 
     for (int i = 0; i < 10050; i++) {
-      field.setValue(df.format(i));
+      field.setStringValue(df.format(i));
       iw.addDocument(document);
     }
     
@@ -87,7 +87,7 @@ public class Test10KPulsings extends LuceneTestCase {
     for (int i = 0; i < 10050; i++) {
       String expected = df.format(i);
       assertEquals(expected, te.next().utf8ToString());
-      de = _TestUtil.docs(random, te, null, de, false);
+      de = _TestUtil.docs(random(), te, null, de, false);
       assertTrue(de.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
       assertEquals(DocIdSetIterator.NO_MORE_DOCS, de.nextDoc());
     }
@@ -101,19 +101,19 @@ public class Test10KPulsings extends LuceneTestCase {
    */
   public void test10kNotPulsed() throws Exception {
     // we always run this test with pulsing codec.
-    int freqCutoff = _TestUtil.nextInt(random, 1, 10);
+    int freqCutoff = _TestUtil.nextInt(random(), 1, 10);
     Codec cp = _TestUtil.alwaysPostingsFormat(new Pulsing40PostingsFormat(freqCutoff));
     
     File f = _TestUtil.getTempDir("10knotpulsed");
     MockDirectoryWrapper dir = newFSDirectory(f);
     dir.setCheckIndexOnClose(false); // we do this ourselves explicitly
-    RandomIndexWriter iw = new RandomIndexWriter(random, dir, 
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setCodec(cp));
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, 
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setCodec(cp));
     
     Document document = new Document();
     FieldType ft = new FieldType(TextField.TYPE_STORED);
     
-    switch(_TestUtil.nextInt(random, 0, 2)) {
+    switch(_TestUtil.nextInt(random(), 0, 2)) {
       case 0: ft.setIndexOptions(IndexOptions.DOCS_ONLY); break;
       case 1: ft.setIndexOptions(IndexOptions.DOCS_AND_FREQS); break;
       default: ft.setIndexOptions(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS); break; 
@@ -132,7 +132,7 @@ public class Test10KPulsings extends LuceneTestCase {
         sb.append(df.format(i));
         sb.append(' '); // whitespace
       }
-      field.setValue(sb.toString());
+      field.setStringValue(sb.toString());
       iw.addDocument(document);
     }
     
@@ -145,7 +145,7 @@ public class Test10KPulsings extends LuceneTestCase {
     for (int i = 0; i < 10050; i++) {
       String expected = df.format(i);
       assertEquals(expected, te.next().utf8ToString());
-      de = _TestUtil.docs(random, te, null, de, false);
+      de = _TestUtil.docs(random(), te, null, de, false);
       assertTrue(de.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
       assertEquals(DocIdSetIterator.NO_MORE_DOCS, de.nextDoc());
     }

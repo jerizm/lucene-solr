@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -38,6 +38,7 @@ public class SolrException extends RuntimeException {
     UNAUTHORIZED( 401 ),
     FORBIDDEN( 403 ),
     NOT_FOUND( 404 ),
+    CONFLICT( 409 ),
     SERVER_ERROR( 500 ),
     SERVICE_UNAVAILABLE( 503 ),
     UNKNOWN(0);
@@ -56,7 +57,8 @@ public class SolrException extends RuntimeException {
   };
 
   public SolrException(ErrorCode code, String msg) {
-    this(code, msg, null);
+    super(msg);
+    this.code = code.code;
   }
   public SolrException(ErrorCode code, String msg, Throwable th) {
     super(msg, th);
@@ -64,7 +66,8 @@ public class SolrException extends RuntimeException {
   }
 
   public SolrException(ErrorCode code, Throwable th) {
-    this(code, null, th);
+    super(th);
+    this.code = code.code;
   }
   
   int code=0;
@@ -73,6 +76,10 @@ public class SolrException extends RuntimeException {
 
   public void log(Logger log) { log(log,this); }
   public static void log(Logger log, Throwable e) {
+    if (e instanceof SolrException
+        && ((SolrException) e).code() == ErrorCode.SERVICE_UNAVAILABLE.code) {
+      return;
+    }
     String stackTrace = toStr(e);
     String ignore = doIgnore(e, stackTrace);
     if (ignore != null) {
@@ -84,6 +91,10 @@ public class SolrException extends RuntimeException {
   }
 
   public static void log(Logger log, String msg, Throwable e) {
+    if (e instanceof SolrException
+        && ((SolrException) e).code() == ErrorCode.SERVICE_UNAVAILABLE.code) {
+      log(log, msg);
+    }
     String stackTrace = msg + ':' + toStr(e);
     String ignore = doIgnore(e, stackTrace);
     if (ignore != null) {
@@ -107,7 +118,7 @@ public class SolrException extends RuntimeException {
   @Override
   public String toString() { return super.toString(); }
 
-  public static String toStr(Throwable e) {
+  public static String toStr(Throwable e) {   
     CharArrayWriter cw = new CharArrayWriter();
     PrintWriter pw = new PrintWriter(cw);
     e.printStackTrace(pw);

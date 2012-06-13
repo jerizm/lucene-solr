@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,7 +23,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.index.IndexReader;
@@ -42,10 +42,10 @@ public class TestBooleanScorer extends LuceneTestCase
 
     String[] values = new String[] { "1", "2", "3", "4" };
 
-    RandomIndexWriter writer = new RandomIndexWriter(random, directory);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), directory);
     for (int i = 0; i < values.length; i++) {
       Document doc = new Document();
-      doc.add(newField(FIELD, values[i], StringField.TYPE_STORED));
+      doc.add(newStringField(FIELD, values[i], Field.Store.YES));
       writer.addDocument(doc);
     }
     IndexReader ir = writer.getReader();
@@ -73,7 +73,7 @@ public class TestBooleanScorer extends LuceneTestCase
     // changes, we have a test to back it up.
     
     Directory directory = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, directory);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), directory);
     writer.commit();
     IndexReader ir = writer.getReader();
     writer.close();
@@ -127,12 +127,12 @@ public class TestBooleanScorer extends LuceneTestCase
 
   public void testMoreThan32ProhibitedClauses() throws Exception {
     final Directory d = newDirectory();
-    final RandomIndexWriter w = new RandomIndexWriter(random, d);
+    final RandomIndexWriter w = new RandomIndexWriter(random(), d);
     Document doc = new Document();
-    doc.add(new TextField("field", "0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33"));
+    doc.add(new TextField("field", "0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33", Field.Store.NO));
     w.addDocument(doc);
     doc = new Document();
-    doc.add(new TextField("field", "33"));
+    doc.add(new TextField("field", "33", Field.Store.NO));
     w.addDocument(doc);
     final IndexReader r = w.getReader();
     w.close();

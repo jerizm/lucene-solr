@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,6 +21,7 @@ import java.io.IOException;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.*;
+import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.FieldsEnum;
 import org.apache.lucene.index.IndexReader;
@@ -40,7 +41,7 @@ public class TestMultiThreadTermVectors extends LuceneTestCase {
   public void setUp() throws Exception {
     super.setUp();
     directory = newDirectory();
-    IndexWriter writer = new IndexWriter(directory, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random)).setMergePolicy(newLogMergePolicy()));
+    IndexWriter writer = new IndexWriter(directory, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMergePolicy(newLogMergePolicy()));
     //writer.setUseCompoundFile(false);
     //writer.infoStream = System.out;
     FieldType customType = new FieldType(TextField.TYPE_STORED);
@@ -67,7 +68,7 @@ public class TestMultiThreadTermVectors extends LuceneTestCase {
     IndexReader reader = null;
     
     try {
-      reader = IndexReader.open(directory);
+      reader = DirectoryReader.open(directory);
       for(int i = 1; i <= numThreads; i++)
         testTermPositionVectors(reader, i);
       

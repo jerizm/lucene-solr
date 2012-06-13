@@ -1,6 +1,6 @@
 package org.apache.solr.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,13 +22,14 @@ import java.io.StringReader;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.lucene.analysis.BaseTokenStreamTestCase;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.TokenStream;
 
 /**
  * Simple tests to ensure the Shingle filter factory works.
  */
-public class TestShingleFilterFactory extends BaseTokenTestCase { 
+public class TestShingleFilterFactory extends BaseTokenStreamTestCase {
   /**
    * Test the defaults
    */

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -55,6 +55,9 @@ public interface UpdateParams
   /** Select the update processor chain to use.  A RequestHandler may or may not respect this parameter */
   public static final String UPDATE_CHAIN = "update.chain";
 
+  /** Override the content type used for UpdateLoader **/
+  public static final String ASSUME_CONTENT_TYPE = "update.contentType";
+  
   /**
    * If optimizing, set the maximum number of segments left in the index after optimization.  1 is the default (and is equivalent to calling IndexWriter.optimize() in Lucene).
    */

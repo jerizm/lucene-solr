@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,17 +18,18 @@
 package org.apache.solr.client.solrj;
 
 import junit.framework.Assert;
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.MultiThreadedHttpConnectionManager;
 import org.apache.commons.io.FileUtils;
+import org.apache.http.client.HttpClient;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.client.solrj.embedded.JettySolrRunner;
-import org.apache.solr.client.solrj.impl.CommonsHttpSolrServer;
+import org.apache.solr.client.solrj.impl.HttpClientUtil;
+import org.apache.solr.client.solrj.impl.HttpSolrServer;
 import org.apache.solr.client.solrj.impl.LBHttpSolrServer;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.client.solrj.response.UpdateResponse;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.util.AbstractSolrTestCase;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -43,7 +44,6 @@ import java.util.Set;
 /**
  * Test for LBHttpSolrServer
  *
- *
  * @since solr 1.4
  */
 public class TestLBHttpSolrServer extends LuceneTestCase {
@@ -52,11 +52,13 @@ public class TestLBHttpSolrServer extends LuceneTestCase {
 
   // TODO: fix this test to not require FSDirectory
   static String savedFactory;
+
   @BeforeClass
   public static void beforeClass() throws Exception {
     savedFactory = System.getProperty("solr.DirectoryFactory");
     System.setProperty("solr.directoryFactory", "org.apache.solr.core.MockFSDirectoryFactory");
   }
+
   @AfterClass
   public static void afterClass() throws Exception {
     if (savedFactory == null) {
@@ -69,9 +71,8 @@ public class TestLBHttpSolrServer extends LuceneTestCase {
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    httpClient = new HttpClient(new MultiThreadedHttpConnectionManager());
-
-    httpClient.getParams().setParameter("http.connection.timeout", new Integer(1000));
+    httpClient = HttpClientUtil.createClient(null);
+    HttpClientUtil.setConnectionTimeout(httpClient,  1000);
     for (int i = 0; i < solr.length; i++) {
       solr[i] = new SolrInstance("solr" + i, 0);
       solr[i].setUp();
@@ -88,7 +89,7 @@ public class TestLBHttpSolrServer extends LuceneTestCase {
       doc.addField("name", solrInstance.name);
       docs.add(doc);
     }
-    CommonsHttpSolrServer solrServer = new CommonsHttpSolrServer(solrInstance.getUrl(), httpClient);
+    HttpSolrServer solrServer = new HttpSolrServer(solrInstance.getUrl(), httpClient);
     UpdateResponse resp = solrServer.add(docs);
     assertEquals(0, resp.getStatus());
     resp = solrServer.commit();
@@ -100,6 +101,7 @@ public class TestLBHttpSolrServer extends LuceneTestCase {
     for (SolrInstance aSolr : solr) {
       aSolr.tearDown();
     }
+    httpClient.getConnectionManager().shutdown();
     super.tearDown();
   }
 
@@ -178,10 +180,11 @@ public class TestLBHttpSolrServer extends LuceneTestCase {
     for (int i = 0; i < solr.length; i++) {
       s[i] = solr[i].getUrl();
     }
-    HttpClient myHttpClient = new HttpClient(new MultiThreadedHttpConnectionManager());
+    ModifiableSolrParams params = new ModifiableSolrParams();
+    params.set(HttpClientUtil.PROP_CONNECTION_TIMEOUT, 250);
+    params.set(HttpClientUtil.PROP_SO_TIMEOUT, 250);
+    HttpClient myHttpClient = HttpClientUtil.createClient(params);
 
-    myHttpClient.getParams().setParameter("http.connection.timeout", new Integer(250));
-    myHttpClient.getParams().setParameter("http.socket.timeout", new Integer(250));
     LBHttpSolrServer lbHttpSolrServer = new LBHttpSolrServer(myHttpClient, s);
     lbHttpSolrServer.setAliveCheckInterval(500);
 
@@ -248,7 +251,7 @@ public class TestLBHttpSolrServer extends LuceneTestCase {
     }
 
     public void setUp() throws Exception {
-      File home = new File(SolrTestCaseJ4.TEMP_DIR,
+      File home = new File(LuceneTestCase.TEMP_DIR,
               getClass().getName() + "-" + System.currentTimeMillis());
 
 

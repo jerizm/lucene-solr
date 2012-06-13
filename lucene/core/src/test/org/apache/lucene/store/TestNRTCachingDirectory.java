@@ -1,6 +1,6 @@
 package org.apache.lucene.store;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -46,10 +46,10 @@ public class TestNRTCachingDirectory extends LuceneTestCase {
   public void testNRTAndCommit() throws Exception {
     Directory dir = newDirectory();
     NRTCachingDirectory cachedDir = new NRTCachingDirectory(dir, 2.0, 25.0);
-    IndexWriterConfig conf = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random));
-    RandomIndexWriter w = new RandomIndexWriter(random, cachedDir, conf);
-    final LineFileDocs docs = new LineFileDocs(random);    
-    final int numDocs = _TestUtil.nextInt(random, 100, 400);
+    IndexWriterConfig conf = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
+    RandomIndexWriter w = new RandomIndexWriter(random(), cachedDir, conf);
+    final LineFileDocs docs = new LineFileDocs(random(), true);
+    final int numDocs = _TestUtil.nextInt(random(), 100, 400);
 
     if (VERBOSE) {
       System.out.println("TEST: numDocs=" + numDocs);
@@ -61,9 +61,9 @@ public class TestNRTCachingDirectory extends LuceneTestCase {
       final Document doc = docs.nextDoc();
       ids.add(new BytesRef(doc.get("docid")));
       w.addDocument(doc);
-      if (random.nextInt(20) == 17) {
+      if (random().nextInt(20) == 17) {
         if (r == null) {
-          r = IndexReader.open(w.w, false);
+          r = DirectoryReader.open(w.w, false);
         } else {
           final DirectoryReader r2 = DirectoryReader.openIfChanged(r);
           if (r2 != null) {
@@ -93,12 +93,13 @@ public class TestNRTCachingDirectory extends LuceneTestCase {
     }
     assertEquals(0, cachedFiles.length);
     
-    r = IndexReader.open(dir);
+    r = DirectoryReader.open(dir);
     for(BytesRef id : ids) {
       assertEquals(1, r.docFreq("docid", id));
     }
     r.close();
     cachedDir.close();
+    docs.close();
   }
 
   // NOTE: not a test; just here to make sure the code frag
@@ -108,7 +109,7 @@ public class TestNRTCachingDirectory extends LuceneTestCase {
 
     Directory fsDir = FSDirectory.open(new File("/path/to/index"));
     NRTCachingDirectory cachedFSDir = new NRTCachingDirectory(fsDir, 2.0, 25.0);
-    IndexWriterConfig conf = new IndexWriterConfig(Version.LUCENE_32, analyzer);
+    IndexWriterConfig conf = new IndexWriterConfig(TEST_VERSION_CURRENT, analyzer);
     IndexWriter writer = new IndexWriter(cachedFSDir, conf);
   }
 
@@ -124,7 +125,7 @@ public class TestNRTCachingDirectory extends LuceneTestCase {
   public void testNoDir() throws Throwable {
     Directory dir = new NRTCachingDirectory(newFSDirectory(_TestUtil.getTempDir("doesnotexist")), 2.0, 25.0);
     try {
-      IndexReader.open(dir);
+      DirectoryReader.open(dir);
       fail("did not hit expected exception");
     } catch (NoSuchDirectoryException nsde) {
       // expected
@@ -137,7 +138,7 @@ public class TestNRTCachingDirectory extends LuceneTestCase {
     Directory dir = new NRTCachingDirectory(newFSDirectory(_TestUtil.getTempDir("foo")), 2.0, 25.0);
     String name = "file";
     try {
-      dir.createOutput(name, newIOContext(random)).close();
+      dir.createOutput(name, newIOContext(random())).close();
       assertTrue(dir.fileExists(name));
       assertTrue(Arrays.asList(dir.listAll()).contains(name));
     } finally {
@@ -148,14 +149,14 @@ public class TestNRTCachingDirectory extends LuceneTestCase {
   // LUCENE-3382 test that delegate compound files correctly.
   public void testCompoundFileAppendTwice() throws IOException {
     Directory newDir = new NRTCachingDirectory(newDirectory(), 2.0, 25.0);
-    CompoundFileDirectory csw = new CompoundFileDirectory(newDir, "d.cfs", newIOContext(random), true);
+    CompoundFileDirectory csw = new CompoundFileDirectory(newDir, "d.cfs", newIOContext(random()), true);
     createSequenceFile(newDir, "d1", (byte) 0, 15);
-    IndexOutput out = csw.createOutput("d.xyz", newIOContext(random));
+    IndexOutput out = csw.createOutput("d.xyz", newIOContext(random()));
     out.writeInt(0);
     try {
-      newDir.copy(csw, "d1", "d1", newIOContext(random));
+      newDir.copy(csw, "d1", "d1", newIOContext(random()));
       fail("file does already exist");
-    } catch (IOException e) {
+    } catch (IllegalArgumentException e) {
       //
     }
     out.close();
@@ -164,7 +165,7 @@ public class TestNRTCachingDirectory extends LuceneTestCase {
    
     csw.close();
 
-    CompoundFileDirectory cfr = new CompoundFileDirectory(newDir, "d.cfs", newIOContext(random), false);
+    CompoundFileDirectory cfr = new CompoundFileDirectory(newDir, "d.cfs", newIOContext(random()), false);
     assertEquals(1, cfr.listAll().length);
     assertEquals("d.xyz", cfr.listAll()[0]);
     cfr.close();
@@ -176,7 +177,7 @@ public class TestNRTCachingDirectory extends LuceneTestCase {
    *  computed as start + offset where offset is the number of the byte.
    */
   private void createSequenceFile(Directory dir, String name, byte start, int size) throws IOException {
-      IndexOutput os = dir.createOutput(name, newIOContext(random));
+      IndexOutput os = dir.createOutput(name, newIOContext(random()));
       for (int i=0; i < size; i++) {
           os.writeByte(start);
           start ++;

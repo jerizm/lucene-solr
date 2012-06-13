@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -48,13 +48,8 @@ import org.apache.lucene.store.Directory;
  synchronization, you should <b>not</b> synchronize on the
  <code>IndexReader</code> instance; use your own
  (non-Lucene) objects instead.
- 
- <p><em>Please note:</em> This class extends from an internal (invisible)
- superclass that is generic: The type parameter {@code R} is
- {@link AtomicReader}, see {@link #subReaders} and
- {@link #getSequentialSubReaders}.
 */
-public abstract class DirectoryReader extends BaseMultiReader<AtomicReader> {
+public abstract class DirectoryReader extends BaseCompositeReader<AtomicReader> {
   public static final int DEFAULT_TERMS_INDEX_DIVISOR = 1;
 
   protected final Directory directory;
@@ -258,7 +253,7 @@ public abstract class DirectoryReader extends BaseMultiReader<AtomicReader> {
    *  one commit point.  But if you're using a custom {@link
    *  IndexDeletionPolicy} then there could be many commits.
    *  Once you have a given commit, you can open a reader on
-   *  it by calling {@link IndexReader#open(IndexCommit)}
+   *  it by calling {@link DirectoryReader#open(IndexCommit)}
    *  There must be at least one commit in
    *  the Directory, else this method throws {@link
    *  IndexNotFoundException}.  Note that if a commit is in
@@ -328,8 +323,17 @@ public abstract class DirectoryReader extends BaseMultiReader<AtomicReader> {
     }
   }
 
-  protected DirectoryReader(Directory directory, AtomicReader[] readers) throws CorruptIndexException, IOException {
-    super(readers);
+  /**
+   * Expert: Constructs a {@code DirectoryReader} on the given subReaders.
+   * @param segmentReaders the wrapped atomic index segment readers. This array is
+   * returned by {@link #getSequentialSubReaders} and used to resolve the correct
+   * subreader for docID-based methods. <b>Please note:</b> This array is <b>not</b>
+   * cloned and not protected for modification outside of this reader.
+   * Subclasses of {@code DirectoryReader} should take care to not allow
+   * modification of this internal array, e.g. {@link #doOpenIfChanged()}.
+   */
+  protected DirectoryReader(Directory directory, AtomicReader[] segmentReaders) throws CorruptIndexException, IOException {
+    super(segmentReaders);
     this.directory = directory;
   }
   
@@ -393,9 +397,9 @@ public abstract class DirectoryReader extends BaseMultiReader<AtomicReader> {
    *
    * <p>If instead this reader is a near real-time reader
    * (ie, obtained by a call to {@link
-   * IndexWriter#getReader}, or by calling {@link #openIfChanged}
+   * DirectoryReader#open(IndexWriter,boolean)}, or by calling {@link #openIfChanged}
    * on a near real-time reader), then this method checks if
-   * either a new commmit has occurred, or any new
+   * either a new commit has occurred, or any new
    * uncommitted changes have taken place via the writer.
    * Note that even if the writer has only performed
    * merging, this method will still return false.</p>

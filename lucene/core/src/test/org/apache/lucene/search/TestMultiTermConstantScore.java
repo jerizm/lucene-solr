@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,6 +20,7 @@ package org.apache.lucene.search;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.AtomicReaderContext;
@@ -27,7 +28,6 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.similarities.DefaultSimilarity;
-import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -56,9 +56,9 @@ public class TestMultiTermConstantScore extends BaseTestRangeFilter {
         "X       4 5 6" };
 
     small = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, small, 
+    RandomIndexWriter writer = new RandomIndexWriter(random(), small, 
         newIndexWriterConfig(TEST_VERSION_CURRENT, 
-            new MockAnalyzer(random, MockTokenizer.WHITESPACE, false)).setMergePolicy(newLogMergePolicy()));
+            new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false)).setMergePolicy(newLogMergePolicy()));
 
     FieldType customType = new FieldType(TextField.TYPE_STORED);
     customType.setTokenized(false);
@@ -67,7 +67,7 @@ public class TestMultiTermConstantScore extends BaseTestRangeFilter {
       doc.add(newField("id", String.valueOf(i), customType));// Field.Keyword("id",String.valueOf(i)));
       doc.add(newField("all", "all", customType));// Field.Keyword("all","all"));
       if (null != data[i]) {
-        doc.add(newField("data", data[i], TextField.TYPE_STORED));// Field.Text("data",data[i]));
+        doc.add(newTextField("data", data[i], Field.Store.YES));// Field.Text("data",data[i]));
       }
       writer.addDocument(doc);
     }

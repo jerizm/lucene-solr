@@ -1,6 +1,6 @@
 package org.apache.solr.cloud;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -27,9 +27,9 @@ import org.apache.solr.common.cloud.Slice;
 import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.common.cloud.ZkNodeProps;
 import org.apache.solr.common.cloud.ZkStateReader;
+import org.apache.solr.servlet.SolrDispatchFilter;
 import org.apache.zookeeper.KeeperException;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
 
 public abstract class AbstractDistributedZkTestCase extends BaseDistributedSearchTestCase {
@@ -42,9 +42,7 @@ public abstract class AbstractDistributedZkTestCase extends BaseDistributedSearc
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    log.info("####SETUP_START " + getName());
     createTempDir();
-    ignoreException("java.nio.channels.ClosedChannelException");
     
     String zkDir = testDir.getAbsolutePath() + File.separator
     + "zookeeper/server1/data";
@@ -81,16 +79,24 @@ public abstract class AbstractDistributedZkTestCase extends BaseDistributedSearc
     }
 
     shards = sb.toString();
+    
+    // now wait till we see the leader for each shard
+    for (int i = 1; i <= numShards; i++) {
+      ZkStateReader zkStateReader = ((SolrDispatchFilter) jettys.get(0)
+          .getDispatchFilter().getFilter()).getCores().getZkController()
+          .getZkStateReader();
+      zkStateReader.getLeaderProps("collection1", "shard" + (i + 2), 15000);
+    }
   }
   
   protected void waitForRecoveriesToFinish(String collection, ZkStateReader zkStateReader, boolean verbose)
-      throws KeeperException, InterruptedException {
-    waitForRecoveriesToFinish(collection, zkStateReader, verbose, false);
+      throws Exception {
+    waitForRecoveriesToFinish(collection, zkStateReader, verbose, true);
   }
   
   protected void waitForRecoveriesToFinish(String collection,
       ZkStateReader zkStateReader, boolean verbose, boolean failOnTimeout)
-      throws KeeperException, InterruptedException {
+      throws Exception {
     boolean cont = true;
     int cnt = 0;
     
@@ -110,19 +116,20 @@ public abstract class AbstractDistributedZkTestCase extends BaseDistributedSearc
                   ZkStateReader.NODE_NAME_PROP)));
           String state = shard.getValue().get(ZkStateReader.STATE_PROP);
           if ((state.equals(ZkStateReader.RECOVERING) || state
-              .equals(ZkStateReader.SYNC))
+              .equals(ZkStateReader.SYNC) || state.equals(ZkStateReader.DOWN))
               && cloudState.liveNodesContain(shard.getValue().get(
                   ZkStateReader.NODE_NAME_PROP))) {
             sawLiveRecovering = true;
           }
         }
       }
-      if (!sawLiveRecovering || cnt == 15) {
+      if (!sawLiveRecovering || cnt == 120) {
         if (!sawLiveRecovering) {
           if (verbose) System.out.println("no one is recoverying");
         } else {
           if (failOnTimeout) {
             fail("There are still nodes recoverying");
+            printLayout();
             return;
           }
           if (verbose) System.out
@@ -130,7 +137,7 @@ public abstract class AbstractDistributedZkTestCase extends BaseDistributedSearc
         }
         cont = false;
       } else {
-        Thread.sleep(2000);
+        Thread.sleep(1000);
       }
       cnt++;
     }
@@ -151,7 +158,7 @@ public abstract class AbstractDistributedZkTestCase extends BaseDistributedSearc
 
           String state = shard.getValue().get(ZkStateReader.STATE_PROP);
           if (!state.equals(ZkStateReader.ACTIVE)) {
-            fail("Not all shards are ACTIVE");
+            fail("Not all shards are ACTIVE - found a shard that is: " + state);
           }
         }
       }
@@ -179,9 +186,5 @@ public abstract class AbstractDistributedZkTestCase extends BaseDistributedSearc
     SolrZkClient zkClient = new SolrZkClient(zkServer.getZkHost(), AbstractZkTestCase.TIMEOUT);
     zkClient.printLayoutToStdOut();
     zkClient.close();
-  }
-  
-  @AfterClass
-  public static void afterClass() throws InterruptedException {
   }
 }

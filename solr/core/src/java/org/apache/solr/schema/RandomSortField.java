@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -137,6 +137,12 @@ public class RandomSortField extends FieldType {
         @Override
         public Integer value(int slot) {
           return values[slot];
+        }
+
+        @Override
+        public int compareDocToValue(int doc, Integer valueObj) {
+          // values will be positive... no overflow possible.
+          return hash(doc+seed) - valueObj.intValue();
         }
       };
     }

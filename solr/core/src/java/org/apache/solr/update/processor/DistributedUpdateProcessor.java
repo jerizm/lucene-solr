@@ -1,6 +1,6 @@
 package org.apache.solr.update.processor;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -25,12 +25,13 @@ import java.util.Map.Entry;
 
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CharsRef;
-import org.apache.solr.client.solrj.impl.CommonsHttpSolrServer;
+import org.apache.solr.client.solrj.impl.HttpSolrServer;
 import org.apache.solr.client.solrj.request.CoreAdminRequest.RequestRecovery;
 import org.apache.solr.cloud.CloudDescriptor;
 import org.apache.solr.cloud.ZkController;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
+import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.SolrInputField;
 import org.apache.solr.common.cloud.CloudState;
 import org.apache.solr.common.cloud.Slice;
@@ -44,6 +45,7 @@ import org.apache.solr.common.params.UpdateParams;
 import org.apache.solr.common.util.Hash;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.CoreDescriptor;
+import org.apache.solr.handler.component.RealTimeGetComponent;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.response.SolrQueryResponse;
@@ -60,14 +62,40 @@ import org.apache.solr.update.UpdateHandler;
 import org.apache.solr.update.UpdateLog;
 import org.apache.solr.update.VersionBucket;
 import org.apache.solr.update.VersionInfo;
-import org.apache.zookeeper.KeeperException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import static org.apache.solr.update.processor.DistributingUpdateProcessorFactory.DISTRIB_UPDATE_PARAM;
 
 // NOT mt-safe... create a new processor for each add thread
 // TODO: we really should not wait for distrib after local? unless a certain replication factor is asked for
 public class DistributedUpdateProcessor extends UpdateRequestProcessor {
-  public static final String SEEN_LEADER = "leader";
+  public final static Logger log = LoggerFactory.getLogger(DistributedUpdateProcessor.class);
+
+  /**
+   * Values this processor supports for the <code>DISTRIB_UPDATE_PARAM</code>.
+   * This is an implementation detail exposed solely for tests.
+   * 
+   * @see DistributingUpdateProcessorFactory#DISTRIB_UPDATE_PARAM
+   */
+  public static enum DistribPhase {
+    NONE, TOLEADER, FROMLEADER;
+
+    public static DistribPhase parseParam(final String param) {
+      if (param == null || param.trim().isEmpty()) {
+        return NONE;
+      }
+      try {
+        return valueOf(param);
+      } catch (IllegalArgumentException e) {
+        throw new SolrException
+          (SolrException.ErrorCode.BAD_REQUEST, "Illegal value for " + 
+           DISTRIB_UPDATE_PARAM + ": " + param, e);
+      }
+    }
+  }
+
   public static final String COMMIT_END_POINT = "commit_end_point";
-  public static final String DELETE_BY_QUERY_LEVEL = "dbq_level";
 
   private final SolrQueryRequest req;
   private final SolrQueryResponse rsp;
@@ -161,7 +189,10 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
         String coreNodeName = zkController.getNodeName() + "_" + coreName;
         isLeader = coreNodeName.equals(leaderNodeName);
         
-        if (req.getParams().getBool(SEEN_LEADER, false)) {
+        DistribPhase phase = 
+          DistribPhase.parseParam(req.getParams().get(DISTRIB_UPDATE_PARAM));
+
+        if (DistribPhase.FROMLEADER == phase) {
           // we are coming from the leader, just go local - add no urls
           forwardToLeader = false;
         } else if (isLeader) {
@@ -170,7 +201,7 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
           forwardToLeader = false;
           List<ZkCoreNodeProps> replicaProps = zkController.getZkStateReader()
               .getReplicaProps(collection, shardId, zkController.getNodeName(),
-                  coreName);
+                  coreName, null, ZkStateReader.DOWN);
           if (replicaProps != null) {
             nodes = new ArrayList<Node>(replicaProps.size());
             for (ZkCoreNodeProps props : replicaProps) {
@@ -203,7 +234,7 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
     return cloudState.getShard(hash, collection);
   }
 
-  // used for deleteByQyery to get the list of nodes this leader should forward to
+  // used for deleteByQuery to get the list of nodes this leader should forward to
   private List<Node> setupRequest() {
     List<Node> nodes = null;
     String shardId = cloudDesc.getShardId();
@@ -249,8 +280,7 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
       hash = hash(cmd);
       nodes = setupRequest(hash);
     } else {
-      // even in non zk mode, tests simulate updates from a leader
-      isLeader = !req.getParams().getBool(SEEN_LEADER, false);
+      isLeader = getNonZkLeaderAssumption(req);
     }
     
     boolean dropCmd = false;
@@ -266,9 +296,11 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
     ModifiableSolrParams params = null;
     if (nodes != null) {
       params = new ModifiableSolrParams(req.getParams());
-      if (isLeader) {
-        params.set(SEEN_LEADER, true);
-      }
+      params.set(DISTRIB_UPDATE_PARAM, 
+                 (isLeader ? 
+                  DistribPhase.FROMLEADER.toString() : 
+                  DistribPhase.TOLEADER.toString()));
+      params.remove("commit"); // this will be distributed from the local commit
       cmdDistrib.distribAdd(cmd, nodes, params);
     }
     
@@ -329,10 +361,10 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
       // TODO: what if its is already recovering? Right now recoveries queue up -
       // should they?
       String recoveryUrl = error.node.getBaseUrl();
-      CommonsHttpSolrServer server;
+      HttpSolrServer server;
       log.info("try and ask " + recoveryUrl + " to recover");
       try {
-        server = new CommonsHttpSolrServer(recoveryUrl);
+        server = new HttpSolrServer(recoveryUrl);
         server.setSoTimeout(5000);
         server.setConnectionTimeout(5000);
         
@@ -416,6 +448,24 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
           long bucketVersion = bucket.highest;
 
           if (leaderLogic) {
+
+            boolean updated = getUpdatedDocument(cmd);
+            if (updated && versionOnUpdate == -1) {
+              versionOnUpdate = 1;  // implied "doc must exist" for now...
+            }
+
+            if (versionOnUpdate != 0) {
+              Long lastVersion = vinfo.lookupVersion(cmd.getIndexedId());
+              long foundVersion = lastVersion == null ? -1 : lastVersion;
+              if ( versionOnUpdate == foundVersion || (versionOnUpdate < 0 && foundVersion < 0) || (versionOnUpdate==1 && foundVersion > 0) ) {
+                // we're ok if versions match, or if both are negative (all missing docs are equal), or if cmd
+                // specified it must exist (versionOnUpdate==1) and it does.
+              } else {
+                throw new SolrException(ErrorCode.CONFLICT, "version conflict for " + cmd.getPrintableId() + " expected=" + versionOnUpdate + " actual=" + foundVersion);
+              }
+            }
+
+
             long version = vinfo.getNewClock();
             cmd.setVersion(version);
             cmd.getSolrInputDocument().setField(VersionInfo.VERSION_FIELD, version);
@@ -455,6 +505,86 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
     }
     return false;
   }
+
+
+  // TODO: may want to switch to using optimistic locking in the future for better concurrency
+  // that's why this code is here... need to retry in a loop closely around/in versionAdd
+  boolean getUpdatedDocument(AddUpdateCommand cmd) throws IOException {
+    SolrInputDocument sdoc = cmd.getSolrInputDocument();
+    boolean update = false;
+    for (SolrInputField sif : sdoc.values()) {
+      if (sif.getValue() instanceof Map) {
+        update = true;
+        break;
+      }
+    }
+
+    if (!update) return false;
+
+    BytesRef id = cmd.getIndexedId();
+    SolrInputDocument oldDoc = RealTimeGetComponent.getInputDocument(cmd.getReq().getCore(), id);
+
+    if (oldDoc == null) {
+      // not found... allow this in the future (depending on the details of the update, or if the user explicitly sets it).
+      // could also just not change anything here and let the optimistic locking throw the error
+      throw new SolrException(ErrorCode.CONFLICT, "Document not found for update.  id=" + cmd.getPrintableId());
+    }
+
+    oldDoc.remove(VERSION_FIELD);
+
+    for (SolrInputField sif : sdoc.values()) {
+      Object val = sif.getValue();
+      if (val instanceof Map) {
+        for (Entry<String,Object> entry : ((Map<String,Object>) val).entrySet()) {
+          String key = entry.getKey();
+          Object fieldVal = entry.getValue();
+          if ("add".equals(key)) {
+            oldDoc.addField( sif.getName(), fieldVal, sif.getBoost());
+          } else if ("set".equals(key)) {
+            oldDoc.setField(sif.getName(),  fieldVal, sif.getBoost());
+          } else if ("inc".equals(key)) {
+            SolrInputField numericField = oldDoc.get(sif.getName());
+            if (numericField == null) {
+              oldDoc.setField(sif.getName(),  fieldVal, sif.getBoost());
+            } else {
+              // TODO: fieldtype needs externalToObject?
+              String oldValS = numericField.getFirstValue().toString();
+              SchemaField sf = cmd.getReq().getSchema().getField(sif.getName());
+              BytesRef term = new BytesRef();
+              sf.getType().readableToIndexed(oldValS, term);
+              Object oldVal = sf.getType().toObject(sf, term);
+
+              String fieldValS = fieldVal.toString();
+              Number result;
+              if (oldVal instanceof Long) {
+                result = ((Long) oldVal).longValue() + Long.parseLong(fieldValS);
+              } else if (oldVal instanceof Float) {
+                result = ((Float) oldVal).floatValue() + Float.parseFloat(fieldValS);
+              } else if (oldVal instanceof Double) {
+                result = ((Double) oldVal).doubleValue() + Double.parseDouble(fieldValS);
+              } else {
+                // int, short, byte
+                result = ((Integer) oldVal).intValue() + Integer.parseInt(fieldValS);
+              }
+
+              oldDoc.setField(sif.getName(),  result, sif.getBoost());
+            }
+
+          }
+        }
+      } else {
+        // normal fields are treated as a "set"
+        oldDoc.put(sif.getName(), sif);
+      }
+
+    }
+
+    cmd.solrDoc = oldDoc;
+    return true;
+  }
+
+
+
   
   @Override
   public void processDelete(DeleteUpdateCommand cmd) throws IOException {
@@ -469,8 +599,7 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
       hash = hash(cmd);
       nodes = setupRequest(hash);
     } else {
-      // even in non zk mode, tests simulate updates from a leader
-      isLeader = !req.getParams().getBool(SEEN_LEADER, false);
+      isLeader = getNonZkLeaderAssumption(req);
     }
     
     boolean dropCmd = false;
@@ -486,9 +615,11 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
     ModifiableSolrParams params = null;
     if (nodes != null) {
       params = new ModifiableSolrParams(req.getParams());
-      if (isLeader) {
-        params.set(SEEN_LEADER, true);
-      }
+      params.set(DISTRIB_UPDATE_PARAM, 
+                 (isLeader ? 
+                  DistribPhase.FROMLEADER.toString() : 
+                  DistribPhase.TOLEADER.toString()));
+      params.remove("commit"); // we already will have forwarded this from our local commit
       cmdDistrib.distribDelete(cmd, nodes, params);
     }
 
@@ -508,29 +639,35 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
   public void doDeleteByQuery(DeleteUpdateCommand cmd) throws IOException {
     // even in non zk mode, tests simulate updates from a leader
     if(!zkEnabled) {
-      isLeader = !req.getParams().getBool(SEEN_LEADER, false);
+      isLeader = getNonZkLeaderAssumption(req);
     } else {
       zkCheck();
     }
 
-    // Lev1: we are the first to receive this deleteByQuery, it must be forwarded to the leader of every shard
-    // Lev2: we are a leader receiving a forwarded deleteByQuery... we must:
+    // NONE: we are the first to receive this deleteByQuery
+    //       - it must be forwarded to the leader of every shard
+    // TO:   we are a leader receiving a forwarded deleteByQuery... we must:
     //       - block all updates (use VersionInfo)
     //       - flush *all* updates going to our replicas
     //       - forward the DBQ to our replicas and wait for the response
     //       - log + execute the local DBQ
-    // Lev3: we are a replica receiving a DBQ from our leader
+    // FROM: we are a replica receiving a DBQ from our leader
     //       - log + execute the local DBQ
+    DistribPhase phase = 
+      DistribPhase.parseParam(req.getParams().get(DISTRIB_UPDATE_PARAM));
 
-    int dbqlevel = req.getParams().getInt(DELETE_BY_QUERY_LEVEL, 1);
-
-    if (zkEnabled && dbqlevel == 1) {
+    if (zkEnabled && DistribPhase.NONE == phase) {
       boolean leaderForAnyShard = false;  // start off by assuming we are not a leader for any shard
 
       Map<String,Slice> slices = zkController.getCloudState().getSlices(collection);
+      if (slices == null) {
+        throw new SolrException(ErrorCode.BAD_REQUEST,
+            "Cannot find collection:" + collection + " in "
+                + zkController.getCloudState().getCollections());
+      }
 
       ModifiableSolrParams params = new ModifiableSolrParams(req.getParams());
-      params.set(DELETE_BY_QUERY_LEVEL, 2);
+      params.set(DISTRIB_UPDATE_PARAM, DistribPhase.TOLEADER.toString());
 
       List<Node> leaders =  new ArrayList<Node>(slices.size());
       for (Map.Entry<String,Slice> sliceEntry : slices.entrySet()) {
@@ -560,19 +697,20 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
         }
       }
 
+      params.remove("commit"); // this will be distributed from the local commit
       cmdDistrib.distribDelete(cmd, leaders, params);
 
       if (!leaderForAnyShard) {
         return;
       }
 
-      // change the level to 2 so we look up and forward to our own replicas (if any)
-      dbqlevel = 2;
+      // change the phase to TOLEADER so we look up and forward to our own replicas (if any)
+      phase = DistribPhase.TOLEADER;
     }
 
     List<Node> replicas = null;
 
-    if (zkEnabled && dbqlevel == 2) {
+    if (zkEnabled && DistribPhase.TOLEADER == phase) {
       // This core should be a leader
       replicas = setupRequest();
     }
@@ -609,24 +747,7 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
           cmd.setVersion(-version);
           // TODO update versions in all buckets
 
-          // TODO: flush any adds to these replicas so they do not get reordered w.r.t. this DBQ
-
           doLocalDelete(cmd);
-
-          // forward to all replicas
-          if (replicas != null) {
-            ModifiableSolrParams params = new ModifiableSolrParams(req.getParams());
-            params.set(DELETE_BY_QUERY_LEVEL, 3);
-            params.set(VERSION_FIELD, Long.toString(cmd.getVersion()));
-            params.set(SEEN_LEADER, "true");
-            cmdDistrib.distribDelete(cmd, replicas, params);
-
-            // wait for DBQ responses before releasing the update block to eliminate the possibility
-            // of an add being reordered.
-            // TODO: this isn't strictly necessary - we could do the same thing we do for PeerSync
-            // in DUH2 and add a clause that prevents deleting older docs.
-            cmdDistrib.finish();
-          }
 
         } else {
           cmd.setVersion(-versionOnUpdate);
@@ -649,6 +770,19 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
     } finally {
       vinfo.unblockUpdates();
     }
+
+
+
+    // TODO: need to handle reorders to replicas somehow
+    // forward to all replicas
+    if (leaderLogic && replicas != null) {
+      ModifiableSolrParams params = new ModifiableSolrParams(req.getParams());
+      params.set(VERSION_FIELD, Long.toString(cmd.getVersion()));
+      params.set(DISTRIB_UPDATE_PARAM, DistribPhase.FROMLEADER.toString());
+      cmdDistrib.distribDelete(cmd, replicas, params);
+      cmdDistrib.finish();
+    }
+
 
     if (returnVersions && rsp != null) {
       if (deleteByQueryResponse == null) {
@@ -698,6 +832,7 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
       String versionOnUpdateS = req.getParams().get(VERSION_FIELD);
       versionOnUpdate = versionOnUpdateS == null ? 0 : Long.parseLong(versionOnUpdateS);
     }
+    long signedVersionOnUpdate = versionOnUpdate;
     versionOnUpdate = Math.abs(versionOnUpdate);  // normalize to positive version
 
     boolean isReplay = (cmd.getFlags() & UpdateCommand.REPLAY) != 0;
@@ -717,6 +852,18 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
           long bucketVersion = bucket.highest;
 
           if (leaderLogic) {
+
+            if (signedVersionOnUpdate != 0) {
+              Long lastVersion = vinfo.lookupVersion(cmd.getIndexedId());
+              long foundVersion = lastVersion == null ? -1 : lastVersion;
+              if ( (signedVersionOnUpdate == foundVersion) || (signedVersionOnUpdate < 0 && foundVersion < 0) || (signedVersionOnUpdate == 1 && foundVersion > 0) ) {
+                // we're ok if versions match, or if both are negative (all missing docs are equal), or if cmd
+                // specified it must exist (versionOnUpdate==1) and it does.
+              } else {
+                throw new SolrException(ErrorCode.CONFLICT, "version conflict for " + cmd.getId() + " expected=" + signedVersionOnUpdate + " actual=" + foundVersion);
+              }
+            }
+
             long version = vinfo.getNewClock();
             cmd.setVersion(-version);
             bucket.updateHighest(version);
@@ -908,5 +1055,18 @@ public class DistributedUpdateProcessor extends UpdateRequestProcessor {
       return true;
     }
   }
-  
+
+  /**
+   * Returns a boolean indicating wether or not the caller should behave as 
+   * if this is the "leader" even when ZooKeeper is not enabled.  
+   * (Even in non zk mode, tests may simulate updates to/from a leader)
+   */
+  public static boolean getNonZkLeaderAssumption(SolrQueryRequest req) {
+    DistribPhase phase = 
+      DistribPhase.parseParam(req.getParams().get(DISTRIB_UPDATE_PARAM));
+
+    // if we have been told we are coming from a leader, then we are 
+    // definitely not the leader.  Otherwise assume we are.
+    return DistribPhase.FROMLEADER != phase;
+  }
 }

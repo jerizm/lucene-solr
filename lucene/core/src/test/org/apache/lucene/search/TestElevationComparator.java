@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,7 +19,7 @@ package org.apache.lucene.search;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.TextField;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.index.*;
 import org.apache.lucene.search.FieldValueHitQueue.Entry;
 import org.apache.lucene.search.similarities.DefaultSimilarity;
@@ -39,7 +39,7 @@ public class TestElevationComparator extends LuceneTestCase {
     Directory directory = newDirectory();
     IndexWriter writer = new IndexWriter(
         directory,
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).
             setMaxBufferedDocs(2).
             setMergePolicy(newLogMergePolicy(1000)).
             setSimilarity(new DefaultSimilarity())
@@ -51,7 +51,7 @@ public class TestElevationComparator extends LuceneTestCase {
     writer.addDocument(adoc(new String[] {"id", "y", "title", "boosted boosted", "str_s","y"}));
     writer.addDocument(adoc(new String[] {"id", "z", "title", "boosted boosted boosted","str_s", "z"}));
 
-    IndexReader r = IndexReader.open(writer, true);
+    IndexReader r = DirectoryReader.open(writer, true);
     writer.close();
 
     IndexSearcher searcher = newSearcher(r);
@@ -125,7 +125,7 @@ public class TestElevationComparator extends LuceneTestCase {
  private Document adoc(String[] vals) {
    Document doc = new Document();
    for (int i = 0; i < vals.length - 2; i += 2) {
-     doc.add(newField(vals[i], vals[i + 1], TextField.TYPE_STORED));
+     doc.add(newTextField(vals[i], vals[i + 1], Field.Store.YES));
    }
    return doc;
  }
@@ -139,7 +139,7 @@ class ElevationComparatorSource extends FieldComparatorSource {
   }
 
   @Override
-  public FieldComparator newComparator(final String fieldname, final int numHits, int sortPos, boolean reversed) throws IOException {
+  public FieldComparator<Integer> newComparator(final String fieldname, final int numHits, int sortPos, boolean reversed) throws IOException {
    return new FieldComparator<Integer>() {
 
      FieldCache.DocTermsIndex idIndex;
@@ -179,7 +179,7 @@ class ElevationComparatorSource extends FieldComparatorSource {
      }
 
      @Override
-     public FieldComparator setNextReader(AtomicReaderContext context) throws IOException {
+     public FieldComparator<Integer> setNextReader(AtomicReaderContext context) throws IOException {
        idIndex = FieldCache.DEFAULT.getTermsIndex(context.reader(), fieldname);
        return this;
      }
@@ -187,6 +187,14 @@ class ElevationComparatorSource extends FieldComparatorSource {
      @Override
      public Integer value(int slot) {
        return Integer.valueOf(values[slot]);
+     }
+
+     @Override
+     public int compareDocToValue(int doc, Integer valueObj) throws IOException {
+       final int value = valueObj.intValue();
+       final int docValue = docVal(doc);
+       // values will be small enough that there is no overflow concern
+       return value - docValue;
      }
    };
  }

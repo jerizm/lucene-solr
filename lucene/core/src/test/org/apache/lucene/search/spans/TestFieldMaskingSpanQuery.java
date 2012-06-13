@@ -1,6 +1,6 @@
 package org.apache.lucene.search.spans;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,7 +23,6 @@ import java.util.Set;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
@@ -48,7 +47,7 @@ public class TestFieldMaskingSpanQuery extends LuceneTestCase {
   }
   
   protected static Field field(String name, String value) {
-    return newField(name, value, TextField.TYPE_UNSTORED);
+    return newTextField(name, value, Field.Store.NO);
   }
 
   protected static IndexSearcher searcher;
@@ -58,7 +57,7 @@ public class TestFieldMaskingSpanQuery extends LuceneTestCase {
   @BeforeClass
   public static void beforeClass() throws Exception {
     directory = newDirectory();
-    RandomIndexWriter writer= new RandomIndexWriter(random, directory, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setMergePolicy(newLogMergePolicy()));
+    RandomIndexWriter writer= new RandomIndexWriter(random(), directory, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMergePolicy(newLogMergePolicy()));
     
     writer.addDocument(doc(new Field[] { field("id", "0")
                                          ,
@@ -128,7 +127,7 @@ public class TestFieldMaskingSpanQuery extends LuceneTestCase {
   }
 
   protected void check(SpanQuery q, int[] docs) throws Exception {
-    CheckHits.checkHitCollector(random, q, null, searcher, docs);
+    CheckHits.checkHitCollector(random(), q, null, searcher, docs);
   }
 
   public void testRewrite0() throws Exception {

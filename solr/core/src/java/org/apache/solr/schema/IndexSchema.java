@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,12 +23,12 @@ import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.util.Version;
-import org.apache.solr.common.ResourceLoader;
+import org.apache.lucene.analysis.util.ResourceLoader;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.SolrParams;
-import org.apache.solr.common.util.DOMUtil;
+import org.apache.solr.util.DOMUtil;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.SystemIdResolver;
+import org.apache.solr.util.SystemIdResolver;
 import org.apache.solr.core.SolrConfig;
 import org.apache.solr.core.Config;
 import org.apache.solr.core.SolrResourceLoader;
@@ -465,6 +465,14 @@ public final class IndexSchema {
       log.warn("no uniqueKey specified in schema.");
     } else {
       uniqueKeyField=getIndexedField(node.getNodeValue().trim());
+      if (null != uniqueKeyField.getDefaultValue()) {
+        String msg = "uniqueKey field ("+uniqueKeyFieldName+
+          ") can not be configured with a default value ("+
+          uniqueKeyField.getDefaultValue()+")";
+        log.error(msg);
+        throw new SolrException( SolrException.ErrorCode.SERVER_ERROR, msg );
+      }
+
       if (!uniqueKeyField.stored()) {
         log.error("uniqueKey is not stored - distributed search will not work");
       }
@@ -507,6 +515,14 @@ public final class IndexSchema {
           }
         }
 
+        if (dest.equals(uniqueKeyFieldName)) {
+          String msg = "uniqueKey field ("+uniqueKeyFieldName+
+            ") can not be the dest of a copyField (src="+source+")";
+          log.error(msg);
+          throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, msg);
+          
+        }
+
         registerCopyField(source, dest, maxCharsInt);
      }
       
@@ -517,6 +533,8 @@ public final class IndexSchema {
                       entry.getValue()+")");
         }
       }
+
+
       //Run the callbacks on SchemaAware now that everything else is done
       for (SchemaAware aware : schemaAware) {
         aware.inform(this);
@@ -663,7 +681,7 @@ public final class IndexSchema {
       return null;
     } else {
       SimilarityFactory similarityFactory;
-      final Object obj = loader.newInstance(((Element) node).getAttribute("class"), "search.similarities.");
+      final Object obj = loader.newInstance(((Element) node).getAttribute("class"), Object.class, "search.similarities.");
       if (obj instanceof SimilarityFactory) {
         // configure a factory, get a similarity back
         SolrParams params = SolrParams.toSolrParams(DOMUtil.childNodesToNamedList(node));
@@ -920,7 +938,7 @@ public final class IndexSchema {
     /***  REMOVED -YCS
     if (defaultFieldType != null) return new SchemaField(fieldName,defaultFieldType);
     ***/
-    throw new SolrException( SolrException.ErrorCode.BAD_REQUEST,"undefined field "+fieldName);
+    throw new SolrException( SolrException.ErrorCode.BAD_REQUEST,"undefined field: \""+fieldName+"\"");
   }
 
   /**

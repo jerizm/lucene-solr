@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,11 +21,11 @@ import java.io.StringReader;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.lucene.analysis.BaseTokenStreamTestCase;
 import org.apache.lucene.analysis.TokenStream;
 
 /** Simple Tests to ensure this factory is working */
-public class TestPatternTokenizerFactory extends BaseTokenTestCase 
-{
+public class TestPatternTokenizerFactory extends BaseTokenStreamTestCase {
   public void testFactory() throws Exception {
     final String INPUT = "Günther Günther is here";
 

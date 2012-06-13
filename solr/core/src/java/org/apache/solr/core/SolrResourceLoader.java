@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -30,6 +30,12 @@ import java.net.URLClassLoader;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.apache.lucene.analysis.util.CharFilterFactory;
+import org.apache.lucene.analysis.util.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
+import org.apache.lucene.analysis.util.TokenizerFactory;
+import org.apache.solr.common.ResourceLoader;
+import org.apache.solr.handler.admin.CoreAdminHandler;
 import org.apache.solr.handler.component.ShardHandlerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,18 +50,13 @@ import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import javax.naming.NoInitialContextException;
 
-import org.apache.solr.analysis.CharFilterFactory;
-import org.apache.solr.analysis.TokenFilterFactory;
-import org.apache.solr.analysis.TokenizerFactory;
-import org.apache.solr.common.util.FileUtils;
-import org.apache.solr.common.ResourceLoader;
+import org.apache.solr.util.FileUtils;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.handler.component.SearchComponent;
 import org.apache.solr.request.SolrRequestHandler;
 import org.apache.solr.response.QueryResponseWriter;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.update.processor.UpdateRequestProcessorFactory;
-import org.apache.solr.util.plugin.ResourceLoaderAware;
 import org.apache.solr.util.plugin.SolrCoreAware;
 import org.apache.solr.search.QParserPlugin;
 
@@ -88,17 +89,22 @@ public class SolrResourceLoader implements ResourceLoader
    * This loader will delegate to the context classloader when possible,
    * otherwise it will attempt to resolve resources using any jar files
    * found in the "lib/" directory in the specified instance directory.
-   * If the instance directory is not specified (=null), SolrResourceLoader#locateInstanceDir will provide one.
-   * <p>
+   * </p>
+   *
+   * @param instanceDir - base directory for this resource loader, if null locateSolrHome() will be used.
+   * @see #locateSolrHome
    */
   public SolrResourceLoader( String instanceDir, ClassLoader parent, Properties coreProperties )
   {
     if( instanceDir == null ) {
       this.instanceDir = SolrResourceLoader.locateSolrHome();
+      log.info("new SolrResourceLoader for deduced Solr Home: '{}'", 
+               this.instanceDir);
     } else{
       this.instanceDir = normalizeDir(instanceDir);
+      log.info("new SolrResourceLoader for directory: '{}'", 
+               this.instanceDir);
     }
-    log.info("Solr home set to '" + this.instanceDir + "'");
     
     this.classLoader = createClassLoader(null, parent);
     addToClassLoader("./lib/", null);
@@ -373,13 +379,13 @@ public class SolrResourceLoader implements ResourceLoader
    * @param subpackages the packages to be tried if the cnams starts with solr.
    * @return the loaded class. An exception is thrown if it fails
    */
-  public Class findClass(String cname, String... subpackages) {
+  public <T> Class<? extends T> findClass(String cname, Class<T> expectedType, String... subpackages) {
     if (subpackages == null || subpackages.length == 0 || subpackages == packages) {
       subpackages = packages;
       String  c = classNameCache.get(cname);
       if(c != null) {
         try {
-          return Class.forName(c, true, classLoader);
+          return Class.forName(c, true, classLoader).asSubclass(expectedType);
         } catch (ClassNotFoundException e) {
           //this is unlikely
           log.error("Unable to load cached class-name :  "+ c +" for shortname : "+cname + e);
@@ -387,10 +393,10 @@ public class SolrResourceLoader implements ResourceLoader
 
       }
     }
-    Class clazz = null;
+    Class<? extends T> clazz = null;
     // first try cname == full name
     try {
-      return Class.forName(cname, true, classLoader);
+      return Class.forName(cname, true, classLoader).asSubclass(expectedType);
     } catch (ClassNotFoundException e) {
       String newName=cname;
       if (newName.startsWith(project)) {
@@ -400,7 +406,7 @@ public class SolrResourceLoader implements ResourceLoader
         try {
           String name = base + '.' + subpackage + newName;
           log.trace("Trying class name " + name);
-          return clazz = Class.forName(name,true,classLoader);
+          return clazz = Class.forName(name,true,classLoader).asSubclass(expectedType);
         } catch (ClassNotFoundException e1) {
           // ignore... assume first exception is best.
         }
@@ -420,14 +426,14 @@ public class SolrResourceLoader implements ResourceLoader
     }
   }
 
-  public Object newInstance(String cname, String ... subpackages) {
-    Class clazz = findClass(cname,subpackages);
+  public <T> T newInstance(String cname, Class<T> expectedType, String ... subpackages) {
+    Class<? extends T> clazz = findClass(cname, expectedType, subpackages);
     if( clazz == null ) {
       throw new SolrException( SolrException.ErrorCode.SERVER_ERROR,
           "Can not find class: "+cname + " in " + classLoader);
     }
     
-    Object obj = null;
+    T obj = null;
     try {
       obj = clazz.newInstance();
     } 
@@ -441,6 +447,10 @@ public class SolrResourceLoader implements ResourceLoader
         assertAwareCompatibility( SolrCoreAware.class, obj );
         waitingForCore.add( (SolrCoreAware)obj );
       }
+      if (org.apache.solr.util.plugin.ResourceLoaderAware.class.isInstance(obj)) {
+        log.warn("Class [{}] uses org.apache.solr.util.plugin.ResourceLoaderAware " +
+            "which is deprecated. Change to org.apache.lucene.analysis.util.ResourceLoaderAware.", cname);
+      }
       if( obj instanceof ResourceLoaderAware ) {
         assertAwareCompatibility( ResourceLoaderAware.class, obj );
         waitingForResources.add( (ResourceLoaderAware)obj );
@@ -453,17 +463,17 @@ public class SolrResourceLoader implements ResourceLoader
     return obj;
   }
 
-  public Object newAdminHandlerInstance(final CoreContainer coreContainer, String cname, String ... subpackages) {
-    Class clazz = findClass(cname,subpackages);
+  public CoreAdminHandler newAdminHandlerInstance(final CoreContainer coreContainer, String cname, String ... subpackages) {
+    Class<? extends CoreAdminHandler> clazz = findClass(cname, CoreAdminHandler.class, subpackages);
     if( clazz == null ) {
       throw new SolrException( SolrException.ErrorCode.SERVER_ERROR,
           "Can not find class: "+cname + " in " + classLoader);
     }
     
-    Object obj = null;
+    CoreAdminHandler obj = null;
     try {
-      Constructor ctor = clazz.getConstructor(CoreContainer.class);
-       obj = ctor.newInstance(coreContainer);
+      Constructor<? extends CoreAdminHandler> ctor = clazz.getConstructor(CoreContainer.class);
+      obj = ctor.newInstance(coreContainer);
     } 
     catch (Exception e) {
       throw new SolrException( SolrException.ErrorCode.SERVER_ERROR,
@@ -473,6 +483,10 @@ public class SolrResourceLoader implements ResourceLoader
     if (!live) {
       //TODO: Does SolrCoreAware make sense here since in a multi-core context
       // which core are we talking about ?
+      if (org.apache.solr.util.plugin.ResourceLoaderAware.class.isInstance(obj)) {
+        log.warn("Class [{}] uses org.apache.solr.util.plugin.ResourceLoaderAware " +
+            "which is deprecated. Change to org.apache.lucene.analysis.util.ResourceLoaderAware.", cname);
+      }
       if( obj instanceof ResourceLoaderAware ) {
         assertAwareCompatibility( ResourceLoaderAware.class, obj );
         waitingForResources.add( (ResourceLoaderAware)obj );
@@ -484,17 +498,17 @@ public class SolrResourceLoader implements ResourceLoader
 
  
 
-  public Object newInstance(String cName, String [] subPackages, Class[] params, Object[] args){
-    Class clazz = findClass(cName,subPackages);
+  public <T> T newInstance(String cName, Class<T> expectedType, String [] subPackages, Class[] params, Object[] args){
+    Class<? extends T> clazz = findClass(cName, expectedType, subPackages);
     if( clazz == null ) {
       throw new SolrException( SolrException.ErrorCode.SERVER_ERROR,
           "Can not find class: "+cName + " in " + classLoader);
     }
 
-    Object obj = null;
+    T obj = null;
     try {
 
-      Constructor constructor = clazz.getConstructor(params);
+      Constructor<? extends T> constructor = clazz.getConstructor(params);
       obj = constructor.newInstance(args);
     }
     catch (Exception e) {
@@ -506,6 +520,10 @@ public class SolrResourceLoader implements ResourceLoader
       if( obj instanceof SolrCoreAware ) {
         assertAwareCompatibility( SolrCoreAware.class, obj );
         waitingForCore.add( (SolrCoreAware)obj );
+      }
+      if (org.apache.solr.util.plugin.ResourceLoaderAware.class.isInstance(obj)) {
+        log.warn("Class [{}] uses org.apache.solr.util.plugin.ResourceLoaderAware " +
+            "which is deprecated. Change to org.apache.lucene.analysis.util.ResourceLoaderAware.", cName);
       }
       if( obj instanceof ResourceLoaderAware ) {
         assertAwareCompatibility( ResourceLoaderAware.class, obj );
@@ -607,6 +625,7 @@ public class SolrResourceLoader implements ResourceLoader
    * @see #normalizeDir(String)
    */
   public static String locateSolrHome() {
+
     String home = null;
     // Try JNDI
     try {

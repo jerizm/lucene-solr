@@ -1,6 +1,6 @@
 package org.apache.lucene.search.payloads;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -76,7 +76,7 @@ public class PayloadNearQuery extends SpanNearQuery {
   }
 
   @Override
-  public Object clone() {
+  public PayloadNearQuery clone() {
     int sz = clauses.size();
     SpanQuery[] newClauses = new SpanQuery[sz];
 

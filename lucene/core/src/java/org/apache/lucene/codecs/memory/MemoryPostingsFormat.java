@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.memory;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,7 +20,6 @@ package org.apache.lucene.codecs.memory;
 import java.io.IOException;
 import java.util.Comparator;
 import java.util.Iterator;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
@@ -37,7 +36,6 @@ import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.FieldsEnum;
 import org.apache.lucene.index.IndexFileNames;
-import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.index.Terms;
@@ -98,8 +96,6 @@ public class MemoryPostingsFormat extends PostingsFormat {
     return "PostingsFormat(name=" + getName() + " doPackFST= " + doPackFST + ")";
   }
 
-  private static final boolean VERBOSE = false;
-
   private final static class TermsWriter extends TermsConsumer {
     private final IndexOutput out;
     private final FieldInfo field;
@@ -123,16 +119,19 @@ public class MemoryPostingsFormat extends PostingsFormat {
       // NOTE: not private so we don't pay access check at runtime:
       int docCount;
       RAMOutputStream buffer = new RAMOutputStream();
+      
+      int lastOffsetLength;
+      int lastOffset;
 
       @Override
       public void startDoc(int docID, int termDocFreq) throws IOException {
-        if (VERBOSE) System.out.println("    startDoc docID=" + docID + " freq=" + termDocFreq);
+        //System.out.println("    startDoc docID=" + docID + " freq=" + termDocFreq);
         final int delta = docID - lastDocID;
         assert docID == 0 || delta > 0;
         lastDocID = docID;
         docCount++;
 
-        if (field.indexOptions == IndexOptions.DOCS_ONLY) {
+        if (field.getIndexOptions() == IndexOptions.DOCS_ONLY) {
           buffer.writeVInt(delta);
         } else if (termDocFreq == 1) {
           buffer.writeVInt((delta<<1) | 1);
@@ -143,20 +142,23 @@ public class MemoryPostingsFormat extends PostingsFormat {
         }
 
         lastPos = 0;
+        lastOffset = 0;
       }
 
       @Override
       public void addPosition(int pos, BytesRef payload, int startOffset, int endOffset) throws IOException {
-        assert payload == null || field.storePayloads;
+        assert payload == null || field.hasPayloads();
 
-        if (VERBOSE) System.out.println("      addPos pos=" + pos + " payload=" + payload);
+        //System.out.println("      addPos pos=" + pos + " payload=" + payload);
 
         final int delta = pos - lastPos;
         assert delta >= 0;
         lastPos = pos;
         
-        if (field.storePayloads) {
-          final int payloadLen = payload == null ? 0 : payload.length;
+        int payloadLen = 0;
+        
+        if (field.hasPayloads()) {
+          payloadLen = payload == null ? 0 : payload.length;
           if (payloadLen != lastPayloadLen) {
             lastPayloadLen = payloadLen;
             buffer.writeVInt((delta<<1)|1);
@@ -164,12 +166,27 @@ public class MemoryPostingsFormat extends PostingsFormat {
           } else {
             buffer.writeVInt(delta<<1);
           }
-
-          if (payloadLen > 0) {
-            buffer.writeBytes(payload.bytes, payload.offset, payloadLen);
-          }
         } else {
           buffer.writeVInt(delta);
+        }
+        
+        if (field.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0) {
+          // don't use startOffset - lastEndOffset, because this creates lots of negative vints for synonyms,
+          // and the numbers aren't that much smaller anyways.
+          int offsetDelta = startOffset - lastOffset;
+          int offsetLength = endOffset - startOffset;
+          if (offsetLength != lastOffsetLength) {
+            buffer.writeVInt(offsetDelta << 1 | 1);
+            buffer.writeVInt(offsetLength);
+          } else {
+            buffer.writeVInt(offsetDelta << 1);
+          }
+          lastOffset = startOffset;
+          lastOffsetLength = offsetLength;
+        }
+        
+        if (payloadLen > 0) {
+          buffer.writeBytes(payload.bytes, payload.offset, payloadLen);
         }
       }
 
@@ -182,6 +199,8 @@ public class MemoryPostingsFormat extends PostingsFormat {
         lastDocID = 0;
         docCount = 0;
         lastPayloadLen = 0;
+        // force first offset to write its length
+        lastOffsetLength = -1;
         return this;
       }
     }
@@ -190,7 +209,7 @@ public class MemoryPostingsFormat extends PostingsFormat {
 
     @Override
     public PostingsConsumer startTerm(BytesRef text) {
-      if (VERBOSE) System.out.println("  startTerm term=" + text.utf8ToString());
+      //System.out.println("  startTerm term=" + text.utf8ToString());
       return postingsWriter.reset();
     }
 
@@ -208,7 +227,7 @@ public class MemoryPostingsFormat extends PostingsFormat {
       assert buffer2.getFilePointer() == 0;
 
       buffer2.writeVInt(stats.docFreq);
-      if (field.indexOptions != IndexOptions.DOCS_ONLY) {
+      if (field.getIndexOptions() != IndexOptions.DOCS_ONLY) {
         buffer2.writeVLong(stats.totalTermFreq-stats.docFreq);
       }
       int pos = (int) buffer2.getFilePointer();
@@ -224,12 +243,12 @@ public class MemoryPostingsFormat extends PostingsFormat {
 
       spare.bytes = finalBuffer;
       spare.length = totalBytes;
-      if (VERBOSE) {
-        System.out.println("    finishTerm term=" + text.utf8ToString() + " " + totalBytes + " bytes totalTF=" + stats.totalTermFreq);
-        for(int i=0;i<totalBytes;i++) {
-          System.out.println("      " + Integer.toHexString(finalBuffer[i]&0xFF));
-        }
-      }
+
+      //System.out.println("    finishTerm term=" + text.utf8ToString() + " " + totalBytes + " bytes totalTF=" + stats.totalTermFreq);
+      //for(int i=0;i<totalBytes;i++) {
+      //  System.out.println("      " + Integer.toHexString(finalBuffer[i]&0xFF));
+      //}
+
       builder.add(Util.toIntsRef(text, scratchIntsRef), BytesRef.deepCopyOf(spare));
       termCount++;
     }
@@ -239,7 +258,7 @@ public class MemoryPostingsFormat extends PostingsFormat {
       if (termCount > 0) {
         out.writeVInt(termCount);
         out.writeVInt(field.number);
-        if (field.indexOptions != IndexOptions.DOCS_ONLY) {
+        if (field.getIndexOptions() != IndexOptions.DOCS_ONLY) {
           out.writeVLong(sumTotalTermFreq);
         }
         out.writeVLong(sumDocFreq);
@@ -249,7 +268,7 @@ public class MemoryPostingsFormat extends PostingsFormat {
           fst = fst.pack(3, Math.max(10, fst.getNodeCount()/4));
         }
         fst.save(out);
-        if (VERBOSE) System.out.println("finish field=" + field.name + " fp=" + out.getFilePointer());
+        //System.out.println("finish field=" + field.name + " fp=" + out.getFilePointer());
       }
     }
 
@@ -264,16 +283,13 @@ public class MemoryPostingsFormat extends PostingsFormat {
   @Override
   public FieldsConsumer fieldsConsumer(SegmentWriteState state) throws IOException {
 
-    final String fileName = IndexFileNames.segmentFileName(state.segmentName, state.segmentSuffix, EXTENSION);
+    final String fileName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, EXTENSION);
     final IndexOutput out = state.directory.createOutput(fileName, state.context);
     
     return new FieldsConsumer() {
       @Override
       public TermsConsumer addField(FieldInfo field) {
-        if (field.indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0) {
-          throw new UnsupportedOperationException("this codec cannot index offsets");
-        }
-        if (VERBOSE) System.out.println("\naddField field=" + field.name);
+        //System.out.println("\naddField field=" + field.name);
         return new TermsWriter(out, field, doPackFST);
       }
 
@@ -331,11 +347,9 @@ public class MemoryPostingsFormat extends PostingsFormat {
     @Override
     public int nextDoc() {
       while(true) {
-        if (VERBOSE) System.out.println("  nextDoc cycle docUpto=" + docUpto + " numDocs=" + numDocs + " fp=" + in.getPosition() + " this=" + this);
+        //System.out.println("  nextDoc cycle docUpto=" + docUpto + " numDocs=" + numDocs + " fp=" + in.getPosition() + " this=" + this);
         if (docUpto == numDocs) {
-          if (VERBOSE) {
-            System.out.println("    END");
-          }
+          // System.out.println("    END");
           return docID = NO_MORE_DOCS;
         }
         docUpto++;
@@ -344,7 +358,7 @@ public class MemoryPostingsFormat extends PostingsFormat {
         } else {
           final int code = in.readVInt();
           accum += code >>> 1;
-          if (VERBOSE) System.out.println("  docID=" + accum + " code=" + code);
+          //System.out.println("  docID=" + accum + " code=" + code);
           if ((code & 1) != 0) {
             freq = 1;
           } else {
@@ -352,8 +366,8 @@ public class MemoryPostingsFormat extends PostingsFormat {
             assert freq > 0;
           }
 
-          if (indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0) {
-            // Skip positions
+          if (indexOptions == IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) {
+            // Skip positions/payloads
             for(int posUpto=0;posUpto<freq;posUpto++) {
               if (!storePayloads) {
                 in.readVInt();
@@ -365,11 +379,26 @@ public class MemoryPostingsFormat extends PostingsFormat {
                 in.skipBytes(payloadLen);
               }
             }
+          } else if (indexOptions == IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) {
+            // Skip positions/offsets/payloads
+            for(int posUpto=0;posUpto<freq;posUpto++) {
+              int posCode = in.readVInt();
+              if (storePayloads && ((posCode & 1) != 0)) {
+                payloadLen = in.readVInt();
+              }
+              if ((in.readVInt() & 1) != 0) {
+                // new offset length
+                in.readVInt();
+              }
+              if (storePayloads) {
+                in.skipBytes(payloadLen);
+              }
+            }
           }
         }
 
         if (liveDocs == null || liveDocs.get(accum)) {
-          if (VERBOSE) System.out.println("    return docID=" + accum + " freq=" + freq);
+          //System.out.println("    return docID=" + accum + " freq=" + freq);
           return (docID = accum);
         }
       }
@@ -393,7 +422,7 @@ public class MemoryPostingsFormat extends PostingsFormat {
     }
 
     @Override
-    public int freq() {
+    public int freq() throws IOException {
       assert indexOptions != IndexOptions.DOCS_ONLY;
       return freq;
     }
@@ -413,26 +442,30 @@ public class MemoryPostingsFormat extends PostingsFormat {
     private int posPending;
     private int payloadLength;
     private boolean payloadRetrieved;
+    final boolean storeOffsets;
+    int offsetLength;
+    int startOffset;
 
     private int pos;
     private final BytesRef payload = new BytesRef();
 
-    public FSTDocsAndPositionsEnum(boolean storePayloads) {
+    public FSTDocsAndPositionsEnum(boolean storePayloads, boolean storeOffsets) {
       this.storePayloads = storePayloads;
+      this.storeOffsets = storeOffsets;
     }
 
-    public boolean canReuse(boolean storePayloads) {
-      return storePayloads == this.storePayloads;
+    public boolean canReuse(boolean storePayloads, boolean storeOffsets) {
+      return storePayloads == this.storePayloads && storeOffsets == this.storeOffsets;
     }
     
     public FSTDocsAndPositionsEnum reset(BytesRef bufferIn, Bits liveDocs, int numDocs) {
       assert numDocs > 0;
-      if (VERBOSE) {
-        System.out.println("D&P reset bytes this=" + this);
-        for(int i=bufferIn.offset;i<bufferIn.length;i++) {
-          System.out.println("  " + Integer.toHexString(bufferIn.bytes[i]&0xFF));
-        }
-      }
+
+      // System.out.println("D&P reset bytes this=" + this);
+      // for(int i=bufferIn.offset;i<bufferIn.length;i++) {
+      //   System.out.println("  " + Integer.toHexString(bufferIn.bytes[i]&0xFF));
+      // }
+
       if (buffer.length < bufferIn.length - bufferIn.offset) {
         buffer = ArrayUtil.grow(buffer, bufferIn.length - bufferIn.offset);
       }
@@ -447,6 +480,8 @@ public class MemoryPostingsFormat extends PostingsFormat {
       this.numDocs = numDocs;
       posPending = 0;
       payloadRetrieved = false;
+      startOffset = storeOffsets ? 0 : -1; // always return -1 if no offsets are stored
+      offsetLength = 0;
       return this;
     }
 
@@ -456,9 +491,9 @@ public class MemoryPostingsFormat extends PostingsFormat {
         nextPosition();
       }
       while(true) {
-        if (VERBOSE) System.out.println("  nextDoc cycle docUpto=" + docUpto + " numDocs=" + numDocs + " fp=" + in.getPosition() + " this=" + this);
+        //System.out.println("  nextDoc cycle docUpto=" + docUpto + " numDocs=" + numDocs + " fp=" + in.getPosition() + " this=" + this);
         if (docUpto == numDocs) {
-          if (VERBOSE) System.out.println("    END");
+          //System.out.println("    END");
           return docID = NO_MORE_DOCS;
         }
         docUpto++;
@@ -474,8 +509,9 @@ public class MemoryPostingsFormat extends PostingsFormat {
 
         if (liveDocs == null || liveDocs.get(accum)) {
           pos = 0;
+          startOffset = storeOffsets ? 0 : -1;
           posPending = freq;
-          if (VERBOSE) System.out.println("    return docID=" + accum + " freq=" + freq);
+          //System.out.println("    return docID=" + accum + " freq=" + freq);
           return (docID = accum);
         }
 
@@ -487,8 +523,18 @@ public class MemoryPostingsFormat extends PostingsFormat {
             final int skipCode = in.readVInt();
             if ((skipCode & 1) != 0) {
               payloadLength = in.readVInt();
-              if (VERBOSE) System.out.println("    new payloadLen=" + payloadLength);
+              //System.out.println("    new payloadLen=" + payloadLength);
             }
+          }
+          
+          if (storeOffsets) {
+            if ((in.readVInt() & 1) != 0) {
+              // new offset length
+              offsetLength = in.readVInt();
+            }
+          }
+          
+          if (storePayloads) {
             in.skipBytes(payloadLength);
           }
         }
@@ -497,7 +543,7 @@ public class MemoryPostingsFormat extends PostingsFormat {
 
     @Override
     public int nextPosition() {
-      if (VERBOSE) System.out.println("    nextPos storePayloads=" + storePayloads + " this=" + this);
+      //System.out.println("    nextPos storePayloads=" + storePayloads + " this=" + this);
       assert posPending > 0;
       posPending--;
       if (!storePayloads) {
@@ -511,6 +557,18 @@ public class MemoryPostingsFormat extends PostingsFormat {
           //} else {
           //System.out.println("      same payloadLen=" + payloadLength);
         }
+      }
+      
+      if (storeOffsets) {
+        int offsetCode = in.readVInt();
+        if ((offsetCode & 1) != 0) {
+          // new offset length
+          offsetLength = in.readVInt();
+        }
+        startOffset += offsetCode >>> 1;
+      }
+      
+      if (storePayloads) {
         payload.offset = in.getPosition();
         in.skipBytes(payloadLength);
         payload.length = payloadLength;
@@ -520,18 +578,18 @@ public class MemoryPostingsFormat extends PostingsFormat {
         payloadRetrieved = false;
       }
 
-      if (VERBOSE) System.out.println("      pos=" + pos + " payload=" + payload + " fp=" + in.getPosition());
+      //System.out.println("      pos=" + pos + " payload=" + payload + " fp=" + in.getPosition());
       return pos;
     }
 
     @Override
     public int startOffset() {
-      return -1;
+      return startOffset;
     }
 
     @Override
     public int endOffset() {
-      return -1;
+      return startOffset + offsetLength;
     }
 
     @Override
@@ -564,7 +622,7 @@ public class MemoryPostingsFormat extends PostingsFormat {
     }
 
     @Override
-    public int freq() {
+    public int freq() throws IOException {
       return freq;
     }
   }
@@ -588,20 +646,20 @@ public class MemoryPostingsFormat extends PostingsFormat {
       if (!didDecode) {
         buffer.reset(current.output.bytes, 0, current.output.length);
         docFreq = buffer.readVInt();
-        if (field.indexOptions != IndexOptions.DOCS_ONLY) {
+        if (field.getIndexOptions() != IndexOptions.DOCS_ONLY) {
           totalTermFreq = docFreq + buffer.readVLong();
         } else {
           totalTermFreq = -1;
         }
         current.output.offset = buffer.getPosition();
-        if (VERBOSE) System.out.println("  df=" + docFreq + " totTF=" + totalTermFreq + " offset=" + buffer.getPosition() + " len=" + current.output.length);
+        //System.out.println("  df=" + docFreq + " totTF=" + totalTermFreq + " offset=" + buffer.getPosition() + " len=" + current.output.length);
         didDecode = true;
       }
     }
 
     @Override
     public boolean seekExact(BytesRef text, boolean useCache /* ignored */) throws IOException {
-      if (VERBOSE) System.out.println("te.seekExact text=" + field.name + ":" + text.utf8ToString() + " this=" + this);
+      //System.out.println("te.seekExact text=" + field.name + ":" + text.utf8ToString() + " this=" + this);
       current = fstEnum.seekExact(text);
       didDecode = false;
       return current != null;
@@ -609,25 +667,24 @@ public class MemoryPostingsFormat extends PostingsFormat {
 
     @Override
     public SeekStatus seekCeil(BytesRef text, boolean useCache /* ignored */) throws IOException {
-      if (VERBOSE) System.out.println("te.seek text=" + field.name + ":" + text.utf8ToString() + " this=" + this);
+      //System.out.println("te.seek text=" + field.name + ":" + text.utf8ToString() + " this=" + this);
       current = fstEnum.seekCeil(text);
       if (current == null) {
         return SeekStatus.END;
       } else {
-        if (VERBOSE) {
-          System.out.println("  got term=" + current.input.utf8ToString());
-          for(int i=0;i<current.output.length;i++) {
-            System.out.println("    " + Integer.toHexString(current.output.bytes[i]&0xFF));
-          }
-        }
+
+        // System.out.println("  got term=" + current.input.utf8ToString());
+        // for(int i=0;i<current.output.length;i++) {
+        //   System.out.println("    " + Integer.toHexString(current.output.bytes[i]&0xFF));
+        // }
 
         didDecode = false;
 
         if (text.equals(current.input)) {
-          if (VERBOSE) System.out.println("  found!");
+          //System.out.println("  found!");
           return SeekStatus.FOUND;
         } else {
-          if (VERBOSE) System.out.println("  not found: " + current.input.utf8ToString());
+          //System.out.println("  not found: " + current.input.utf8ToString());
           return SeekStatus.NOT_FOUND;
         }
       }
@@ -638,14 +695,14 @@ public class MemoryPostingsFormat extends PostingsFormat {
       decodeMetaData();
       FSTDocsEnum docsEnum;
 
-      if (needsFreqs && field.indexOptions == IndexOptions.DOCS_ONLY) {
+      if (needsFreqs && field.getIndexOptions() == IndexOptions.DOCS_ONLY) {
         return null;
       } else if (reuse == null || !(reuse instanceof FSTDocsEnum)) {
-        docsEnum = new FSTDocsEnum(field.indexOptions, field.storePayloads);
+        docsEnum = new FSTDocsEnum(field.getIndexOptions(), field.hasPayloads());
       } else {
         docsEnum = (FSTDocsEnum) reuse;        
-        if (!docsEnum.canReuse(field.indexOptions, field.storePayloads)) {
-          docsEnum = new FSTDocsEnum(field.indexOptions, field.storePayloads);
+        if (!docsEnum.canReuse(field.getIndexOptions(), field.hasPayloads())) {
+          docsEnum = new FSTDocsEnum(field.getIndexOptions(), field.hasPayloads());
         }
       }
       return docsEnum.reset(current.output, liveDocs, docFreq);
@@ -654,25 +711,25 @@ public class MemoryPostingsFormat extends PostingsFormat {
     @Override
     public DocsAndPositionsEnum docsAndPositions(Bits liveDocs, DocsAndPositionsEnum reuse, boolean needsOffsets) throws IOException {
 
-      if (needsOffsets) {
-        // Not until we can index offsets...
-        return null;
+      boolean hasOffsets = field.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0;
+      if (needsOffsets && !hasOffsets) {
+        return null; // not available
       }
       
-      if (field.indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) < 0) {
+      if (field.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) < 0) {
         return null;
       }
       decodeMetaData();
       FSTDocsAndPositionsEnum docsAndPositionsEnum;
       if (reuse == null || !(reuse instanceof FSTDocsAndPositionsEnum)) {
-        docsAndPositionsEnum = new FSTDocsAndPositionsEnum(field.storePayloads);
+        docsAndPositionsEnum = new FSTDocsAndPositionsEnum(field.hasPayloads(), hasOffsets);
       } else {
         docsAndPositionsEnum = (FSTDocsAndPositionsEnum) reuse;        
-        if (!docsAndPositionsEnum.canReuse(field.storePayloads)) {
-          docsAndPositionsEnum = new FSTDocsAndPositionsEnum(field.storePayloads);
+        if (!docsAndPositionsEnum.canReuse(field.hasPayloads(), hasOffsets)) {
+          docsAndPositionsEnum = new FSTDocsAndPositionsEnum(field.hasPayloads(), hasOffsets);
         }
       }
-      if (VERBOSE) System.out.println("D&P reset this=" + this);
+      //System.out.println("D&P reset this=" + this);
       return docsAndPositionsEnum.reset(current.output, liveDocs, docFreq);
     }
 
@@ -683,14 +740,14 @@ public class MemoryPostingsFormat extends PostingsFormat {
 
     @Override
     public BytesRef next() throws IOException {
-      if (VERBOSE) System.out.println("te.next");
+      //System.out.println("te.next");
       current = fstEnum.next();
       if (current == null) {
-        if (VERBOSE) System.out.println("  END");
+        //System.out.println("  END");
         return null;
       }
       didDecode = false;
-      if (VERBOSE) System.out.println("  term=" + field.name + ":" + current.input.utf8ToString());
+      //System.out.println("  term=" + field.name + ":" + current.input.utf8ToString());
       return current.input;
     }
 
@@ -738,7 +795,7 @@ public class MemoryPostingsFormat extends PostingsFormat {
       this.termCount = termCount;
       final int fieldNumber = in.readVInt();
       field = fieldInfos.fieldInfo(fieldNumber);
-      if (field.indexOptions != IndexOptions.DOCS_ONLY) {
+      if (field.getIndexOptions() != IndexOptions.DOCS_ONLY) {
         sumTotalTermFreq = in.readVLong();
       } else {
         sumTotalTermFreq = -1;
@@ -765,7 +822,7 @@ public class MemoryPostingsFormat extends PostingsFormat {
     }
 
     @Override
-    public long getUniqueTermCount() throws IOException {
+    public long size() throws IOException {
       return termCount;
     }
 
@@ -794,9 +851,7 @@ public class MemoryPostingsFormat extends PostingsFormat {
           break;
         }
         final TermsReader termsReader = new TermsReader(state.fieldInfos, in, termCount);
-        if (VERBOSE) {
-          System.out.println("load field=" + termsReader.field.name);
-        }
+        // System.out.println("load field=" + termsReader.field.name);
         fields.put(termsReader.field.name, termsReader);
       }
     } finally {
@@ -831,7 +886,7 @@ public class MemoryPostingsFormat extends PostingsFormat {
       }
       
       @Override
-      public int getUniqueFieldCount() {
+      public int size() {
         return fields.size();
       }
 
@@ -843,10 +898,5 @@ public class MemoryPostingsFormat extends PostingsFormat {
         }
       }
     };
-  }
-
-  @Override
-  public void files(SegmentInfo segmentInfo, String segmentSuffix, Set<String> files) throws IOException {
-    files.add(IndexFileNames.segmentFileName(segmentInfo.name, segmentSuffix, EXTENSION));
   }
 }

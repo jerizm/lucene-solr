@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,7 +20,6 @@ package org.apache.lucene.search;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.FieldInvertState;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -46,19 +45,19 @@ public class TestSimilarityProvider extends LuceneTestCase {
     directory = newDirectory();
     PerFieldSimilarityWrapper sim = new ExampleSimilarityProvider();
     IndexWriterConfig iwc = newIndexWriterConfig(TEST_VERSION_CURRENT, 
-        new MockAnalyzer(random)).setSimilarity(sim);
-    RandomIndexWriter iw = new RandomIndexWriter(random, directory, iwc);
+        new MockAnalyzer(random())).setSimilarity(sim);
+    RandomIndexWriter iw = new RandomIndexWriter(random(), directory, iwc);
     Document doc = new Document();
-    Field field = newField("foo", "", TextField.TYPE_UNSTORED);
+    Field field = newTextField("foo", "", Field.Store.NO);
     doc.add(field);
-    Field field2 = newField("bar", "", TextField.TYPE_UNSTORED);
+    Field field2 = newTextField("bar", "", Field.Store.NO);
     doc.add(field2);
     
-    field.setValue("quick brown fox");
-    field2.setValue("quick brown fox");
+    field.setStringValue("quick brown fox");
+    field2.setStringValue("quick brown fox");
     iw.addDocument(doc);
-    field.setValue("jumps over lazy brown dog");
-    field2.setValue("jumps over lazy brown dog");
+    field.setStringValue("jumps over lazy brown dog");
+    field2.setStringValue("jumps over lazy brown dog");
     iw.addDocument(doc);
     reader = iw.getReader();
     iw.close();

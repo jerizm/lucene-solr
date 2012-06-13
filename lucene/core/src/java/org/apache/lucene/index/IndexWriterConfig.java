@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,6 +18,7 @@ package org.apache.lucene.index;
  */
 
 import java.io.PrintStream;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.codecs.Codec;
@@ -27,6 +28,7 @@ import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.util.InfoStream;
 import org.apache.lucene.util.PrintStreamInfoStream;
+import org.apache.lucene.util.SetOnce;
 import org.apache.lucene.util.Version;
 
 /**
@@ -51,15 +53,25 @@ import org.apache.lucene.util.Version;
 public final class IndexWriterConfig implements Cloneable {
 
   /**
-   * Specifies the open mode for {@link IndexWriter}:
-   * <ul>
-   * {@link #CREATE} - creates a new index or overwrites an existing one.
-   * {@link #CREATE_OR_APPEND} - creates a new index if one does not exist,
-   * otherwise it opens the index and documents will be appended.
-   * {@link #APPEND} - opens an existing index.
-   * </ul>
+   * Specifies the open mode for {@link IndexWriter}.
    */
-  public static enum OpenMode { CREATE, APPEND, CREATE_OR_APPEND }
+  public static enum OpenMode {
+    /** 
+     * Creates a new index or overwrites an existing one. 
+     */
+    CREATE,
+    
+    /** 
+     * Opens an existing index. 
+     */
+    APPEND,
+    
+    /** 
+     * Creates a new index if one does not exist,
+     * otherwise it opens the index and documents will be appended. 
+     */
+    CREATE_OR_APPEND 
+  }
 
   /** Default value is 32. Change using {@link #setTermIndexInterval(int)}. */
   public static final int DEFAULT_TERM_INDEX_INTERVAL = 32; // TODO: this should be private to the codec, not settable here
@@ -143,15 +155,17 @@ public final class IndexWriterConfig implements Cloneable {
 
   private Version matchVersion;
 
+  // Used directly by IndexWriter:
+  AtomicBoolean inUseByIndexWriter = new AtomicBoolean();
+
   /**
    * Creates a new config that with defaults that match the specified
    * {@link Version} as well as the default {@link
-   * Analyzer}. If matchVersion is >= {@link
-   * Version#LUCENE_32}, {@link TieredMergePolicy} is used
-   * for merging; else {@link LogByteSizeMergePolicy}.
+   * Analyzer}. By default, {@link TieredMergePolicy} is used
+   * for merging;
    * Note that {@link TieredMergePolicy} is free to select
    * non-contiguous merges, which means docIDs may not
-   * remain montonic over time.  If this is a problem you
+   * remain monotonic over time.  If this is a problem you
    * should switch to {@link LogByteSizeMergePolicy} or
    * {@link LogDocMergePolicy}.
    */
@@ -172,11 +186,7 @@ public final class IndexWriterConfig implements Cloneable {
     mergedSegmentWarmer = null;
     codec = Codec.getDefault();
     infoStream = InfoStream.getDefault();
-    if (matchVersion.onOrAfter(Version.LUCENE_32)) {
-      mergePolicy = new TieredMergePolicy();
-    } else {
-      mergePolicy = new LogByteSizeMergePolicy();
-    }
+    mergePolicy = new TieredMergePolicy();
     flushPolicy = new FlushByRamOrCountsPolicy();
     readerPooling = DEFAULT_READER_POOLING;
     indexerThreadPool = new ThreadAffinityDocumentsWriterThreadPool(DEFAULT_MAX_THREAD_STATES);
@@ -185,15 +195,27 @@ public final class IndexWriterConfig implements Cloneable {
   }
 
   @Override
-  public Object clone() {
-    // Shallow clone is the only thing that's possible, since parameters like
-    // analyzer, index commit etc. do not implement Cloneable.
+  public IndexWriterConfig clone() {
+    IndexWriterConfig clone;
+    if (inUseByIndexWriter.get()) {
+      throw new IllegalStateException("cannot clone: this IndexWriterConfig is private to IndexWriter; make a new one instead");
+    }
     try {
-      return super.clone();
+      clone = (IndexWriterConfig) super.clone();
     } catch (CloneNotSupportedException e) {
       // should not happen
       throw new RuntimeException(e);
     }
+
+    // Mostly shallow clone, but do a deepish clone of
+    // certain objects that have state that cannot be shared
+    // across IW instances:
+    clone.inUseByIndexWriter = new AtomicBoolean();
+    clone.flushPolicy = flushPolicy.clone();
+    clone.indexerThreadPool = indexerThreadPool.clone();
+    clone.mergePolicy = mergePolicy.clone();
+
+    return clone;
   }
 
   /** Returns the default analyzer to use for indexing documents. */
@@ -571,8 +593,8 @@ public final class IndexWriterConfig implements Cloneable {
    * </p>
    * <p>
    * NOTE: This only takes effect when IndexWriter is first created.</p>*/
-  public IndexWriterConfig setIndexerThreadPool(DocumentsWriterPerThreadPool threadPool) {
-    if(threadPool == null) {
+  IndexWriterConfig setIndexerThreadPool(DocumentsWriterPerThreadPool threadPool) {
+    if (threadPool == null) {
       throw new IllegalArgumentException("DocumentsWriterPerThreadPool must not be nul");
     }
     this.indexerThreadPool = threadPool;
@@ -582,18 +604,40 @@ public final class IndexWriterConfig implements Cloneable {
   /** Returns the configured {@link DocumentsWriterPerThreadPool} instance.
    * @see #setIndexerThreadPool(DocumentsWriterPerThreadPool)
    * @return the configured {@link DocumentsWriterPerThreadPool} instance.*/
-  public DocumentsWriterPerThreadPool getIndexerThreadPool() {
+  DocumentsWriterPerThreadPool getIndexerThreadPool() {
     return this.indexerThreadPool;
+  }
+
+  /**
+   * Sets the max number of simultaneous threads that may be indexing documents
+   * at once in IndexWriter. Values &lt; 1 are invalid and if passed
+   * <code>maxThreadStates</code> will be set to
+   * {@link #DEFAULT_MAX_THREAD_STATES}.
+   *
+   * <p>Only takes effect when IndexWriter is first created. */
+  public IndexWriterConfig setMaxThreadStates(int maxThreadStates) {
+    this.indexerThreadPool = new ThreadAffinityDocumentsWriterThreadPool(maxThreadStates);
+    return this;
+  }
+
+  /** Returns the max number of simultaneous threads that
+   *  may be indexing documents at once in IndexWriter. */
+  public int getMaxThreadStates() {
+    try {
+      return ((ThreadAffinityDocumentsWriterThreadPool) indexerThreadPool).getMaxThreadStates();
+    } catch (ClassCastException cce) {
+      throw new IllegalStateException(cce);
+    }
   }
 
   /** By default, IndexWriter does not pool the
    *  SegmentReaders it must open for deletions and
    *  merging, unless a near-real-time reader has been
-   *  obtained by calling {@link IndexWriter#getReader}.
+   *  obtained by calling {@link DirectoryReader#open(IndexWriter, boolean)}.
    *  This method lets you enable pooling without getting a
    *  near-real-time reader.  NOTE: if you set this to
    *  false, IndexWriter will still pool readers once
-   *  {@link IndexWriter#getReader} is called.
+   *  {@link DirectoryReader#open(IndexWriter, boolean)} is called.
    *
    * <p>Only takes effect when IndexWriter is first created. */
   public IndexWriterConfig setReaderPooling(boolean readerPooling) {
@@ -602,7 +646,7 @@ public final class IndexWriterConfig implements Cloneable {
   }
 
   /** Returns true if IndexWriter should pool readers even
-   *  if {@link IndexWriter#getReader} has not been called. */
+   *  if {@link DirectoryReader#open(IndexWriter, boolean)} has not been called. */
   public boolean getReaderPooling() {
     return readerPooling;
   }
@@ -623,7 +667,7 @@ public final class IndexWriterConfig implements Cloneable {
   /** Sets the termsIndexDivisor passed to any readers that
    *  IndexWriter opens, for example when applying deletes
    *  or creating a near-real-time reader in {@link
-   *  IndexWriter#getReader}. If you pass -1, the terms index 
+   *  DirectoryReader#open(IndexWriter, boolean)}. If you pass -1, the terms index 
    *  won't be loaded by the readers. This is only useful in 
    *  advanced situations when you will only .next() through 
    *  all terms; attempts to seek will hit an exception.

@@ -33,8 +33,20 @@
   <description>Apache Lucene Java Test Framework</description>
   <properties>
     <module-directory>lucene/test-framework</module-directory>
-    <build-directory>../build/test-framework</build-directory>
+    <top-level>../../..</top-level>
+    <module-path>${top-level}/${module-directory}</module-path>
   </properties>
+  <scm>
+    <connection>
+      scm:svn:http://svn.apache.org/repos/asf/lucene/dev/trunk/${module-directory}
+    </connection>
+    <developerConnection>
+      scm:svn:https://svn.apache.org/repos/asf/lucene/dev/trunk/${module-directory}
+    </developerConnection>
+    <url>
+      http://svn.apache.org/viewvc/lucene/dev/trunk/${module-directory}
+    </url>
+  </scm>
   <dependencies>
     <dependency>
       <groupId>${project.groupId}</groupId>
@@ -49,14 +61,16 @@
       <groupId>org.apache.ant</groupId>
       <artifactId>ant-junit</artifactId>
     </dependency>
+    <dependency>
+      <groupId>com.carrotsearch.randomizedtesting</groupId>
+      <artifactId>randomizedtesting-runner</artifactId>
+    </dependency>
   </dependencies>
   <build>
-    <directory>${build-directory}</directory>
-    <outputDirectory>${build-directory}/classes/java</outputDirectory>
-    <sourceDirectory>src/java</sourceDirectory>
+    <sourceDirectory>${module-path}/src/java</sourceDirectory>
     <resources>
       <resource>
-        <directory>src/resources</directory>
+        <directory>${module-path}/src/resources</directory>
       </resource>
       <resource>
         <directory>${project.build.sourceDirectory}</directory>
@@ -75,4 +89,17 @@
       </plugin>
     </plugins>
   </build>
+  <repositories>
+    <repository>
+      <id>sonatype.releases</id>
+      <name>Sonatype Releases Repository</name>
+      <url>http://oss.sonatype.org/content/repositories/releases</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <updatePolicy>never</updatePolicy>
+      </snapshots>
+    </repository>
+  </repositories>
 </project>

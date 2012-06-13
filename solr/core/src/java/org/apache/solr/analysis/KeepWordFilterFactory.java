@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,11 +17,9 @@
 
 package org.apache.solr.analysis;
 
-import org.apache.solr.common.ResourceLoader;
-import org.apache.solr.util.plugin.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.*;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.miscellaneous.KeepWordFilter;
-import org.apache.lucene.analysis.util.CharArraySet;
 
 import java.util.Map;
 import java.util.Set;
@@ -38,7 +36,7 @@ import java.io.IOException;
  * &lt;/fieldType&gt;</pre> 
  *
  */
-public class KeepWordFilterFactory extends BaseTokenFilterFactory implements ResourceLoaderAware {
+public class KeepWordFilterFactory extends TokenFilterFactory implements ResourceLoaderAware {
 
   @Override
   public void init(Map<String,String> args) {
@@ -55,7 +53,7 @@ public class KeepWordFilterFactory extends BaseTokenFilterFactory implements Res
       try {
         words = getWordSet(loader, wordFiles, ignoreCase);
       } catch (IOException e) {
-        throw new RuntimeException(e);
+        throw new InitializationException("IOException thrown while loading words", e);
       }
     }
   }

@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,16 +17,22 @@ package org.apache.lucene.codecs;
  * limitations under the License.
  */
 
-import java.io.IOException;
 import java.util.Set;
+import java.util.ServiceLoader; // javadocs
 
-import org.apache.lucene.index.IndexFileNames;
 import org.apache.lucene.index.IndexWriterConfig; // javadocs
-import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.util.NamedSPILoader;
 
 /**
- * Encodes/decodes an inverted index segment
+ * Encodes/decodes an inverted index segment.
+ * <p>
+ * Note, when extending this class, the name ({@link #getName}) is 
+ * written into the index. In order for the segment to be read, the
+ * name must resolve to your implementation via {@link #forName(String)}.
+ * This method uses Java's 
+ * {@link ServiceLoader Service Provider Interface} to resolve codec names.
+ * <p>
+ * @see ServiceLoader
  */
 public abstract class Codec implements NamedSPILoader.NamedSPI {
 
@@ -36,34 +42,14 @@ public abstract class Codec implements NamedSPILoader.NamedSPI {
   private final String name;
 
   public Codec(String name) {
+    NamedSPILoader.checkServiceName(name);
     this.name = name;
   }
   
   /** Returns this codec's name */
   @Override
-  public String getName() {
+  public final String getName() {
     return name;
-  }
-  
-  /** Populates <code>files</code> with all filenames needed for 
-   * the <code>info</code> segment.
-   */
-  public void files(SegmentInfo info, Set<String> files) throws IOException {
-    if (info.getUseCompoundFile()) {
-      files.add(IndexFileNames.segmentFileName(info.name, "", IndexFileNames.COMPOUND_FILE_EXTENSION));
-      files.add(IndexFileNames.segmentFileName(info.name, "", IndexFileNames.COMPOUND_FILE_ENTRIES_EXTENSION));
-    } else {
-      postingsFormat().files(info, "", files);
-      storedFieldsFormat().files(info, files);
-      termVectorsFormat().files(info, files);
-      fieldInfosFormat().files(info, files);
-      // TODO: segmentInfosFormat should be allowed to declare additional files
-      // if it wants, in addition to segments_N
-      docValuesFormat().files(info, files);
-      normsFormat().files(info, files);
-    }
-    // never inside CFS
-    liveDocsFormat().files(info, files);
   }
   
   /** Encodes/decodes postings */
@@ -81,8 +67,8 @@ public abstract class Codec implements NamedSPILoader.NamedSPI {
   /** Encodes/decodes field infos file */
   public abstract FieldInfosFormat fieldInfosFormat();
   
-  /** Encodes/decodes segments file */
-  public abstract SegmentInfosFormat segmentInfosFormat();
+  /** Encodes/decodes segment info file */
+  public abstract SegmentInfoFormat segmentInfoFormat();
   
   /** Encodes/decodes document normalization values */
   public abstract NormsFormat normsFormat();

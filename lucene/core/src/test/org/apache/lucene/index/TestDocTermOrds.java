@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -28,9 +28,7 @@ import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.NumericField;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
+import org.apache.lucene.document.IntField;
 import org.apache.lucene.index.DocTermOrds.TermOrdsIterator;
 import org.apache.lucene.search.FieldCache;
 import org.apache.lucene.store.Directory;
@@ -50,17 +48,17 @@ public class TestDocTermOrds extends LuceneTestCase {
 
   public void testSimple() throws Exception {
     Directory dir = newDirectory();
-    final RandomIndexWriter w = new RandomIndexWriter(random, dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setMergePolicy(newLogMergePolicy()));
+    final RandomIndexWriter w = new RandomIndexWriter(random(), dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMergePolicy(newLogMergePolicy()));
     Document doc = new Document();
-    Field field = newField("field", "", TextField.TYPE_UNSTORED);
+    Field field = newTextField("field", "", Field.Store.NO);
     doc.add(field);
-    field.setValue("a b c");
+    field.setStringValue("a b c");
     w.addDocument(doc);
 
-    field.setValue("d e f");
+    field.setStringValue("d e f");
     w.addDocument(doc);
 
-    field.setValue("a f");
+    field.setStringValue("a f");
     w.addDocument(doc);
     
     final IndexReader r = w.getReader();
@@ -96,7 +94,7 @@ public class TestDocTermOrds extends LuceneTestCase {
     final int NUM_TERMS = atLeast(20);
     final Set<BytesRef> terms = new HashSet<BytesRef>();
     while(terms.size() < NUM_TERMS) {
-      final String s = _TestUtil.randomRealisticUnicodeString(random);
+      final String s = _TestUtil.randomRealisticUnicodeString(random());
       //final String s = _TestUtil.randomSimpleString(random);
       if (s.length() > 0) {
         terms.add(new BytesRef(s));
@@ -107,16 +105,16 @@ public class TestDocTermOrds extends LuceneTestCase {
     
     final int NUM_DOCS = atLeast(100);
 
-    IndexWriterConfig conf = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random));
+    IndexWriterConfig conf = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
 
     // Sometimes swap in codec that impls ord():
-    if (random.nextInt(10) == 7) {
+    if (random().nextInt(10) == 7) {
       // Make sure terms index has ords:
       Codec codec = _TestUtil.alwaysPostingsFormat(PostingsFormat.forName("Lucene40WithOrds"));
       conf.setCodec(codec);
     }
     
-    final RandomIndexWriter w = new RandomIndexWriter(random, dir, conf);
+    final RandomIndexWriter w = new RandomIndexWriter(random(), dir, conf);
 
     final int[][] idToOrds = new int[NUM_DOCS][];
     final Set<Integer> ordsForDocSet = new HashSet<Integer>();
@@ -124,11 +122,11 @@ public class TestDocTermOrds extends LuceneTestCase {
     for(int id=0;id<NUM_DOCS;id++) {
       Document doc = new Document();
 
-      doc.add(new NumericField("id", id));
+      doc.add(new IntField("id", id, Field.Store.NO));
       
-      final int termCount = _TestUtil.nextInt(random, 0, 20*RANDOM_MULTIPLIER);
+      final int termCount = _TestUtil.nextInt(random(), 0, 20*RANDOM_MULTIPLIER);
       while(ordsForDocSet.size() < termCount) {
-        ordsForDocSet.add(random.nextInt(termsArray.length));
+        ordsForDocSet.add(random().nextInt(termsArray.length));
       }
       final int[] ordsForDoc = new int[termCount];
       int upto = 0;
@@ -137,7 +135,7 @@ public class TestDocTermOrds extends LuceneTestCase {
       }
       for(int ord : ordsForDocSet) {
         ordsForDoc[upto++] = ord;
-        Field field = newField("field", termsArray[ord].utf8ToString(), StringField.TYPE_UNSTORED);
+        Field field = newStringField("field", termsArray[ord].utf8ToString(), Field.Store.NO);
         if (VERBOSE) {
           System.out.println("  f=" + termsArray[ord].utf8ToString());
         }
@@ -181,12 +179,12 @@ public class TestDocTermOrds extends LuceneTestCase {
     MockDirectoryWrapper dir = newDirectory();
 
     final Set<String> prefixes = new HashSet<String>();
-    final int numPrefix = _TestUtil.nextInt(random, 2, 7);
+    final int numPrefix = _TestUtil.nextInt(random(), 2, 7);
     if (VERBOSE) {
       System.out.println("TEST: use " + numPrefix + " prefixes");
     }
     while(prefixes.size() < numPrefix) {
-      prefixes.add(_TestUtil.randomRealisticUnicodeString(random));
+      prefixes.add(_TestUtil.randomRealisticUnicodeString(random()));
       //prefixes.add(_TestUtil.randomSimpleString(random));
     }
     final String[] prefixesArray = prefixes.toArray(new String[prefixes.size()]);
@@ -194,7 +192,7 @@ public class TestDocTermOrds extends LuceneTestCase {
     final int NUM_TERMS = atLeast(20);
     final Set<BytesRef> terms = new HashSet<BytesRef>();
     while(terms.size() < NUM_TERMS) {
-      final String s = prefixesArray[random.nextInt(prefixesArray.length)] + _TestUtil.randomRealisticUnicodeString(random);
+      final String s = prefixesArray[random().nextInt(prefixesArray.length)] + _TestUtil.randomRealisticUnicodeString(random());
       //final String s = prefixesArray[random.nextInt(prefixesArray.length)] + _TestUtil.randomSimpleString(random);
       if (s.length() > 0) {
         terms.add(new BytesRef(s));
@@ -205,15 +203,15 @@ public class TestDocTermOrds extends LuceneTestCase {
     
     final int NUM_DOCS = atLeast(100);
 
-    IndexWriterConfig conf = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random));
+    IndexWriterConfig conf = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
 
     // Sometimes swap in codec that impls ord():
-    if (random.nextInt(10) == 7) {
+    if (random().nextInt(10) == 7) {
       Codec codec = _TestUtil.alwaysPostingsFormat(PostingsFormat.forName("Lucene40WithOrds"));
       conf.setCodec(codec);
     }
     
-    final RandomIndexWriter w = new RandomIndexWriter(random, dir, conf);
+    final RandomIndexWriter w = new RandomIndexWriter(random(), dir, conf);
 
     final int[][] idToOrds = new int[NUM_DOCS][];
     final Set<Integer> ordsForDocSet = new HashSet<Integer>();
@@ -221,11 +219,11 @@ public class TestDocTermOrds extends LuceneTestCase {
     for(int id=0;id<NUM_DOCS;id++) {
       Document doc = new Document();
 
-      doc.add(new NumericField("id", id));
+      doc.add(new IntField("id", id, Field.Store.NO));
       
-      final int termCount = _TestUtil.nextInt(random, 0, 20*RANDOM_MULTIPLIER);
+      final int termCount = _TestUtil.nextInt(random(), 0, 20*RANDOM_MULTIPLIER);
       while(ordsForDocSet.size() < termCount) {
-        ordsForDocSet.add(random.nextInt(termsArray.length));
+        ordsForDocSet.add(random().nextInt(termsArray.length));
       }
       final int[] ordsForDoc = new int[termCount];
       int upto = 0;
@@ -234,7 +232,7 @@ public class TestDocTermOrds extends LuceneTestCase {
       }
       for(int ord : ordsForDocSet) {
         ordsForDoc[upto++] = ord;
-        Field field = newField("field", termsArray[ord].utf8ToString(), StringField.TYPE_UNSTORED);
+        Field field = newStringField("field", termsArray[ord].utf8ToString(), Field.Store.NO);
         if (VERBOSE) {
           System.out.println("  f=" + termsArray[ord].utf8ToString());
         }
@@ -302,7 +300,7 @@ public class TestDocTermOrds extends LuceneTestCase {
                                             "field",
                                             prefixRef,
                                             Integer.MAX_VALUE,
-                                            _TestUtil.nextInt(random, 2, 10));
+                                            _TestUtil.nextInt(random(), 2, 10));
                                             
 
     final int[] docIDToID = FieldCache.DEFAULT.getInts(r, "id", false);
@@ -324,7 +322,7 @@ public class TestDocTermOrds extends LuceneTestCase {
 
     //final TermsEnum te = subR.fields().terms("field").iterator();
     final TermsEnum te = dto.getOrdTermsEnum(r);
-    if (te == null) {
+    if (dto.numTerms() == 0) {
       if (prefixRef == null) {
         assertNull(MultiFields.getTerms(r, "field"));
       } else {

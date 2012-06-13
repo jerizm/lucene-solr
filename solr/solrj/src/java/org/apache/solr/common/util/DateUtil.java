@@ -1,5 +1,5 @@
 package org.apache.solr.common.util;
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -90,8 +90,6 @@ public class DateUtil {
    * @param d The input date to parse
    * @return The parsed {@link java.util.Date}
    * @throws java.text.ParseException If the input can't be parsed
-   * @throws org.apache.commons.httpclient.util.DateParseException
-   *                                  If the input can't be parsed
    */
   public static Date parseDate(String d) throws ParseException {
     return parseDate(d, DEFAULT_DATE_FORMATS);

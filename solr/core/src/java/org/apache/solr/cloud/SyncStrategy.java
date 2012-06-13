@@ -1,6 +1,6 @@
 package org.apache.solr.cloud;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,10 +23,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.http.client.HttpClient;
 import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.impl.CommonsHttpSolrServer;
+import org.apache.solr.client.solrj.impl.HttpClientUtil;
+import org.apache.solr.client.solrj.impl.HttpSolrServer;
 import org.apache.solr.client.solrj.request.CoreAdminRequest.RequestRecovery;
-import org.apache.solr.client.solrj.request.QueryRequest;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.CloudState;
 import org.apache.solr.common.cloud.Slice;
@@ -37,12 +38,37 @@ import org.apache.solr.common.params.CoreAdminParams.CoreAdminAction;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.core.SolrCore;
+import org.apache.solr.handler.component.HttpShardHandlerFactory;
+import org.apache.solr.handler.component.ShardHandler;
+import org.apache.solr.handler.component.ShardRequest;
+import org.apache.solr.handler.component.ShardResponse;
 import org.apache.solr.update.PeerSync;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class SyncStrategy {
   protected final Logger log = LoggerFactory.getLogger(getClass());
+
+  private final ShardHandler shardHandler;
+  
+  private final static HttpClient client;
+  static {
+    ModifiableSolrParams params = new ModifiableSolrParams();
+    params.set(HttpClientUtil.PROP_MAX_CONNECTIONS, 10000);
+    params.set(HttpClientUtil.PROP_MAX_CONNECTIONS_PER_HOST, 20);
+    params.set(HttpClientUtil.PROP_CONNECTION_TIMEOUT, 30000);
+    params.set(HttpClientUtil.PROP_SO_TIMEOUT, 30000);
+    params.set(HttpClientUtil.PROP_USE_RETRY, false);
+    client = HttpClientUtil.createClient(params);
+  }
+  
+  public SyncStrategy() {
+    shardHandler = new HttpShardHandlerFactory().getShardHandler(client);
+  }
+  
+  private static class SyncShardRequest extends ShardRequest {
+    String coreName;
+  }
   
   public boolean sync(ZkController zkController, SolrCore core,
       ZkNodeProps leaderProps) {
@@ -51,6 +77,10 @@ public class SyncStrategy {
     
     // solrcloud_debug
     // System.out.println("SYNC UP");
+    if (core.getUpdateHandler().getUpdateLog() == null) {
+      log.error("No UpdateLog found - cannot sync");
+      return false;
+    }
     boolean success = syncReplicas(zkController, core, leaderProps);
     return success;
   }
@@ -156,7 +186,7 @@ public class SyncStrategy {
     }
     
  
-    PeerSync peerSync = new PeerSync(core, syncWith, 1000);
+    PeerSync peerSync = new PeerSync(core, syncWith, core.getUpdateHandler().getUpdateLog().numRecordsToKeep);
     return peerSync.sync();
   }
   
@@ -180,44 +210,68 @@ public class SyncStrategy {
     ZkCoreNodeProps zkLeader = new ZkCoreNodeProps(leaderProps);
     for (ZkCoreNodeProps node : nodes) {
       try {
-        // TODO: do we first everyone register as sync phase? get the overseer
-        // to do it?
-        // TODO: this should be done in parallel
-        QueryRequest qr = new QueryRequest(params("qt", "/get", "getVersions",
-            Integer.toString(1000), "sync", zkLeader.getCoreUrl(), "distrib",
-            "false"));
-        CommonsHttpSolrServer server = new CommonsHttpSolrServer(
-            node.getCoreUrl());
-        server.setConnectionTimeout(15000);
-        server.setSoTimeout(15000);
-        //System.out.println("ask " + node.getCoreUrl() + " to sync");
-        NamedList rsp = server.request(qr);
-        //System.out.println("response about syncing to leader:" + rsp + " node:"
-        //    + node.getCoreUrl() + " me:" + zkController.getBaseUrl());
-        boolean success = (Boolean) rsp.get("sync");
-        //System.out.println("success:" + success);
-        if (!success) {
-         // System.out
-         //     .println("try and ask " + node.getCoreUrl() + " to recover");
-          log.info("try and ask " + node.getCoreUrl() + " to recover");
-          try {
-            server = new CommonsHttpSolrServer(node.getBaseUrl());
-            server.setSoTimeout(5000);
-            server.setConnectionTimeout(5000);
-            
-            RequestRecovery recoverRequestCmd = new RequestRecovery();
-            recoverRequestCmd.setAction(CoreAdminAction.REQUESTRECOVERY);
-            recoverRequestCmd.setCoreName(node.getCoreName());
-            
-            server.request(recoverRequestCmd);
-          } catch (Exception e) {
-            log.info("Could not tell a replica to recover", e);
-          }
-        }
+//         System.out
+//             .println("try and ask " + node.getCoreUrl() + " to sync");
+        log.info("try and ask " + node.getCoreUrl() + " to sync");
+        requestSync(zkLeader.getCoreUrl(), node.getCoreName());
+
       } catch (Exception e) {
         SolrException.log(log, "Error syncing replica to leader", e);
       }
     }
+    
+    
+    for(;;) {
+      ShardResponse srsp = shardHandler.takeCompletedOrError();
+      if (srsp == null) break;
+      boolean success = handleResponse(srsp);
+      //System.out.println("got response:" + success);
+      if (!success) {
+         try {
+           log.info("Sync failed - asking replica to recover.");
+           //System.out.println("Sync failed - asking replica to recover.");
+           RequestRecovery recoverRequestCmd = new RequestRecovery();
+           recoverRequestCmd.setAction(CoreAdminAction.REQUESTRECOVERY);
+           recoverRequestCmd.setCoreName(((SyncShardRequest)srsp.getShardRequest()).coreName);
+           
+           HttpSolrServer server = new HttpSolrServer(zkLeader.getBaseUrl());
+           server.request(recoverRequestCmd);
+         } catch (Exception e) {
+           log.info("Could not tell a replica to recover", e);
+         }
+         shardHandler.cancelAll();
+        break;
+      }
+    }
+  }
+  
+  private boolean handleResponse(ShardResponse srsp) {
+    NamedList<Object> response = srsp.getSolrResponse().getResponse();
+    // TODO: why does this return null sometimes?
+    if (response == null) {
+      return false;
+    }
+    boolean success = (Boolean) response.get("sync");
+    
+    return success;
+  }
+
+  private void requestSync(String replica, String coreName) {
+    SyncShardRequest sreq = new SyncShardRequest();
+    sreq.coreName = coreName;
+    sreq.purpose = 1;
+    // TODO: this sucks
+    if (replica.startsWith("http://"))
+      replica = replica.substring(7);
+    sreq.shards = new String[]{replica};
+    sreq.actualShards = sreq.shards;
+    sreq.params = new ModifiableSolrParams();
+    sreq.params.set("qt","/get");
+    sreq.params.set("distrib",false);
+    sreq.params.set("getVersions",Integer.toString(100));
+    sreq.params.set("sync",replica);
+    
+    shardHandler.submit(sreq, replica, sreq.params);
   }
   
   public static ModifiableSolrParams params(String... params) {

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,7 +17,6 @@
 
 package org.apache.solr.handler.admin;
 
-import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.File;
 import java.lang.management.ManagementFactory;
@@ -46,11 +45,6 @@ import org.slf4j.LoggerFactory;
 /**
  * This handler returns system info
  * 
- * NOTE: the response format is still likely to change.  It should be designed so
- * that it works nicely with an XSLT transformation.  Until we have a nice
- * XSLT front end for /admin, the format is still open to change.
- * 
- *
  * @since solr 1.2
  */
 public class SystemInfoHandler extends RequestHandlerBase 
@@ -124,29 +118,30 @@ public class SystemInfoHandler extends RequestHandlerBase
     info.add( "name", os.getName() );
     info.add( "version", os.getVersion() );
     info.add( "arch", os.getArch() );
+    info.add( "systemLoadAverage", os.getSystemLoadAverage());
 
-    // Java 1.6
-    addGetterIfAvaliable( os, "systemLoadAverage", info );
+    // com.sun.management.OperatingSystemMXBean
+    addGetterIfAvaliable( os, "committedVirtualMemorySize", info);
+    addGetterIfAvaliable( os, "freePhysicalMemorySize", info);
+    addGetterIfAvaliable( os, "freeSwapSpaceSize", info);
+    addGetterIfAvaliable( os, "processCpuTime", info);
+    addGetterIfAvaliable( os, "totalPhysicalMemorySize", info);
+    addGetterIfAvaliable( os, "totalSwapSpaceSize", info);
 
     // com.sun.management.UnixOperatingSystemMXBean
     addGetterIfAvaliable( os, "openFileDescriptorCount", info );
     addGetterIfAvaliable( os, "maxFileDescriptorCount", info );
 
-    // com.sun.management.OperatingSystemMXBean
-    addGetterIfAvaliable( os, "committedVirtualMemorySize", info );
-    addGetterIfAvaliable( os, "totalPhysicalMemorySize", info );
-    addGetterIfAvaliable( os, "totalSwapSpaceSize", info );
-    addGetterIfAvaliable( os, "processCpuTime", info );
-
     try { 
       if( !os.getName().toLowerCase(Locale.ENGLISH).startsWith( "windows" ) ) {
         // Try some command line things
         info.add( "uname",  execute( "uname -a" ) );
-        info.add( "ulimit", execute( "ulimit -n" ) );
         info.add( "uptime", execute( "uptime" ) );
       }
     }
-    catch( Throwable ex ) {} // ignore
+    catch( Throwable ex ) {
+      ex.printStackTrace();
+    } 
     return info;
   }
   
@@ -165,6 +160,7 @@ public class SystemInfoHandler extends RequestHandlerBase
     try {
       String n = Character.toUpperCase( getter.charAt(0) ) + getter.substring( 1 );
       Method m = obj.getClass().getMethod( "get" + n );
+      m.setAccessible(true);
       Object v = m.invoke( obj, (Object[])null );
       if( v != null ) {
         info.add( getter, v );
@@ -180,21 +176,24 @@ public class SystemInfoHandler extends RequestHandlerBase
   private static String execute( String cmd )
   {
     DataInputStream in = null;
-    BufferedReader reader = null;
+    Process process = null;
     
     try {
-      Process process = Runtime.getRuntime().exec(cmd);
+      process = Runtime.getRuntime().exec(cmd);
       in = new DataInputStream( process.getInputStream() );
       // use default charset from locale here, because the command invoked also uses the default locale:
-      return IOUtils.toString( in );
+      return IOUtils.toString(in);
     }
     catch( Exception ex ) {
       // ignore - log.warn("Error executing command", ex);
       return "(error executing: " + cmd + ")";
     }
     finally {
-      IOUtils.closeQuietly( reader );
-      IOUtils.closeQuietly( in );
+      if (process != null) {
+        IOUtils.closeQuietly( process.getOutputStream() );
+        IOUtils.closeQuietly( process.getInputStream() );
+        IOUtils.closeQuietly( process.getErrorStream() );
+      }
     }
   }
   
@@ -278,16 +277,6 @@ public class SystemInfoHandler extends RequestHandlerBase
   @Override
   public String getDescription() {
     return "Get System Info";
-  }
-
-  @Override
-  public String getVersion() {
-    return "$Revision$";
-  }
-
-  @Override
-  public String getSourceId() {
-    return "$Id$";
   }
 
   @Override

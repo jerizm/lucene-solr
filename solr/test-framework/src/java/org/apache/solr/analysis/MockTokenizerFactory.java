@@ -1,6 +1,6 @@
 package org.apache.solr.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,12 +22,13 @@ import java.util.Map;
 
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.Tokenizer;
+import org.apache.lucene.analysis.util.TokenizerFactory;
 import org.apache.lucene.util.automaton.CharacterRunAutomaton;
 
 /**
  * Factory for {@link MockTokenizer} for testing purposes.
  */
-public class MockTokenizerFactory extends BaseTokenizerFactory {
+public class MockTokenizerFactory extends TokenizerFactory {
   CharacterRunAutomaton pattern;
   boolean enableChecks;
   

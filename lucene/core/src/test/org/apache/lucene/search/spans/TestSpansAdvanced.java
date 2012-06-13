@@ -1,6 +1,6 @@
 package org.apache.lucene.search.spans;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,14 +19,13 @@ package org.apache.lucene.search.spans;
 
 import java.io.IOException;
 
+import org.apache.lucene.document.Field;
 import org.apache.lucene.util.LuceneTestCase;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.analysis.MockTokenFilter;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
@@ -58,9 +57,9 @@ public class TestSpansAdvanced extends LuceneTestCase {
     super.setUp();
     // create test index
     mDirectory = newDirectory();
-    final RandomIndexWriter writer = new RandomIndexWriter(random, mDirectory, 
+    final RandomIndexWriter writer = new RandomIndexWriter(random(), mDirectory, 
         newIndexWriterConfig(TEST_VERSION_CURRENT, 
-            new MockAnalyzer(random, MockTokenizer.SIMPLE, true, MockTokenFilter.ENGLISH_STOPSET, true))
+            new MockAnalyzer(random(), MockTokenizer.SIMPLE, true, MockTokenFilter.ENGLISH_STOPSET, true))
             .setMergePolicy(newLogMergePolicy()).setSimilarity(new DefaultSimilarity()));
     addDocument(writer, "1", "I think it should work.");
     addDocument(writer, "2", "I think it should work.");
@@ -92,8 +91,8 @@ public class TestSpansAdvanced extends LuceneTestCase {
       final String text) throws IOException {
     
     final Document document = new Document();
-    document.add(newField(FIELD_ID, id, StringField.TYPE_STORED));
-    document.add(newField(FIELD_TEXT, text, TextField.TYPE_STORED));
+    document.add(newStringField(FIELD_ID, id, Field.Store.YES));
+    document.add(newTextField(FIELD_TEXT, text, Field.Store.YES));
     writer.addDocument(document);
   }
   
@@ -138,7 +137,7 @@ public class TestSpansAdvanced extends LuceneTestCase {
   protected static void assertHits(IndexSearcher s, Query query,
       final String description, final String[] expectedIds,
       final float[] expectedScores) throws IOException {
-    QueryUtils.check(random, query, s);
+    QueryUtils.check(random(), query, s);
     
     final float tolerance = 1e-5f;
     

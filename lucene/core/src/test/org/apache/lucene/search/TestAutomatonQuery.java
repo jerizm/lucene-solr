@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,7 +21,6 @@ import java.io.IOException;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.MultiFields;
 import org.apache.lucene.index.RandomIndexWriter;
@@ -46,18 +45,18 @@ public class TestAutomatonQuery extends LuceneTestCase {
   public void setUp() throws Exception {
     super.setUp();
     directory = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, directory);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), directory);
     Document doc = new Document();
-    Field titleField = newField("title", "some title", TextField.TYPE_UNSTORED);
-    Field field = newField(FN, "this is document one 2345", TextField.TYPE_UNSTORED);
-    Field footerField = newField("footer", "a footer", TextField.TYPE_UNSTORED);
+    Field titleField = newTextField("title", "some title", Field.Store.NO);
+    Field field = newTextField(FN, "this is document one 2345", Field.Store.NO);
+    Field footerField = newTextField("footer", "a footer", Field.Store.NO);
     doc.add(titleField);
     doc.add(field);
     doc.add(footerField);
     writer.addDocument(doc);
-    field.setValue("some text from doc two a short piece 5678.91");
+    field.setStringValue("some text from doc two a short piece 5678.91");
     writer.addDocument(doc);
-    field.setValue("doc three has some different stuff"
+    field.setStringValue("doc three has some different stuff"
         + " with numbers 1234 5678.9 and letter b");
     writer.addDocument(doc);
     reader = writer.getReader();

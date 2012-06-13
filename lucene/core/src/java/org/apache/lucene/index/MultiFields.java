@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -35,7 +35,7 @@ import org.apache.lucene.util.ReaderUtil;
  * Exposes flex API, merged from flex API of sub-segments.
  * This is useful when you're interacting with an {@link
  * IndexReader} implementation that consists of sequential
- * sub-readers (eg DirectoryReader or {@link
+ * sub-readers (eg {@link DirectoryReader} or {@link
  * MultiReader}).
  *
  * <p><b>NOTE</b>: for multi readers, you'll get better
@@ -228,7 +228,7 @@ public final class MultiFields extends Fields {
   }
 
   @Override
-  public int getUniqueFieldCount() {
+  public int size() {
     return -1;
   }
 
@@ -244,21 +244,27 @@ public final class MultiFields extends Fields {
   }
 
   /** Call this to get the (merged) FieldInfos for a
-   *  composite reader */
+   *  composite reader. 
+   *  <p>
+   *  NOTE: the returned field numbers will likely not
+   *  correspond to the actual field numbers in the underlying
+   *  readers, and codec metadata ({@link FieldInfo#getAttribute(String)}
+   *  will be unavailable.
+   */
   public static FieldInfos getMergedFieldInfos(IndexReader reader) {
     final List<AtomicReader> subReaders = new ArrayList<AtomicReader>();
     ReaderUtil.gatherSubReaders(subReaders, reader);
-    final FieldInfos fieldInfos = new FieldInfos();
+    final FieldInfos.Builder builder = new FieldInfos.Builder();
     for(AtomicReader subReader : subReaders) {
-      fieldInfos.add(subReader.getFieldInfos());
+      builder.add(subReader.getFieldInfos());
     }
-    return fieldInfos;
+    return builder.finish();
   }
 
   public static Collection<String> getIndexedFields(IndexReader reader) {
     final Collection<String> fields = new HashSet<String>();
     for(FieldInfo fieldInfo : getMergedFieldInfos(reader)) {
-      if (fieldInfo.isIndexed) {
+      if (fieldInfo.isIndexed()) {
         fields.add(fieldInfo.name);
       }
     }

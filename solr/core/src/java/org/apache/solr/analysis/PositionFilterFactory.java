@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,6 +19,7 @@ package org.apache.solr.analysis;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.position.PositionFilter;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 import java.util.Map;
 
@@ -38,7 +39,7 @@ import java.util.Map;
  * @see org.apache.lucene.analysis.position.PositionFilter
  * @since solr 1.4
  */
-public class PositionFilterFactory extends BaseTokenFilterFactory {
+public class PositionFilterFactory extends TokenFilterFactory {
   private int positionIncrement;
 
   @Override

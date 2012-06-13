@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -195,9 +195,6 @@ public class DocTermOrds {
    *  <p><b>NOTE</b>: you must pass the same reader that was
    *  used when creating this class */
   public TermsEnum getOrdTermsEnum(AtomicReader reader) throws IOException {
-    if (termInstances == 0) {
-      return null;
-    }
     if (indexedTermsArray == null) {
       //System.out.println("GET normal enum");
       final Fields fields = reader.fields();
@@ -214,6 +211,20 @@ public class DocTermOrds {
       //System.out.println("GET wrapped enum ordBase=" + ordBase);
       return new OrdWrappedTermsEnum(reader);
     }
+  }
+
+  /**
+   * @return The number of terms in this field
+   */
+  public int numTerms() {
+    return numTermsInField;
+  }
+
+  /**
+   * @return Whether this <code>DocTermOrds</code> instance is empty.
+   */
+  public boolean isEmpty() {
+    return index == null;
   }
 
   /** Subclass can override this */
@@ -504,9 +515,9 @@ public class DocTermOrds {
           break;
       }
 
-      if (indexedTerms != null) {
-        indexedTermsArray = indexedTerms.toArray(new BytesRef[indexedTerms.size()]);
-      }
+    }
+    if (indexedTerms != null) {
+      indexedTermsArray = indexedTerms.toArray(new BytesRef[indexedTerms.size()]);
     }
 
     long endTime = System.currentTimeMillis();
@@ -642,19 +653,17 @@ public class DocTermOrds {
    * ord; in this case we "wrap" our own terms index
    * around it. */
   private final class OrdWrappedTermsEnum extends TermsEnum {
-    private final AtomicReader reader;
     private final TermsEnum termsEnum;
     private BytesRef term;
     private long ord = -indexInterval-1;          // force "real" seek
     
     public OrdWrappedTermsEnum(AtomicReader reader) throws IOException {
-      this.reader = reader;
       assert indexedTermsArray != null;
       termsEnum = reader.fields().terms(field).iterator(null);
     }
 
     @Override
-    public Comparator<BytesRef> getComparator() throws IOException {
+    public Comparator<BytesRef> getComparator() {
       return termsEnum.getComparator();
     }
 

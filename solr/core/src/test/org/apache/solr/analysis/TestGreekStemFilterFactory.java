@@ -3,12 +3,13 @@ package org.apache.solr.analysis;
 import java.io.Reader;
 import java.io.StringReader;
 
+import org.apache.lucene.analysis.BaseTokenStreamTestCase;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.el.GreekLowerCaseFilter;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -28,11 +29,11 @@ import org.apache.lucene.analysis.el.GreekLowerCaseFilter;
 /**
  * Simple tests to ensure the Greek stem filter factory is working.
  */
-public class TestGreekStemFilterFactory extends BaseTokenTestCase {
+public class TestGreekStemFilterFactory extends BaseTokenStreamTestCase {
   public void testStemming() throws Exception {
     Reader reader = new StringReader("άνθρωπος");
     Tokenizer tokenizer = new MockTokenizer(reader, MockTokenizer.WHITESPACE, false);
-    TokenStream normalized = new GreekLowerCaseFilter(DEFAULT_VERSION, tokenizer);
+    TokenStream normalized = new GreekLowerCaseFilter(TEST_VERSION_CURRENT, tokenizer);
     GreekStemFilterFactory factory = new GreekStemFilterFactory();
     TokenStream stream = factory.create(normalized);
     assertTokenStreamContents(stream, new String[] { "ανθρωπ" });

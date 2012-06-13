@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,8 +20,6 @@ package org.apache.lucene.search;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
@@ -71,14 +69,14 @@ public class TestExplanations extends LuceneTestCase {
   @BeforeClass
   public static void beforeClassTestExplanations() throws Exception {
     directory = newDirectory();
-    RandomIndexWriter writer= new RandomIndexWriter(random, directory, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setMergePolicy(newLogMergePolicy()));
+    RandomIndexWriter writer= new RandomIndexWriter(random(), directory, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMergePolicy(newLogMergePolicy()));
     for (int i = 0; i < docFields.length; i++) {
       Document doc = new Document();
-      doc.add(newField(KEY, ""+i, StringField.TYPE_UNSTORED));
-      Field f = newField(FIELD, docFields[i], TextField.TYPE_UNSTORED);
+      doc.add(newStringField(KEY, ""+i, Field.Store.NO));
+      Field f = newTextField(FIELD, docFields[i], Field.Store.NO);
       f.setBoost(i);
       doc.add(f);
-      doc.add(newField(ALTFIELD, docFields[i], TextField.TYPE_UNSTORED));
+      doc.add(newTextField(ALTFIELD, docFields[i], Field.Store.NO));
       writer.addDocument(doc);
     }
     reader = writer.getReader();
@@ -95,7 +93,7 @@ public class TestExplanations extends LuceneTestCase {
   
   /** check the expDocNrs first, then check the query (and the explanations) */
   public void qtest(Query q, int[] expDocNrs) throws Exception {
-    CheckHits.checkHitCollector(random, q, FIELD, searcher, expDocNrs);
+    CheckHits.checkHitCollector(random(), q, FIELD, searcher, expDocNrs);
   }
 
   /**

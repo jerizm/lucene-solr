@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -31,6 +31,7 @@ import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.core.CoreContainer;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.handler.component.ResponseBuilder;
+import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestInfo;
 import org.apache.solr.schema.TrieField;
@@ -57,9 +58,37 @@ public class JoinQParserPlugin extends QParserPlugin {
         String fromIndex = getParam("fromIndex");
         String toField = getParam("to");
         String v = localParams.get("v");
-        QParser fromQueryParser = subQuery(v, null);
-        Query fromQuery = fromQueryParser.getQuery();
+        Query fromQuery;
+        long fromCoreOpenTime = 0;
+
+        if (fromIndex != null && !fromIndex.equals(req.getCore().getCoreDescriptor().getName()) ) {
+          CoreContainer container = req.getCore().getCoreDescriptor().getCoreContainer();
+
+          final SolrCore fromCore = container.getCore(fromIndex);
+          RefCounted<SolrIndexSearcher> fromHolder = null;
+
+          if (fromCore == null) {
+            throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Cross-core join: no such core " + fromIndex);
+          }
+
+          LocalSolrQueryRequest otherReq = new LocalSolrQueryRequest(fromCore, params);
+          try {
+            QParser parser = QParser.getParser(v, "lucene", otherReq);
+            fromQuery = parser.getQuery();
+            fromHolder = fromCore.getRegisteredSearcher();
+            if (fromHolder != null) fromCoreOpenTime = fromHolder.get().getOpenTime();
+          } finally {
+            otherReq.close();
+            fromCore.close();
+            if (fromHolder != null) fromHolder.decref();
+          }
+        } else {
+          QParser fromQueryParser = subQuery(v, null);
+          fromQuery = fromQueryParser.getQuery();
+        }
+
         JoinQuery jq = new JoinQuery(fromField, toField, fromIndex, fromQuery);
+        jq.fromCoreOpenTime = fromCoreOpenTime;
         return jq;
       }
     };
@@ -72,6 +101,7 @@ class JoinQuery extends Query {
   String toField;
   String fromIndex;
   Query q;
+  long fromCoreOpenTime;
 
   public JoinQuery(String fromField, String toField, String fromIndex, Query subQuery) {
     this.fromField = fromField;
@@ -84,16 +114,12 @@ class JoinQuery extends Query {
 
   @Override
   public Query rewrite(IndexReader reader) throws IOException {
-    Query newQ = q.rewrite(reader);
-    if (newQ == q) return this;
-    JoinQuery nq = (JoinQuery)this.clone();
-    nq.q = newQ;
-    return nq;
+    // don't rewrite the subQuery
+    return this;
   }
 
   @Override
   public void extractTerms(Set terms) {
-    q.extractTerms(terms);
   }
 
   public Weight createWeight(IndexSearcher searcher) throws IOException {
@@ -127,7 +153,7 @@ class JoinQuery extends Query {
         final SolrCore fromCore = container.getCore(fromIndex);
 
         if (fromCore == null) {
-          throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Cross-core join: no such core ");
+          throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Cross-core join: no such core " + fromIndex);
         }
 
         if (info.getReq().getCore() == fromCore) {
@@ -529,12 +555,14 @@ class JoinQuery extends Query {
            && this.toField.equals(other.toField)
            && this.getBoost() == other.getBoost()
            && this.q.equals(other.q)
-           && (this.fromIndex == other.fromIndex || this.fromIndex != null && this.fromIndex.equals(other.fromIndex));
+           && (this.fromIndex == other.fromIndex || this.fromIndex != null && this.fromIndex.equals(other.fromIndex))
+           && this.fromCoreOpenTime == other.fromCoreOpenTime
+        ;
   }
 
   @Override
   public int hashCode() {
-    int h = q.hashCode();
+    int h = q.hashCode() + (int)fromCoreOpenTime;
     h = h * 31 + fromField.hashCode();
     h = h * 31 + toField.hashCode();
     return h;

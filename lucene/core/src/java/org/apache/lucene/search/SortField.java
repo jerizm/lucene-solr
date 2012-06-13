@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -376,7 +376,7 @@ public class SortField {
    *   optimize themselves when they are the primary sort.
    * @return {@link FieldComparator} to use when sorting
    */
-  public FieldComparator getComparator(final int numHits, final int sortPos) throws IOException {
+  public FieldComparator<?> getComparator(final int numHits, final int sortPos) throws IOException {
 
     switch (type) {
     case SCORE:

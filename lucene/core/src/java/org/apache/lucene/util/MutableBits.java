@@ -1,6 +1,6 @@
 package org.apache.lucene.util;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,6 +17,9 @@ package org.apache.lucene.util;
  * limitations under the License.
  */
 
+/**
+ * Extension of Bits for live documents.
+ */
 public interface MutableBits extends Bits {
   public void clear(int bit);
 }

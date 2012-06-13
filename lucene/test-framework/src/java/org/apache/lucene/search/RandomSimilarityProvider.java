@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -55,6 +55,13 @@ import org.apache.lucene.search.similarities.NormalizationZ;
 import org.apache.lucene.search.similarities.PerFieldSimilarityWrapper;
 import org.apache.lucene.search.similarities.Similarity;
 
+/**
+ * Similarity implementation that randomizes Similarity implementations
+ * per-field.
+ * <p>
+ * The choices are 'sticky', so the selected algorithm is always used
+ * for the same field.
+ */
 public class RandomSimilarityProvider extends PerFieldSimilarityWrapper {
   final DefaultSimilarity defaultSim = new DefaultSimilarity();
   final List<Similarity> knownSims;

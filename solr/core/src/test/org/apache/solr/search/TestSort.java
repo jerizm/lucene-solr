@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -45,13 +45,19 @@ public class TestSort extends SolrTestCaseJ4 {
     initCore("solrconfig.xml","schema-minimal.xml");
   }
 
-  final Random r = random;
+  Random r;
 
   int ndocs = 77;
   int iter = 50;
   int qiter = 1000;
   int commitCount = ndocs/5 + 1;
   int maxval = ndocs*2;
+
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
+    r = random();
+  }
 
   static class MyDoc {
     int doc;
@@ -152,8 +158,8 @@ public class TestSort extends SolrTestCaseJ4 {
 
   public void testSort() throws Exception {
     Directory dir = new RAMDirectory();
-    Field f = new Field("f", "0", StringField.TYPE_UNSTORED);
-    Field f2 = new Field("f2", "0", StringField.TYPE_UNSTORED);
+    Field f = new StringField("f", "0", Field.Store.NO);
+    Field f2 = new StringField("f2", "0", Field.Store.NO);
 
     for (int iterCnt = 0; iterCnt<iter; iterCnt++) {
       IndexWriter iw = new IndexWriter(
@@ -175,12 +181,12 @@ public class TestSort extends SolrTestCaseJ4 {
         Document document = new Document();
         if (r.nextInt(100) < v1EmptyPercent) {
           mydoc.val = Integer.toString(r.nextInt(maxval));
-          f.setValue(mydoc.val);
+          f.setStringValue(mydoc.val);
           document.add(f);
         }
         if (r.nextInt(100) < v2EmptyPercent) {
           mydoc.val2 = Integer.toString(r.nextInt(maxval));
-          f2.setValue(mydoc.val2);
+          f2.setStringValue(mydoc.val2);
           document.add(f2);
         }
 

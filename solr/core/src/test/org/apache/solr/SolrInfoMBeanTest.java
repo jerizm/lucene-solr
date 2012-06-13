@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -64,9 +64,10 @@ public class SolrInfoMBeanTest extends SolrTestCaseJ4
           assertNotNull( info.getName() );
           assertNotNull( info.getDescription() );
           assertNotNull( info.getSource() );
-          assertNotNull( info.getSourceId() );
-          assertNotNull( info.getVersion() );
           assertNotNull( info.getCategory() );
+          
+          // Make sure the URL has the classname in it
+          //assertTrue(info.getSource(), info.getSource().indexOf(info.getClass().getSimpleName()+".java")>0 );
 
           if( info instanceof LRUCache ) {
             continue;

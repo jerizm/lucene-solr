@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -40,10 +40,12 @@ import org.apache.solr.schema.FieldType;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.update.AddUpdateCommand;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Reusable base class for UpdateProcessors that will consider 
- * AddUpdateCommands and mutate the values assocaited with configured 
+ * AddUpdateCommands and mutate the values associated with configured
  * fields.
  * <p>
  * Subclasses should override the mutate method to specify how individual 
@@ -57,7 +59,8 @@ import org.apache.solr.update.AddUpdateCommand;
  */
 public abstract class FieldMutatingUpdateProcessor 
   extends UpdateRequestProcessor {
-  
+  public final static Logger log = LoggerFactory.getLogger(FieldMutatingUpdateProcessor.class);
+
   private final FieldNameSelector selector;
   public FieldMutatingUpdateProcessor(FieldNameSelector selector,
                                       UpdateRequestProcessor next) {
@@ -202,7 +205,7 @@ public abstract class FieldMutatingUpdateProcessor
     
     for (String t : typeClasses) {
       try {
-        classes.add(loader.findClass(t));
+        classes.add(loader.findClass(t, Object.class));
       } catch (Exception e) {
         throw new SolrException(SERVER_ERROR,
                                 "Can't resolve typeClass: " + t, e);

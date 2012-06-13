@@ -1,5 +1,5 @@
 package org.apache.solr.analysis;
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -40,7 +40,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import static org.apache.solr.analysis.BaseTokenTestCase.*;
+import static org.apache.lucene.analysis.BaseTokenStreamTestCase.*;
 
 public class TestReversedWildcardFilterFactory extends SolrTestCaseJ4 {
   Map<String,String> args = new HashMap<String, String>();

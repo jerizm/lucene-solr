@@ -1,6 +1,6 @@
 package org.apache.lucene.util;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -48,6 +48,8 @@ public final class ByteBlockPool {
   public final static int BYTE_BLOCK_SIZE = 1 << BYTE_BLOCK_SHIFT;
   public final static int BYTE_BLOCK_MASK = BYTE_BLOCK_SIZE - 1;
 
+  /** Abstract class for allocating and freeing byte
+   *  blocks. */
   public abstract static class Allocator {
     protected final int blockSize;
 
@@ -67,6 +69,7 @@ public final class ByteBlockPool {
     }
   }
   
+  /** A simple {@link Allocator} that never recycles. */
   public static final class DirectAllocator extends Allocator {
     
     public DirectAllocator() {
@@ -80,9 +83,10 @@ public final class ByteBlockPool {
     @Override
     public void recycleByteBlocks(byte[][] blocks, int start, int end) {
     }
-    
   }
   
+  /** A simple {@link Allocator} that never recycles, but
+   *  tracks how much total RAM is in use. */
   public static class DirectTrackingAllocator extends Allocator {
     private final Counter bytesUsed;
     
@@ -99,6 +103,7 @@ public final class ByteBlockPool {
       bytesUsed.addAndGet(blockSize);
       return new byte[blockSize];
     }
+
     @Override
     public void recycleByteBlocks(byte[][] blocks, int start, int end) {
       bytesUsed.addAndGet(-((end-start)* blockSize));
@@ -106,7 +111,6 @@ public final class ByteBlockPool {
         blocks[i] = null;
       }
     }
-    
   };
 
 
@@ -278,6 +282,37 @@ public final class ByteBlockPool {
         overflow = overflow - BYTE_BLOCK_SIZE;
       }
     }  while(true);
+  }
+  
+  /**
+   *
+   */
+  public final BytesRef copyFrom(final BytesRef bytes) {
+    final int length = bytes.length;
+    final int offset = bytes.offset;
+    bytes.offset = 0;
+    bytes.grow(length);
+    int bufferIndex = offset >> BYTE_BLOCK_SHIFT;
+    byte[] buffer = buffers[bufferIndex];
+    int pos = offset & BYTE_BLOCK_MASK;
+    int overflow = (pos + length) - BYTE_BLOCK_SIZE;
+    do {
+      if (overflow <= 0) {
+        System.arraycopy(buffer, pos, bytes.bytes, bytes.offset, bytes.length);
+        bytes.length = length;
+        bytes.offset = 0;
+        break;
+      } else {
+        final int bytesToCopy = length - overflow;
+        System.arraycopy(buffer, pos, bytes.bytes, bytes.offset, bytesToCopy);
+        pos = 0;
+        bytes.length -= bytesToCopy;
+        bytes.offset += bytesToCopy;
+        buffer = buffers[++bufferIndex];
+        overflow = overflow - BYTE_BLOCK_SIZE;
+      }
+    } while (true);
+    return bytes;
   }
   
   /**

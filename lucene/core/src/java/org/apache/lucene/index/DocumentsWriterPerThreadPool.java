@@ -1,5 +1,5 @@
 package org.apache.lucene.index;
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,7 +18,7 @@ package org.apache.lucene.index;
 
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.apache.lucene.index.FieldInfos.FieldNumberBiMap;
+import org.apache.lucene.index.FieldInfos.FieldNumbers;
 import org.apache.lucene.util.SetOnce;
 
 /**
@@ -36,7 +36,7 @@ import org.apache.lucene.util.SetOnce;
  * new {@link DocumentsWriterPerThread} instance.
  * </p>
  */
-public abstract class DocumentsWriterPerThreadPool {
+abstract class DocumentsWriterPerThreadPool implements Cloneable {
   
   /**
    * {@link ThreadState} references and guards a
@@ -50,7 +50,7 @@ public abstract class DocumentsWriterPerThreadPool {
    * before accessing the state.
    */
   @SuppressWarnings("serial")
-  public final static class ThreadState extends ReentrantLock {
+  final static class ThreadState extends ReentrantLock {
     DocumentsWriterPerThread dwpt;
     // TODO this should really be part of DocumentsWriterFlushControl
     // write access guarded by DocumentsWriterFlushControl
@@ -119,15 +119,15 @@ public abstract class DocumentsWriterPerThreadPool {
     }
   }
 
-  private final ThreadState[] threadStates;
+  private ThreadState[] threadStates;
   private volatile int numThreadStatesActive;
-  private final SetOnce<FieldNumberBiMap> globalFieldMap = new SetOnce<FieldNumberBiMap>();
-  private final SetOnce<DocumentsWriter> documentsWriter = new SetOnce<DocumentsWriter>();
+  private SetOnce<FieldNumbers> globalFieldMap = new SetOnce<FieldNumbers>();
+  private SetOnce<DocumentsWriter> documentsWriter = new SetOnce<DocumentsWriter>();
   
   /**
    * Creates a new {@link DocumentsWriterPerThreadPool} with a given maximum of {@link ThreadState}s.
    */
-  public DocumentsWriterPerThreadPool(int maxNumThreadStates) {
+  DocumentsWriterPerThreadPool(int maxNumThreadStates) {
     if (maxNumThreadStates < 1) {
       throw new IllegalArgumentException("maxNumThreadStates must be >= 1 but was: " + maxNumThreadStates);
     }
@@ -135,27 +135,44 @@ public abstract class DocumentsWriterPerThreadPool {
     numThreadStatesActive = 0;
   }
 
-  public void initialize(DocumentsWriter documentsWriter, FieldNumberBiMap globalFieldMap, IndexWriterConfig config) {
+  void initialize(DocumentsWriter documentsWriter, FieldNumbers globalFieldMap, IndexWriterConfig config) {
     this.documentsWriter.set(documentsWriter); // thread pool is bound to DW
     this.globalFieldMap.set(globalFieldMap);
     for (int i = 0; i < threadStates.length; i++) {
-      final FieldInfos infos = new FieldInfos(globalFieldMap);
+      final FieldInfos.Builder infos = new FieldInfos.Builder(globalFieldMap);
       threadStates[i] = new ThreadState(new DocumentsWriterPerThread(documentsWriter.directory, documentsWriter, infos, documentsWriter.chain));
     }
+  }
+
+  @Override
+  public DocumentsWriterPerThreadPool clone() {
+    // We should only be cloned before being used:
+    assert numThreadStatesActive == 0;
+    DocumentsWriterPerThreadPool clone;
+    try {
+      clone = (DocumentsWriterPerThreadPool) super.clone();
+    } catch (CloneNotSupportedException e) {
+      // should not happen
+      throw new RuntimeException(e);
+    }
+    clone.documentsWriter = new SetOnce<DocumentsWriter>();
+    clone.globalFieldMap = new SetOnce<FieldNumbers>();
+    clone.threadStates = new ThreadState[threadStates.length];
+    return clone;
   }
   
   /**
    * Returns the max number of {@link ThreadState} instances available in this
    * {@link DocumentsWriterPerThreadPool}
    */
-  public int getMaxThreadStates() {
+  int getMaxThreadStates() {
     return threadStates.length;
   }
   
   /**
    * Returns the active number of {@link ThreadState} instances.
    */
-  public int getActiveThreadState() {
+  int getActiveThreadState() {
     return numThreadStatesActive;
   }
 
@@ -169,7 +186,7 @@ public abstract class DocumentsWriterPerThreadPool {
    * @return a new {@link ThreadState} iff any new state is available otherwise
    *         <code>null</code>
    */
-  public synchronized ThreadState newThreadState() {
+  synchronized ThreadState newThreadState() {
     if (numThreadStatesActive < threadStates.length) {
       final ThreadState threadState = threadStates[numThreadStatesActive];
       threadState.lock(); // lock so nobody else will get this ThreadState
@@ -211,7 +228,7 @@ public abstract class DocumentsWriterPerThreadPool {
   /**
    * Deactivate all unreleased threadstates 
    */
-  protected synchronized void deactivateUnreleasedStates() {
+  synchronized void deactivateUnreleasedStates() {
     for (int i = numThreadStatesActive; i < threadStates.length; i++) {
       final ThreadState threadState = threadStates[i];
       threadState.lock();
@@ -223,12 +240,12 @@ public abstract class DocumentsWriterPerThreadPool {
     }
   }
   
-  protected DocumentsWriterPerThread replaceForFlush(ThreadState threadState, boolean closed) {
+  DocumentsWriterPerThread replaceForFlush(ThreadState threadState, boolean closed) {
     assert threadState.isHeldByCurrentThread();
     assert globalFieldMap.get() != null;
     final DocumentsWriterPerThread dwpt = threadState.dwpt;
     if (!closed) {
-      final FieldInfos infos = new FieldInfos(globalFieldMap.get());
+      final FieldInfos.Builder infos = new FieldInfos.Builder(globalFieldMap.get());
       final DocumentsWriterPerThread newDwpt = new DocumentsWriterPerThread(dwpt, infos);
       newDwpt.initialize();
       threadState.resetWriter(newDwpt);
@@ -238,11 +255,13 @@ public abstract class DocumentsWriterPerThreadPool {
     return dwpt;
   }
   
-  public void recycle(DocumentsWriterPerThread dwpt) {
+  void recycle(DocumentsWriterPerThread dwpt) {
     // don't recycle DWPT by default
   }
   
-  public abstract ThreadState getAndLock(Thread requestingThread, DocumentsWriter documentsWriter);
+  // you cannot subclass this without being in o.a.l.index package anyway, so
+  // the class is already pkg-private... fix me: see LUCENE-4013
+  abstract ThreadState getAndLock(Thread requestingThread, DocumentsWriter documentsWriter);
 
   
   /**
@@ -264,7 +283,7 @@ public abstract class DocumentsWriterPerThreadPool {
    * waiting to acquire its lock or <code>null</code> if no {@link ThreadState}
    * is yet visible to the calling thread.
    */
-  protected ThreadState minContendedThreadState() {
+  ThreadState minContendedThreadState() {
     ThreadState minThreadState = null;
     final int limit = numThreadStatesActive;
     for (int i = 0; i < limit; i++) {

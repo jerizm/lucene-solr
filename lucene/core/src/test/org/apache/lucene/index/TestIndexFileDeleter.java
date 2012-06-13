@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,15 +22,10 @@ import java.util.*;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.codecs.Codec;
-import org.apache.lucene.codecs.FieldInfosReader;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
-import org.apache.lucene.search.similarities.DefaultSimilarity;
-import org.apache.lucene.store.CompoundFileDirectory;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.MockDirectoryWrapper;
@@ -52,7 +47,7 @@ public class TestIndexFileDeleter extends LuceneTestCase {
 
     IndexWriter writer = new IndexWriter(
         dir,
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).
             setMaxBufferedDocs(10).
             setMergePolicy(mergePolicy)
     );
@@ -61,7 +56,7 @@ public class TestIndexFileDeleter extends LuceneTestCase {
     for(i=0;i<35;i++) {
       addDoc(writer, i);
     }
-    mergePolicy.setUseCompoundFile(false);
+    ((LogMergePolicy) writer.getConfig().getMergePolicy()).setUseCompoundFile(false);
     for(;i<45;i++) {
       addDoc(writer, i);
     }
@@ -70,7 +65,7 @@ public class TestIndexFileDeleter extends LuceneTestCase {
     // Delete one doc so we get a .del file:
     writer = new IndexWriter(
         dir,
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).
             setMergePolicy(NoMergePolicy.NO_COMPOUND_FILES)
     );
     Term searchTerm = new Term("id", "7");
@@ -123,7 +118,7 @@ public class TestIndexFileDeleter extends LuceneTestCase {
 
     // Open & close a writer: it should delete the above 4
     // files and nothing more:
-    writer = new IndexWriter(dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setOpenMode(OpenMode.APPEND));
+    writer = new IndexWriter(dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setOpenMode(OpenMode.APPEND));
     writer.close();
 
     String[] files2 = dir.listAll();
@@ -179,8 +174,8 @@ public class TestIndexFileDeleter extends LuceneTestCase {
   }
 
   public void copyFile(Directory dir, String src, String dest) throws IOException {
-    IndexInput in = dir.openInput(src, newIOContext(random));
-    IndexOutput out = dir.createOutput(dest, newIOContext(random));
+    IndexInput in = dir.openInput(src, newIOContext(random()));
+    IndexOutput out = dir.createOutput(dest, newIOContext(random()));
     byte[] b = new byte[1024];
     long remainder = in.length();
     while(remainder > 0) {
@@ -196,8 +191,8 @@ public class TestIndexFileDeleter extends LuceneTestCase {
   private void addDoc(IndexWriter writer, int id) throws IOException
   {
     Document doc = new Document();
-    doc.add(newField("content", "aaa", TextField.TYPE_UNSTORED));
-    doc.add(newField("id", Integer.toString(id), StringField.TYPE_UNSTORED));
+    doc.add(newTextField("content", "aaa", Field.Store.NO));
+    doc.add(newStringField("id", Integer.toString(id), Field.Store.NO));
     writer.addDocument(doc);
   }
 }

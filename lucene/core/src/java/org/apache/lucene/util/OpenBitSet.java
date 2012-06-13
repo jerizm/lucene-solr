@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -731,7 +731,7 @@ public class OpenBitSet extends DocIdSet implements Bits, Cloneable {
   }
 
   @Override
-  public Object clone() {
+  public OpenBitSet clone() {
     try {
       OpenBitSet obs = (OpenBitSet)super.clone();
       obs.bits = obs.bits.clone();  // hopefully an array clone is as fast(er) than arraycopy

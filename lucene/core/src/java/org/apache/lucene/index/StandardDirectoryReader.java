@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -83,29 +83,35 @@ final class StandardDirectoryReader extends DirectoryReader {
     List<SegmentReader> readers = new ArrayList<SegmentReader>();
     final Directory dir = writer.getDirectory();
 
-    final SegmentInfos segmentInfos = (SegmentInfos) infos.clone();
+    final SegmentInfos segmentInfos = infos.clone();
     int infosUpto = 0;
     for (int i=0;i<numSegments;i++) {
       IOException prior = null;
       boolean success = false;
       try {
-        final SegmentInfo info = infos.info(i);
-        assert info.dir == dir;
-        final IndexWriter.ReadersAndLiveDocs rld = writer.readerPool.get(info, true);
-        final SegmentReader reader = rld.getReadOnlyClone(IOContext.READ);
-        if (reader.numDocs() > 0 || writer.getKeepFullyDeletedSegments()) {
-          readers.add(reader);
-          infosUpto++;
-        } else {
-          reader.close();
-          segmentInfos.remove(infosUpto);
+        final SegmentInfoPerCommit info = infos.info(i);
+        assert info.info.dir == dir;
+        final ReadersAndLiveDocs rld = writer.readerPool.get(info, true);
+        try {
+          final SegmentReader reader = rld.getReadOnlyClone(IOContext.READ);
+          if (reader.numDocs() > 0 || writer.getKeepFullyDeletedSegments()) {
+            // Steal the ref:
+            readers.add(reader);
+            infosUpto++;
+          } else {
+            reader.close();
+            segmentInfos.remove(infosUpto);
+          }
+        } finally {
+          writer.readerPool.release(rld);
         }
         success = true;
       } catch(IOException ex) {
         prior = ex;
       } finally {
-        if (!success)
+        if (!success) {
           IOUtils.closeWhileHandlingException(prior, readers);
+        }
       }
     }
     return new StandardDirectoryReader(dir, readers.toArray(new SegmentReader[readers.size()]),
@@ -134,7 +140,7 @@ final class StandardDirectoryReader extends DirectoryReader {
     
     for (int i = infos.size() - 1; i>=0; i--) {
       // find SegmentReader for this segment
-      Integer oldReaderIndex = segmentReaders.get(infos.info(i).name);
+      Integer oldReaderIndex = segmentReaders.get(infos.info(i).info.name);
       if (oldReaderIndex == null) {
         // this is a new segment, no old SegmentReader can be reused
         newReaders[i] = null;
@@ -147,7 +153,7 @@ final class StandardDirectoryReader extends DirectoryReader {
       IOException prior = null;
       try {
         SegmentReader newReader;
-        if (newReaders[i] == null || infos.info(i).getUseCompoundFile() != newReaders[i].getSegmentInfo().getUseCompoundFile()) {
+        if (newReaders[i] == null || infos.info(i).info.getUseCompoundFile() != newReaders[i].getSegmentInfo().info.getUseCompoundFile()) {
 
           // this is a new reader; in case we hit an exception we can close it safely
           newReader = new SegmentReader(infos.info(i), termInfosIndexDivisor, IOContext.READ);
@@ -163,7 +169,7 @@ final class StandardDirectoryReader extends DirectoryReader {
           } else {
             readerShared[i] = false;
             // Steal the ref returned by SegmentReader ctor:
-            assert infos.info(i).dir == newReaders[i].getSegmentInfo().dir;
+            assert infos.info(i).info.dir == newReaders[i].getSegmentInfo().info.dir;
             assert infos.info(i).hasDeletions();
             newReaders[i] = new SegmentReader(infos.info(i), newReaders[i].core, IOContext.READ);
           }
@@ -219,12 +225,12 @@ final class StandardDirectoryReader extends DirectoryReader {
   }
 
   @Override
-  protected final DirectoryReader doOpenIfChanged() throws CorruptIndexException, IOException {
+  protected DirectoryReader doOpenIfChanged() throws CorruptIndexException, IOException {
     return doOpenIfChanged(null);
   }
 
   @Override
-  protected final DirectoryReader doOpenIfChanged(final IndexCommit commit) throws CorruptIndexException, IOException {
+  protected DirectoryReader doOpenIfChanged(final IndexCommit commit) throws CorruptIndexException, IOException {
     ensureOpen();
 
     // If we were obtained by writer.getReader(), re-ask the
@@ -237,7 +243,7 @@ final class StandardDirectoryReader extends DirectoryReader {
   }
 
   @Override
-  protected final DirectoryReader doOpenIfChanged(IndexWriter writer, boolean applyAllDeletes) throws CorruptIndexException, IOException {
+  protected DirectoryReader doOpenIfChanged(IndexWriter writer, boolean applyAllDeletes) throws CorruptIndexException, IOException {
     ensureOpen();
     if (writer == this.writer && applyAllDeletes == this.applyAllDeletes) {
       return doOpenFromWriter(null);
@@ -246,7 +252,7 @@ final class StandardDirectoryReader extends DirectoryReader {
     }
   }
 
-  private final DirectoryReader doOpenFromWriter(IndexCommit commit) throws CorruptIndexException, IOException {
+  private DirectoryReader doOpenFromWriter(IndexCommit commit) throws CorruptIndexException, IOException {
     if (commit != null) {
       throw new IllegalArgumentException("a reader obtained from IndexWriter.getReader() cannot currently accept a commit");
     }

@@ -1,6 +1,6 @@
 package org.apache.lucene.analysis.tokenattributes;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -208,7 +208,7 @@ public class CharTermAttributeImpl extends AttributeImpl implements CharTermAttr
   }
 
   @Override
-  public Object clone() {
+  public CharTermAttributeImpl clone() {
     CharTermAttributeImpl t = (CharTermAttributeImpl)super.clone();
     // Do a deep clone
     t.termBuffer = new char[this.termLength];

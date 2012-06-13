@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -26,10 +26,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 
+import org.apache.lucene.document.Field;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.Bits;
 
@@ -64,7 +64,7 @@ public class TestTransactionRollback extends LuceneTestCase {
       throw new RuntimeException("Couldn't find commit point "+id);
 		
     IndexWriter w = new IndexWriter(dir, newIndexWriterConfig(
-        TEST_VERSION_CURRENT, new MockAnalyzer(random)).setIndexDeletionPolicy(
+        TEST_VERSION_CURRENT, new MockAnalyzer(random())).setIndexDeletionPolicy(
         new RollbackDeletionPolicy(id)).setIndexCommit(last));
     Map<String,String> data = new HashMap<String,String>();
     data.put("index", "Rolled back to 1-"+id);
@@ -86,7 +86,7 @@ public class TestTransactionRollback extends LuceneTestCase {
   }
 	
   private void checkExpecteds(BitSet expecteds) throws Exception {
-    IndexReader r = IndexReader.open(dir);
+    IndexReader r = DirectoryReader.open(dir);
 		
     //Perhaps not the most efficient approach but meets our
     //needs here.
@@ -127,11 +127,11 @@ public class TestTransactionRollback extends LuceneTestCase {
     dir = newDirectory();
     //Build index, of records 1 to 100, committing after each batch of 10
     IndexDeletionPolicy sdp=new KeepAllDeletionPolicy();
-    IndexWriter w=new IndexWriter(dir, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random)).setIndexDeletionPolicy(sdp));
+    IndexWriter w=new IndexWriter(dir, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random())).setIndexDeletionPolicy(sdp));
 
     for(int currentRecordId=1;currentRecordId<=100;currentRecordId++) {
       Document doc=new Document();
-      doc.add(newField(FIELD_RECORD_ID,""+currentRecordId,TextField.TYPE_STORED));
+      doc.add(newTextField(FIELD_RECORD_ID, ""+currentRecordId, Field.Store.YES));
       w.addDocument(doc);
 			
       if (currentRecordId%10 == 0) {
@@ -202,9 +202,9 @@ public class TestTransactionRollback extends LuceneTestCase {
     for(int i=0;i<2;i++) {
       // Unless you specify a prior commit point, rollback
       // should not work:
-      new IndexWriter(dir, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random))
+      new IndexWriter(dir, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random()))
           .setIndexDeletionPolicy(new DeleteLastCommitPolicy())).close();
-      IndexReader r = IndexReader.open(dir);
+      IndexReader r = DirectoryReader.open(dir);
       assertEquals(100, r.numDocs());
       r.close();
     }

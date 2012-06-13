@@ -1,6 +1,6 @@
 package org.apache.solr.core;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -45,16 +45,6 @@ public class SolrXMLSerializer {
   /**
    * @param w
    *          Writer to use
-   * @param defaultCoreName
-   *          to use for cores with name ""
-   * @param coreDescriptors
-   *          to persist
-   * @param rootSolrAttribs
-   *          solrxml solr attribs
-   * @param containerProperties
-   *          to persist
-   * @param coresAttribs
-   *          solrxml cores attribs
    * @throws IOException
    */
   void persist(Writer w, SolrXMLDef solrXMLDef) throws IOException {

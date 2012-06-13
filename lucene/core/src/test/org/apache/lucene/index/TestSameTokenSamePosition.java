@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -36,7 +36,7 @@ public class TestSameTokenSamePosition extends LuceneTestCase {
    */
   public void test() throws Exception {
     Directory dir = newDirectory();
-    RandomIndexWriter riw = new RandomIndexWriter(random, dir);
+    RandomIndexWriter riw = new RandomIndexWriter(random(), dir);
     Document doc = new Document();
     doc.add(new TextField("eng", new BugReproTokenStream()));
     riw.addDocument(doc);
@@ -49,7 +49,7 @@ public class TestSameTokenSamePosition extends LuceneTestCase {
    */
   public void testMoreDocs() throws Exception {
     Directory dir = newDirectory();
-    RandomIndexWriter riw = new RandomIndexWriter(random, dir);
+    RandomIndexWriter riw = new RandomIndexWriter(random(), dir);
     for (int i = 0; i < 100; i++) {
       Document doc = new Document();
       doc.add(new TextField("eng", new BugReproTokenStream()));

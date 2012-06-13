@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,17 +23,9 @@ import java.io.Writer;
 import java.net.URLEncoder;
 import java.text.DateFormat;
 import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
-import java.util.TimeZone;
+import java.util.*;
 import java.util.Map.Entry;
 import java.nio.ByteBuffer;
-
-import org.apache.commons.httpclient.util.DateParseException;
 
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
@@ -44,8 +36,6 @@ import org.apache.solr.common.util.*;
 
 
 /**
- * TODO? should this go in common?
- * 
  *
  * @since solr 1.3
  */
@@ -106,10 +96,22 @@ public class ClientUtils
     for( SolrInputField field : doc ) {
       float boost = field.getBoost();
       String name = field.getName();
+
       for( Object v : field ) {
+        String update = null;
+
+        if (v instanceof Map) {
+          // currently only supports a single value
+          for (Entry<Object,Object> entry : ((Map<Object,Object>)v).entrySet()) {
+            update = entry.getKey().toString();
+            Object fieldVal = entry.getValue();
+            v = fieldVal;
+          }
+        }
+
         if (v instanceof Date) {
           v = DateUtil.getThreadLocalDateFormat().format( (Date)v );
-        }else if (v instanceof byte[]) {
+        } else if (v instanceof byte[]) {
           byte[] bytes = (byte[]) v;
           v = Base64.byteArrayToBase64(bytes, 0,bytes.length);
         } else if (v instanceof ByteBuffer) {
@@ -117,10 +119,18 @@ public class ClientUtils
           v = Base64.byteArrayToBase64(bytes.array(), bytes.position(),bytes.limit() - bytes.position());
         }
 
-        if( boost != 1.0f ) {
-          XML.writeXML(writer, "field", v.toString(), "name", name, "boost", boost );
-        } else if (v != null) {
-          XML.writeXML(writer, "field", v.toString(), "name", name );
+        if (update == null) {
+          if( boost != 1.0f ) {
+            XML.writeXML(writer, "field", v.toString(), "name", name, "boost", boost );
+          } else if (v != null) {
+            XML.writeXML(writer, "field", v.toString(), "name", name );
+          }
+        } else {
+          if( boost != 1.0f ) {
+            XML.writeXML(writer, "field", v.toString(), "name", name, "boost", boost, "update", update);
+          } else if (v != null) {
+            XML.writeXML(writer, "field", v.toString(), "name", name, "update", update);
+          }
         }
 
         // only write the boost for the first multi-valued field
@@ -154,12 +164,11 @@ public class ClientUtils
    * Returns a formatter that can be use by the current thread if needed to
    * convert Date objects to the Internal representation.
    * @throws ParseException
-   * @throws DateParseException
    *
    * @deprecated Use {@link org.apache.solr.common.util.DateUtil#parseDate(String)}
    */
   @Deprecated
-  public static Date parseDate( String d ) throws ParseException, DateParseException
+  public static Date parseDate( String d ) throws ParseException
   {
     return DateUtil.parseDate(d);
   }
@@ -185,7 +194,8 @@ public class ClientUtils
 
 
   /**
-   * See: <a href="http://lucene.apache.org/java/docs/nightly/queryparsersyntax.html#Escaping%20Special%20Characters">Escaping Special Characters</a>
+   * See: {@link org.apache.lucene.queryparser.classic queryparser syntax} 
+   * for more information on Escaping Special Characters
    */
   public static String escapeQueryChars(String s) {
     StringBuilder sb = new StringBuilder();
@@ -194,7 +204,7 @@ public class ClientUtils
       // These characters are part of the query syntax and must be escaped
       if (c == '\\' || c == '+' || c == '-' || c == '!'  || c == '(' || c == ')' || c == ':'
         || c == '^' || c == '[' || c == ']' || c == '\"' || c == '{' || c == '}' || c == '~'
-        || c == '*' || c == '?' || c == '|' || c == '&'  || c == ';'
+        || c == '*' || c == '?' || c == '|' || c == '&'  || c == ';' || c == '/'
         || Character.isWhitespace(c)) {
         sb.append('\\');
       }
@@ -235,9 +245,13 @@ public class ClientUtils
   }
   
   public static void appendMap(String collection, Map<String,Slice> map1, Map<String,Slice> map2) {
-    Set<Entry<String,Slice>> entrySet = map2.entrySet();
-    for (Entry<String,Slice> entry : entrySet) {
-      map1.put(collection + "_" + entry.getKey(), entry.getValue());
+    if (map1==null)
+      map1 = new HashMap<String,Slice>();
+    if (map2!=null) {
+      Set<Entry<String,Slice>> entrySet = map2.entrySet();
+      for (Entry<String,Slice> entry : entrySet) {
+        map1.put(collection + "_" + entry.getKey(), entry.getValue());
+      }
     }
   }
 }

@@ -1,6 +1,6 @@
 package org.apache.lucene.store;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,13 +18,11 @@ package org.apache.lucene.store;
  */
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Random;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.StringField;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.util.BytesRef;
@@ -51,7 +49,7 @@ public class TestMultiMMap extends LuceneTestCase {
   
   public void testCloneSafety() throws Exception {
     MMapDirectory mmapDir = new MMapDirectory(_TestUtil.getTempDir("testCloneSafety"));
-    IndexOutput io = mmapDir.createOutput("bytes", newIOContext(random));
+    IndexOutput io = mmapDir.createOutput("bytes", newIOContext(random()));
     io.writeVInt(5);
     io.close();
     IndexInput one = mmapDir.openInput("bytes", IOContext.DEFAULT);
@@ -82,9 +80,9 @@ public class TestMultiMMap extends LuceneTestCase {
     for (int i = 0; i < 31; i++) {
       MMapDirectory mmapDir = new MMapDirectory(_TestUtil.getTempDir("testSeekZero"));
       mmapDir.setMaxChunkSize(1<<i);
-      IndexOutput io = mmapDir.createOutput("zeroBytes", newIOContext(random));
+      IndexOutput io = mmapDir.createOutput("zeroBytes", newIOContext(random()));
       io.close();
-      IndexInput ii = mmapDir.openInput("zeroBytes", newIOContext(random));
+      IndexInput ii = mmapDir.openInput("zeroBytes", newIOContext(random()));
       ii.seek(0L);
       ii.close();
       mmapDir.close();
@@ -95,12 +93,12 @@ public class TestMultiMMap extends LuceneTestCase {
     for (int i = 0; i < 17; i++) {
       MMapDirectory mmapDir = new MMapDirectory(_TestUtil.getTempDir("testSeekEnd"));
       mmapDir.setMaxChunkSize(1<<i);
-      IndexOutput io = mmapDir.createOutput("bytes", newIOContext(random));
+      IndexOutput io = mmapDir.createOutput("bytes", newIOContext(random()));
       byte bytes[] = new byte[1<<i];
-      random.nextBytes(bytes);
+      random().nextBytes(bytes);
       io.writeBytes(bytes, bytes.length);
       io.close();
-      IndexInput ii = mmapDir.openInput("bytes", newIOContext(random));
+      IndexInput ii = mmapDir.openInput("bytes", newIOContext(random()));
       byte actual[] = new byte[1<<i];
       ii.readBytes(actual, 0, actual.length);
       assertEquals(new BytesRef(bytes), new BytesRef(actual));
@@ -114,12 +112,12 @@ public class TestMultiMMap extends LuceneTestCase {
     for (int i = 0; i < 10; i++) {
       MMapDirectory mmapDir = new MMapDirectory(_TestUtil.getTempDir("testSeeking"));
       mmapDir.setMaxChunkSize(1<<i);
-      IndexOutput io = mmapDir.createOutput("bytes", newIOContext(random));
+      IndexOutput io = mmapDir.createOutput("bytes", newIOContext(random()));
       byte bytes[] = new byte[1<<(i+1)]; // make sure we switch buffers
-      random.nextBytes(bytes);
+      random().nextBytes(bytes);
       io.writeBytes(bytes, bytes.length);
       io.close();
-      IndexInput ii = mmapDir.openInput("bytes", newIOContext(random));
+      IndexInput ii = mmapDir.openInput("bytes", newIOContext(random()));
       byte actual[] = new byte[1<<(i+1)]; // first read all bytes
       ii.readBytes(actual, 0, actual.length);
       assertEquals(new BytesRef(bytes), new BytesRef(actual));
@@ -139,7 +137,7 @@ public class TestMultiMMap extends LuceneTestCase {
   public void testRandomChunkSizes() throws Exception {
     int num = atLeast(10);
     for (int i = 0; i < num; i++)
-      assertChunking(random, _TestUtil.nextInt(random, 20, 100));
+      assertChunking(random(), _TestUtil.nextInt(random(), 20, 100));
   }
   
   private void assertChunking(Random random, int chunkSize) throws Exception {
@@ -154,15 +152,15 @@ public class TestMultiMMap extends LuceneTestCase {
     MockDirectoryWrapper dir = new MockDirectoryWrapper(random, mmapDir);
     RandomIndexWriter writer = new RandomIndexWriter(random, dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setMergePolicy(newLogMergePolicy()));
     Document doc = new Document();
-    Field docid = newField("docid", "0", StringField.TYPE_STORED);
-    Field junk = newField("junk", "", StringField.TYPE_STORED);
+    Field docid = newStringField("docid", "0", Field.Store.YES);
+    Field junk = newStringField("junk", "", Field.Store.YES);
     doc.add(docid);
     doc.add(junk);
     
     int numDocs = 100;
     for (int i = 0; i < numDocs; i++) {
-      docid.setValue("" + i);
-      junk.setValue(_TestUtil.randomUnicodeString(random));
+      docid.setStringValue("" + i);
+      junk.setStringValue(_TestUtil.randomUnicodeString(random));
       writer.addDocument(doc);
     }
     IndexReader reader = writer.getReader();

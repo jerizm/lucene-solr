@@ -1,6 +1,6 @@
 package org.apache.lucene.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,7 +22,6 @@ import java.io.Reader;
 
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
-import org.apache.lucene.util.AttributeSource.AttributeFactory;
 import org.apache.lucene.util.automaton.CharacterRunAutomaton;
 import org.apache.lucene.util.automaton.RegExp;
 
@@ -93,6 +92,11 @@ public class MockTokenizer extends Tokenizer {
 
   public MockTokenizer(Reader input, CharacterRunAutomaton runAutomaton, boolean lowerCase) {
     this(input, runAutomaton, lowerCase, DEFAULT_MAX_TOKEN_LENGTH);
+  }
+  
+  /** Calls {@link #MockTokenizer(Reader, CharacterRunAutomaton, boolean) MockTokenizer(Reader, WHITESPACE, true)} */
+  public MockTokenizer(Reader input) {
+    this(input, WHITESPACE, true);
   }
   
   @Override
@@ -199,8 +203,11 @@ public class MockTokenizer extends Tokenizer {
     offsetAtt.setOffset(finalOffset, finalOffset);
     // some tokenizers, such as limiting tokenizers, call end() before incrementToken() returns false.
     // these tests should disable this check (in general you should consume the entire stream)
-    assert !enableChecks || streamState == State.INCREMENT_FALSE : "end() called before incrementToken() returned false!";
-    streamState = State.END;
+    try {
+      assert !enableChecks || streamState == State.INCREMENT_FALSE : "end() called before incrementToken() returned false!";
+    } finally {
+      streamState = State.END;
+    }
   }
 
   /** 

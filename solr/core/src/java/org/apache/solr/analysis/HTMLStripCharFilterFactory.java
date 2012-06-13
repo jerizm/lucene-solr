@@ -1,7 +1,7 @@
 package org.apache.solr.analysis;
 
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,6 +20,7 @@ package org.apache.solr.analysis;
 
 import org.apache.lucene.analysis.CharStream;
 import org.apache.lucene.analysis.charfilter.HTMLStripCharFilter;
+import org.apache.lucene.analysis.util.CharFilterFactory;
 
 import java.util.HashSet;
 import java.util.Map;
@@ -35,10 +36,10 @@ import java.util.regex.Pattern;
  *     &lt;charFilter class="solr.HTMLStripCharFilterFactory" escapedTags="a, title" /&gt;
  *     &lt;tokenizer class="solr.WhitespaceTokenizerFactory"/&gt;
  *   &lt;/analyzer&gt;
- * &lt;/fieldType&gt;</pre
+ * &lt;/fieldType&gt;</pre>
  *
  */
- public class HTMLStripCharFilterFactory extends BaseCharFilterFactory {
+ public class HTMLStripCharFilterFactory extends CharFilterFactory {
   
   Set<String> escapedTags = null;
   Pattern TAG_NAME_PATTERN = Pattern.compile("[^\\s,]+");

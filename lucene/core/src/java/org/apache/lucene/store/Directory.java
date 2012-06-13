@@ -1,6 +1,6 @@
 package org.apache.lucene.store;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -153,7 +153,7 @@ public abstract class Directory implements Closeable {
    * their own locking implementation.
    */
   public LockFactory getLockFactory() {
-      return this.lockFactory;
+    return this.lockFactory;
   }
 
   /**
@@ -284,7 +284,7 @@ public abstract class Directory implements Closeable {
     }
     
     @Override
-    public Object clone() {
+    public SlicedIndexInput clone() {
       SlicedIndexInput clone = (SlicedIndexInput)super.clone();
       clone.base = (IndexInput)base.clone();
       clone.fileOffset = fileOffset;

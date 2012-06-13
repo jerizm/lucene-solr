@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,9 +21,7 @@ import java.io.IOException;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.commongrams.CommonGramsFilter;
 import org.apache.lucene.analysis.core.StopAnalyzer;
-import org.apache.lucene.analysis.util.CharArraySet;
-import org.apache.solr.common.ResourceLoader;
-import org.apache.solr.util.plugin.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.*;
 
 /**
  * Constructs a {@link CommonGramsFilter}.
@@ -40,7 +38,7 @@ import org.apache.solr.util.plugin.ResourceLoaderAware;
 /*
  * This is pretty close to a straight copy from StopFilterFactory
  */
-public class CommonGramsFilterFactory extends BaseTokenFilterFactory implements
+public class CommonGramsFilterFactory extends TokenFilterFactory implements
     ResourceLoaderAware {
 
   public void inform(ResourceLoader loader) {
@@ -55,10 +53,10 @@ public class CommonGramsFilterFactory extends BaseTokenFilterFactory implements
           commonWords = getWordSet(loader, commonWordFiles, ignoreCase);
         }
       } catch (IOException e) {
-        throw new RuntimeException(e);
+        throw new InitializationException("IOException thrown while loading common word file", e);
       }
     } else {
-      commonWords = (CharArraySet) StopAnalyzer.ENGLISH_STOP_WORDS_SET;
+      commonWords = StopAnalyzer.ENGLISH_STOP_WORDS_SET;
     }
   }
       

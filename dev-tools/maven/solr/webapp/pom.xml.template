@@ -33,8 +33,20 @@
   <description>Apache Solr Search Server</description>
   <properties>
     <module-directory>solr/webapp</module-directory>
-    <build-directory>../build</build-directory>
+    <top-level>../../..</top-level>
+    <module-path>${top-level}/${module-directory}</module-path>
   </properties>
+  <scm>
+    <connection>
+      scm:svn:http://svn.apache.org/repos/asf/lucene/dev/trunk/${module-directory}
+    </connection>
+    <developerConnection>
+      scm:svn:https://svn.apache.org/repos/asf/lucene/dev/trunk/${module-directory}
+    </developerConnection>
+    <url>
+      http://svn.apache.org/viewvc/lucene/dev/trunk/${module-directory}
+    </url>
+  </scm>
   <dependencies>
     <dependency>
       <groupId>${project.groupId}</groupId>
@@ -47,14 +59,22 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>javax.servlet</groupId>
-      <artifactId>servlet-api</artifactId>
+      <groupId>org.eclipse.jetty.orbit</groupId>
+      <artifactId>javax.servlet</artifactId>
       <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-jdk14</artifactId>
       <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>log4j-over-slf4j</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>jcl-over-slf4j</artifactId>
     </dependency>
   </dependencies>
   <build>
@@ -82,24 +102,24 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-war-plugin</artifactId>
         <configuration>
-          <warSourceDirectory>web</warSourceDirectory>
-          <webXml>web/WEB-INF/web.xml</webXml>
+          <warSourceDirectory>${module-path}/web</warSourceDirectory>
+          <webXml>${module-path}/web/WEB-INF/web.xml</webXml>
         </configuration>
       </plugin>
       <plugin>
-        <!-- http://docs.codehaus.org/display/JETTY/Maven+Jetty+Plugin -->
+        <!-- http://wiki.eclipse.org/Jetty/Feature/Jetty_Maven_Plugin -->
         <groupId>org.mortbay.jetty</groupId>
-        <artifactId>maven-jetty-plugin</artifactId>
+        <artifactId>jetty-maven-plugin</artifactId>
         <configuration>
           <scanIntervalSeconds>10</scanIntervalSeconds>
           <webAppConfig>
             <contextPath>/solr</contextPath>
           </webAppConfig>
-          <webAppSourceDirectory>web</webAppSourceDirectory>
+          <webAppSourceDirectory>${module-path}/web</webAppSourceDirectory>
           <systemProperties>
             <systemProperty>
               <name>solr.solr.home</name>
-              <value>../example/solr</value>
+              <value>${top-level}/solr/example/solr</value>
             </systemProperty>
           </systemProperties>
         </configuration>

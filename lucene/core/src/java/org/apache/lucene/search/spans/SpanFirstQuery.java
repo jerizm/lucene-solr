@@ -1,6 +1,6 @@
 package org.apache.lucene.search.spans;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -61,7 +61,7 @@ public class SpanFirstQuery extends SpanPositionRangeQuery {
   }
 
   @Override
-  public Object clone() {
+  public SpanFirstQuery clone() {
     SpanFirstQuery spanFirstQuery = new SpanFirstQuery((SpanQuery) match.clone(), end);
     spanFirstQuery.setBoost(getBoost());
     return spanFirstQuery;

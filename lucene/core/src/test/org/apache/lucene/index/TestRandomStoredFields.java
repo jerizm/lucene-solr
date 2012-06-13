@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -41,8 +41,8 @@ public class TestRandomStoredFields extends LuceneTestCase {
 
   public void testRandomStoredFields() throws IOException {
     Directory dir = newDirectory();
-    Random rand = random;
-    RandomIndexWriter w = new RandomIndexWriter(rand, dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setMaxBufferedDocs(_TestUtil.nextInt(rand, 5, 20)));
+    Random rand = random();
+    RandomIndexWriter w = new RandomIndexWriter(rand, dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMaxBufferedDocs(_TestUtil.nextInt(rand, 5, 20)));
     //w.w.setUseCompoundFile(false);
     final int docCount = atLeast(200);
     final int fieldCount = _TestUtil.nextInt(rand, 1, 5);
@@ -69,7 +69,7 @@ public class TestRandomStoredFields extends LuceneTestCase {
       Document doc = new Document();
       doc.add(idField);
       final String id = ""+i;
-      idField.setValue(id);
+      idField.setStringValue(id);
       docs.put(id, doc);
       if (VERBOSE) {
         System.out.println("TEST: add doc id=" + id);

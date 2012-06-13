@@ -1,6 +1,6 @@
 package org.apache.solr.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,12 +21,13 @@ import java.io.Reader;
 
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.cn.smart.SentenceTokenizer;
+import org.apache.lucene.analysis.util.TokenizerFactory;
 
 /**
  * Factory for the SmartChineseAnalyzer {@link SentenceTokenizer}
  * @lucene.experimental
  */
-public class SmartChineseSentenceTokenizerFactory extends BaseTokenizerFactory {
+public class SmartChineseSentenceTokenizerFactory extends TokenizerFactory {
   public Tokenizer create(Reader input) {
     return new SentenceTokenizer(input);
   }

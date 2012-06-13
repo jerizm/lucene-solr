@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -235,6 +235,7 @@ public class DocumentBuilder {
       SchemaField sfield = schema.getFieldOrNull(name);
       boolean used = false;
       float boost = field.getBoost();
+      boolean omitNorms = sfield != null && sfield.omitNorms();
       
       // Make sure it has the correct number
       if( sfield!=null && !sfield.multiValued() && field.getValueCount() > 1 ) {
@@ -243,6 +244,11 @@ public class DocumentBuilder {
               sfield.getName() + ": " +field.getValue() );
       }
       
+      if (omitNorms && boost != 1.0F) {
+        throw new SolrException( SolrException.ErrorCode.BAD_REQUEST,
+            "ERROR: "+getID(doc, schema)+"cannot set an index-time boost, norms are omitted for field " + 
+              sfield.getName() + ": " +field.getValue() );
+      }
 
       // load each field value
       boolean hasField = false;
@@ -254,7 +260,7 @@ public class DocumentBuilder {
           hasField = true;
           if (sfield != null) {
             used = true;
-            addField(out, sfield, v, docBoost*boost);
+            addField(out, sfield, v, omitNorms ? 1F : docBoost*boost);
           }
   
           // Check if we should copy this field to any other fields.
@@ -276,13 +282,7 @@ public class DocumentBuilder {
             if( val instanceof String && cf.getMaxChars() > 0 ) {
               val = cf.getLimitedValue((String)val);
             }
-            
-            IndexableField [] fields = destinationField.createFields(val, docBoost*boost);
-            if (fields != null) { // null fields are not added
-              for (IndexableField f : fields) {
-                if(f != null) out.add(f);
-              }
-            }
+            addField(out, destinationField, val, destinationField.omitNorms() ? 1F : docBoost*boost);
           }
           
           // In lucene, the boost for a given field is the product of the 
@@ -292,10 +292,13 @@ public class DocumentBuilder {
           boost = docBoost;
         }
       }
+      catch( SolrException ex ) {
+        throw ex;
+      }
       catch( Exception ex ) {
         throw new SolrException( SolrException.ErrorCode.BAD_REQUEST,
             "ERROR: "+getID(doc, schema)+"Error adding field '" + 
-              field.getName() + "'='" +field.getValue()+"'", ex );
+              field.getName() + "'='" +field.getValue()+"' msg=" + ex.getMessage(), ex );
       }
       
       // make sure the field was used somehow...
@@ -320,29 +323,5 @@ public class DocumentBuilder {
       }
     }
     return out;
-  }
-
-  
-  /**
-   * Add fields from the solr document
-   * 
-   * TODO: /!\ NOTE /!\ This semantics of this function are still in flux.  
-   * Something somewhere needs to be able to fill up a SolrDocument from
-   * a lucene document - this is one place that may happen.  It may also be
-   * moved to an independent function
-   * 
-   * @since solr 1.3
-   */
-  public SolrDocument loadStoredFields( SolrDocument doc, Document luceneDoc  )
-  {
-    for( IndexableField field : luceneDoc) {
-      if( field.fieldType().stored() ) {
-        SchemaField sf = schema.getField( field.name() );
-        if( !schema.isCopyFieldTarget( sf ) ) {
-          doc.addField( field.name(), sf.getType().toObject( field ) );
-        }
-      }
-    }
-    return doc;
   }
 }

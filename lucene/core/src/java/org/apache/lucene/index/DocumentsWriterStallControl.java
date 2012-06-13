@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,6 +19,7 @@ package org.apache.lucene.index;
 import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 
 import org.apache.lucene.index.DocumentsWriterPerThreadPool.ThreadState;
+import org.apache.lucene.util.ThreadInterruptedException;
 
 /**
  * Controls the health status of a {@link DocumentsWriter} sessions. This class
@@ -38,7 +39,6 @@ import org.apache.lucene.index.DocumentsWriterPerThreadPool.ThreadState;
 final class DocumentsWriterStallControl {
   @SuppressWarnings("serial")
   private static final class Sync extends AbstractQueuedSynchronizer {
-    volatile boolean hasBlockedThreads = false; // only with assert
 
     Sync() {
       setState(0);
@@ -55,26 +55,21 @@ final class DocumentsWriterStallControl {
 
     boolean tryReset() {
       final int oldState = getState();
-      if (oldState == 0)
+      if (oldState == 0) {
         return true;
+      }
       if (compareAndSetState(oldState, 0)) {
-        releaseShared(0);
-        return true;
+        return releaseShared(0);
       }
       return false;
     }
 
     @Override
     public int tryAcquireShared(int acquires) {
-      assert maybeSetHasBlocked(getState());
       return getState() == 0 ? 1 : -1;
     }
 
-    // only used for testing
-    private boolean maybeSetHasBlocked(int state) {
-      hasBlockedThreads |= getState() != 0;
-      return true;
-    }
+   
 
     @Override
     public boolean tryReleaseShared(int newState) {
@@ -97,11 +92,21 @@ final class DocumentsWriterStallControl {
    * {@link DocumentsWriterStallControl} to healthy and release all threads waiting on
    * {@link #waitIfStalled()}
    */
-  void updateStalled(DocumentsWriterFlushControl flushControl) {
+  void updateStalled(MemoryController controller) {
     do {
-      // if we have more flushing / blocked DWPT than numActiveDWPT we stall!
-      // don't stall if we have queued flushes - threads should be hijacked instead
-      while (flushControl.netBytes() > flushControl.stallLimitBytes()) {
+      final long netBytes = controller.netBytes();
+      final long flushBytes = controller.flushBytes();
+      final long limit = controller.stallLimitBytes();
+      assert netBytes >= flushBytes;
+      assert limit > 0;
+      /*
+       * we block indexing threads if net byte grows due to slow flushes
+       * yet, for small ram buffers and large documents we can easily
+       * reach the limit without any ongoing flushes. we need to ensure
+       * that we don't stall/block if an ongoing or pending flush can 
+       * not free up enough memory to release the stall lock.
+       */
+      while (netBytes > limit && (netBytes - flushBytes) < limit) {
         if (sync.trySetStalled()) {
           assert wasStalled = true;
           return;
@@ -111,10 +116,28 @@ final class DocumentsWriterStallControl {
   }
 
   void waitIfStalled() {
-    sync.acquireShared(0);
+    try {
+      sync.acquireSharedInterruptibly(0);
+    } catch (InterruptedException e) {
+      throw new ThreadInterruptedException(e);
+    }
   }
   
   boolean hasBlocked() { // for tests
-    return sync.hasBlockedThreads;
+    return sync.hasQueuedThreads();
+  }
+  
+  static interface MemoryController {
+    long netBytes();
+    long flushBytes();
+    long stallLimitBytes();
+  }
+
+  public boolean isHealthy() {
+    return sync.isHealthy();
+  }
+  
+  public boolean isThreadQueued(Thread t) {
+    return sync.isQueued(t);
   }
 }

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -31,21 +31,14 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CharsRef;
 import org.apache.lucene.util.ReaderUtil;
 import org.apache.lucene.util.UnicodeUtil;
-import org.apache.solr.client.solrj.util.ClientUtils;
-import org.apache.solr.cloud.CloudDescriptor;
-import org.apache.solr.cloud.ZkController;
+import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrException;
-import org.apache.solr.common.cloud.CloudState;
-import org.apache.solr.common.cloud.Slice;
-import org.apache.solr.common.cloud.ZkCoreNodeProps;
-import org.apache.solr.common.cloud.ZkNodeProps;
-import org.apache.solr.common.cloud.ZkStateReader;
 import org.apache.solr.common.params.*;
 import org.apache.solr.common.util.NamedList;
+import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.common.util.StrUtils;
-import org.apache.solr.core.CoreDescriptor;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.ResultContext;
 import org.apache.solr.response.SolrQueryResponse;
@@ -54,8 +47,6 @@ import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.*;
 import org.apache.solr.search.grouping.CommandHandler;
 import org.apache.solr.search.grouping.GroupingSpecification;
-import org.apache.solr.search.grouping.distributed.shardresultserializer.TopGroupsResultTransformer;
-import org.apache.solr.search.grouping.endresulttransformer.EndResultTransformer;
 import org.apache.solr.search.grouping.distributed.ShardRequestFactory;
 import org.apache.solr.search.grouping.distributed.ShardResponseProcessor;
 import org.apache.solr.search.grouping.distributed.command.QueryCommand;
@@ -68,12 +59,16 @@ import org.apache.solr.search.grouping.distributed.responseprocessor.SearchGroup
 import org.apache.solr.search.grouping.distributed.responseprocessor.StoredFieldsShardResponseProcessor;
 import org.apache.solr.search.grouping.distributed.responseprocessor.TopGroupsShardResponseProcessor;
 import org.apache.solr.search.grouping.distributed.shardresultserializer.SearchGroupsResultTransformer;
+import org.apache.solr.search.grouping.distributed.shardresultserializer.TopGroupsResultTransformer;
+import org.apache.solr.search.grouping.endresulttransformer.EndResultTransformer;
 import org.apache.solr.search.grouping.endresulttransformer.GroupedEndResultTransformer;
 import org.apache.solr.search.grouping.endresulttransformer.MainEndResultTransformer;
 import org.apache.solr.search.grouping.endresulttransformer.SimpleEndResultTransformer;
 import org.apache.solr.util.SolrPluginUtils;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.URL;
 import java.util.*;
 
@@ -272,10 +267,11 @@ public class QueryComponent extends SearchComponent
     if (groupingSpec != null) {
       try {
         boolean needScores = (cmd.getFlags() & SolrIndexSearcher.GET_SCORES) != 0;
-        if (params.getBool("group.distributed.first", false)) {
+        if (params.getBool(GroupParams.GROUP_DISTRIBUTED_FIRST, false)) {
           CommandHandler.Builder topsGroupsActionBuilder = new CommandHandler.Builder()
               .setQueryCommand(cmd)
               .setNeedDocSet(false) // Order matters here
+              .setIncludeHitCount(true)
               .setSearcher(searcher);
 
           for (String field : groupingSpec.getFields()) {
@@ -283,6 +279,7 @@ public class QueryComponent extends SearchComponent
                 .setField(searcher.getSchema().getField(field))
                 .setGroupSort(groupingSpec.getGroupSort())
                 .setTopNGroups(cmd.getOffset() + cmd.getLen())
+                .setIncludeGroupCount(groupingSpec.isIncludeGroupCount())
                 .build()
             );
           }
@@ -291,18 +288,19 @@ public class QueryComponent extends SearchComponent
           commandHandler.execute();
           SearchGroupsResultTransformer serializer = new SearchGroupsResultTransformer(searcher);
           rsp.add("firstPhase", commandHandler.processResult(result, serializer));
+          rsp.add("totalHitCount", commandHandler.getTotalHitCount());
           rb.setResult(result);
           return;
-        } else if (params.getBool("group.distributed.second", false)) {
+        } else if (params.getBool(GroupParams.GROUP_DISTRIBUTED_SECOND, false)) {
           CommandHandler.Builder secondPhaseBuilder = new CommandHandler.Builder()
               .setQueryCommand(cmd)
               .setTruncateGroups(groupingSpec.isTruncateGroups() && groupingSpec.getFields().length > 0)
               .setSearcher(searcher);
 
           for (String field : groupingSpec.getFields()) {
-            String[] topGroupsParam = params.getParams("group.topgroups." + field);
+            String[] topGroupsParam = params.getParams(GroupParams.GROUP_DISTRIBUTED_TOPGROUPS_PREFIX + field);
             if (topGroupsParam == null) {
-              continue;
+              topGroupsParam = new String[0];
             }
 
             List<SearchGroup<BytesRef>> topGroups = new ArrayList<SearchGroup<BytesRef>>(topGroupsParam.length);
@@ -323,7 +321,6 @@ public class QueryComponent extends SearchComponent
                     .setMaxDocPerGroup(groupingSpec.getGroupOffset() + groupingSpec.getGroupLimit())
                     .setNeedScores(needScores)
                     .setNeedMaxScore(needScores)
-                    .setNeedGroupCount(groupingSpec.isIncludeGroupCount())
                     .build()
             );
           }
@@ -438,7 +435,7 @@ public class QueryComponent extends SearchComponent
       Sort sort = searcher.weightSort(rb.getSortSpec().getSort());
       SortField[] sortFields = sort==null ? new SortField[]{SortField.FIELD_SCORE} : sort.getSort();
       NamedList<Object[]> sortVals = new NamedList<Object[]>(); // order is important for the sort fields
-      Field field = new StringField("dummy", ""); // a dummy Field
+      Field field = new StringField("dummy", "", Field.Store.NO); // a dummy Field
       IndexReaderContext topReaderContext = searcher.getTopReaderContext();
       AtomicReaderContext[] leaves = topReaderContext.leaves();
       AtomicReaderContext currentLeaf = null;
@@ -504,7 +501,7 @@ public class QueryComponent extends SearchComponent
           // indexedToReadable() should be a no-op and should
           // thus be harmless anyway (for all current ways anyway)
           if (val instanceof String) {
-            field.setValue((String)val);
+            field.setStringValue((String)val);
             val = ft.toObject(field);
           }
 
@@ -513,7 +510,7 @@ public class QueryComponent extends SearchComponent
           // data as BytesRef:
           if (val instanceof BytesRef) {
             UnicodeUtil.UTF8toUTF16((BytesRef)val, spare);
-            field.setValue(spare.toString());
+            field.setStringValue(spare.toString());
             val = ft.toObject(field);
           }
 
@@ -655,7 +652,7 @@ public class QueryComponent extends SearchComponent
     GroupingSpecification groupSpec = rb.getGroupingSpec();
     if (rb.mergedTopGroups.isEmpty()) {
       for (String field : groupSpec.getFields()) {
-        rb.mergedTopGroups.put(field, new TopGroups(null, null, 0, 0, new GroupDocs[]{}));
+        rb.mergedTopGroups.put(field, new TopGroups(null, null, 0, 0, new GroupDocs[]{}, Float.NaN));
       }
       rb.resultIds = new HashMap<Object, ShardDoc>();
     }
@@ -681,7 +678,7 @@ public class QueryComponent extends SearchComponent
     Map<String, Object> combinedMap = new LinkedHashMap<String, Object>();
     combinedMap.putAll(rb.mergedTopGroups);
     combinedMap.putAll(rb.mergedQueryCommandResults);
-    endResultTransformer.transform(combinedMap, rb.rsp, rb.getGroupingSpec(), solrDocumentSource);
+    endResultTransformer.transform(combinedMap, rb, solrDocumentSource);
   }
 
   private void regularFinishStage(ResponseBuilder rb) {
@@ -768,11 +765,56 @@ public class QueryComponent extends SearchComponent
       ShardFieldSortedHitQueue queue;
       queue = new ShardFieldSortedHitQueue(sortFields, ss.getOffset() + ss.getCount());
 
+      NamedList<Object> shardInfo = null;
+      if(rb.req.getParams().getBool(ShardParams.SHARDS_INFO, false)) {
+        shardInfo = new SimpleOrderedMap<Object>();
+        rb.rsp.getValues().add(ShardParams.SHARDS_INFO,shardInfo);
+      }
+      
       long numFound = 0;
       Float maxScore=null;
+      boolean partialResults = false;
       for (ShardResponse srsp : sreq.responses) {
-        SolrDocumentList docs = (SolrDocumentList)srsp.getSolrResponse().getResponse().get("response");
+        SolrDocumentList docs = null;
 
+        if(shardInfo!=null) {
+          SimpleOrderedMap<Object> nl = new SimpleOrderedMap<Object>();
+          
+          if (srsp.getException() != null) {
+            Throwable t = srsp.getException();
+            if(t instanceof SolrServerException) {
+              t = ((SolrServerException)t).getCause();
+            }
+            nl.add("error", t.toString() );
+            StringWriter trace = new StringWriter();
+            t.printStackTrace(new PrintWriter(trace));
+            nl.add("trace", trace.toString() );
+          }
+          else {
+            docs = (SolrDocumentList)srsp.getSolrResponse().getResponse().get("response");
+            nl.add("numFound", docs.getNumFound());
+            nl.add("maxScore", docs.getMaxScore());
+          }
+          if(srsp.getSolrResponse()!=null) {
+            nl.add("time", srsp.getSolrResponse().getElapsedTime());
+          }
+
+          shardInfo.add(srsp.getShard(), nl);
+        }
+        // now that we've added the shard info, let's only proceed if we have no error.
+        if (srsp.getException() != null) {
+          continue;
+        }
+
+        if (docs == null) { // could have been initialized in the shards info block above
+          docs = (SolrDocumentList)srsp.getSolrResponse().getResponse().get("response");
+        }
+        
+        NamedList<?> responseHeader = (NamedList<?>)srsp.getSolrResponse().getResponse().get("responseHeader");
+        if (responseHeader != null && Boolean.TRUE.equals(responseHeader.get("partialResults"))) {
+          partialResults = true;
+        }
+        
         // calculate global maxScore and numDocsFound
         if (docs.getMaxScore() != null) {
           maxScore = maxScore==null ? docs.getMaxScore() : Math.max(maxScore, docs.getMaxScore());
@@ -851,6 +893,9 @@ public class QueryComponent extends SearchComponent
       // TODO: use ResponseBuilder (w/ comments) or the request context?
       rb.resultIds = resultIds;
       rb._responseDocs = responseDocs;
+      if (partialResults) {
+        rb.rsp.getResponseHeader().add( "partialResults", Boolean.TRUE );
+      }
   }
 
   private void createRetrieveDocs(ResponseBuilder rb) {
@@ -889,17 +934,10 @@ public class QueryComponent extends SearchComponent
       // we already have the field sort values
       sreq.params.remove(ResponseBuilder.FIELD_SORT_VALUES);
 
-      // make sure that the id is returned for correlation.
-      String fl = sreq.params.get(CommonParams.FL);
-      if (fl != null) {
-         fl = fl.trim();
-        // currently, "score" is synonymous with "*,score" so
-        // don't add "id" if the fl is empty or "score" or it would change the meaning.
-         if (fl.length()!=0 && !"score".equals(fl) && !"*".equals(fl)) {
-           sreq.params.set(CommonParams.FL, fl+','+uniqueField.getName());
-         }
-      }      
-
+      if(!rb.rsp.getReturnFields().wantsField(uniqueField.getName())) {
+        sreq.params.add(CommonParams.FL, uniqueField.getName());
+      }
+    
       ArrayList<String> ids = new ArrayList<String>(shardDocs.size());
       for (ShardDoc shardDoc : shardDocs) {
         // TODO: depending on the type, we may need more tha a simple toString()?
@@ -927,6 +965,7 @@ public class QueryComponent extends SearchComponent
       SolrDocumentList docs = (SolrDocumentList)srsp.getSolrResponse().getResponse().get("response");
 
       String keyFieldName = rb.req.getSchema().getUniqueKeyField().getName();
+      boolean removeKeyField = !rb.rsp.getReturnFields().wantsField(keyFieldName);
 
       for (SolrDocument doc : docs) {
         Object id = doc.getFieldValue(keyFieldName);
@@ -934,6 +973,9 @@ public class QueryComponent extends SearchComponent
         if (sdoc != null) {
           if (returnScores && sdoc.score != null) {
               doc.setField("score", sdoc.score);
+          }
+          if(removeKeyField) {
+            doc.removeFields(keyFieldName);
           }
           rb._responseDocs.set(sdoc.positionInResponse, doc);
         }
@@ -948,16 +990,6 @@ public class QueryComponent extends SearchComponent
   @Override
   public String getDescription() {
     return "query";
-  }
-
-  @Override
-  public String getVersion() {
-    return "$Revision$";
-  }
-
-  @Override
-  public String getSourceId() {
-    return "$Id$";
   }
 
   @Override

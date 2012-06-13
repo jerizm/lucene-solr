@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.mocksep;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -53,13 +53,12 @@ public class MockSingleIntIndexOutput extends IntIndexOutput {
   /** Write an int to the primary file */
   @Override
   public void write(int v) throws IOException {
-    assert v >= 0;
     out.writeVInt(v);
   }
 
   @Override
   public Index index() {
-    return new Index();
+    return new MockSingleIntIndexOutputIndex();
   }
 
   @Override
@@ -72,7 +71,7 @@ public class MockSingleIntIndexOutput extends IntIndexOutput {
     return "MockSingleIntIndexOutput fp=" + out.getFilePointer();
   }
 
-  private class Index extends IntIndexOutput.Index {
+  private class MockSingleIntIndexOutputIndex extends IntIndexOutput.Index {
     long fp;
     long lastFP;
     @Override
@@ -81,9 +80,9 @@ public class MockSingleIntIndexOutput extends IntIndexOutput {
     }
     @Override
     public void copyFrom(IntIndexOutput.Index other, boolean copyLast) {
-      fp = ((Index) other).fp;
+      fp = ((MockSingleIntIndexOutputIndex) other).fp;
       if (copyLast) {
-        lastFP = ((Index) other).fp;
+        lastFP = ((MockSingleIntIndexOutputIndex) other).fp;
       }
     }
     @Override

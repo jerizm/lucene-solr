@@ -1,6 +1,6 @@
 package org.apache.lucene.util.fst;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,11 +17,13 @@ package org.apache.lucene.util.fst;
  * limitations under the License.
  */
 
+import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.IntsRef;
 
 import java.io.IOException;
 
-/** Can next() and advance() through the terms in an FST
+/** Enumerates all input (IntsRef) + output pairs in an
+ *  FST.
  *
   * @lucene.experimental
 */
@@ -31,6 +33,7 @@ public final class IntsRefFSTEnum<T> extends FSTEnum<T> {
   private final InputOutput<T> result = new InputOutput<T>();
   private IntsRef target;
 
+  /** Holds a single input (IntsRef) + output pair. */
   public static class InputOutput<T> {
     public IntsRef input;
     public T output;
@@ -108,7 +111,7 @@ public final class IntsRefFSTEnum<T> extends FSTEnum<T> {
 
   @Override
   protected void grow() {
-    current.grow(upto+1);
+    current.ints = ArrayUtil.grow(current.ints, upto+1);
   }
 
   private InputOutput<T> setResult() {

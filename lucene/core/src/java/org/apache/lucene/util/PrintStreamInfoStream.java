@@ -1,6 +1,6 @@
 package org.apache.lucene.util;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,6 +23,9 @@ import java.util.Date;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
+ * InfoStream implementation over a {@link PrintStream}
+ * such as <code>System.out</code>.
+ * 
  * @lucene.internal
  */
 public class PrintStreamInfoStream extends InfoStream {
@@ -30,7 +33,7 @@ public class PrintStreamInfoStream extends InfoStream {
   private static final AtomicInteger MESSAGE_ID = new AtomicInteger();
   protected final int messageID;
   
-  private final PrintStream stream;
+  protected final PrintStream stream;
   
   public PrintStreamInfoStream(PrintStream stream) {
     this(stream, MESSAGE_ID.getAndIncrement());

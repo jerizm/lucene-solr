@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,6 +17,7 @@ package org.apache.lucene.search;
  * limitations under the License.
  */
 
+import org.apache.lucene.document.Field;
 import org.apache.lucene.util.LuceneTestCase;
 
 import java.io.IOException;
@@ -28,11 +29,9 @@ import org.apache.lucene.index.Norm;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.similarities.DefaultSimilarity;
-import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.TextField;
 
 /** Similarity unit test.
  *
@@ -54,15 +53,15 @@ public class TestSimilarity extends LuceneTestCase {
 
   public void testSimilarity() throws Exception {
     Directory store = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, store, 
-        newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random))
+    RandomIndexWriter writer = new RandomIndexWriter(random(), store, 
+        newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random()))
         .setSimilarity(new SimpleSimilarity()));
     
     Document d1 = new Document();
-    d1.add(newField("field", "a c", TextField.TYPE_STORED));
+    d1.add(newTextField("field", "a c", Field.Store.YES));
 
     Document d2 = new Document();
-    d2.add(newField("field", "a b c", TextField.TYPE_STORED));
+    d2.add(newTextField("field", "a b c", Field.Store.YES));
     
     writer.addDocument(d1);
     writer.addDocument(d2);

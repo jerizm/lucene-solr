@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,21 +18,22 @@ package org.apache.lucene.index;
  */
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
 
 import org.apache.lucene.analysis.MockAnalyzer;
-import org.apache.lucene.codecs.Codec;
+import org.apache.lucene.document.ByteDocValuesField;
+import org.apache.lucene.document.DerefBytesDocValuesField;
 import org.apache.lucene.document.Document;
+import org.apache.lucene.document.DoubleDocValuesField;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.DocValuesField;
+import org.apache.lucene.document.FloatDocValuesField;
+import org.apache.lucene.document.IntDocValuesField;
+import org.apache.lucene.document.LongDocValuesField;
+import org.apache.lucene.document.PackedLongDocValuesField;
+import org.apache.lucene.document.ShortDocValuesField;
+import org.apache.lucene.document.SortedBytesDocValuesField;
+import org.apache.lucene.document.StraightBytesDocValuesField;
 import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DocValues.SortedSource;
@@ -46,7 +47,6 @@ import org.apache.lucene.util.BytesRefHash;
 import org.apache.lucene.util.FixedBitSet;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util._TestUtil;
-import org.junit.Before;
 
 /**
  * 
@@ -58,12 +58,6 @@ public class TestDocValuesIndexing extends LuceneTestCase {
    * - add test for multi segment case with deletes
    * - add multithreaded tests / integrate into stress indexing?
    */
-
-  @Before
-  public void setUp() throws Exception {
-    super.setUp();
-    assumeFalse("cannot work with preflex codec", Codec.getDefault().getName().equals("Lucene3x"));
-  }
   
   /*
    * Simple test case to show how to use the API
@@ -73,8 +67,8 @@ public class TestDocValuesIndexing extends LuceneTestCase {
     IndexWriter writer = new IndexWriter(dir, writerConfig(false));
     for (int i = 0; i < 5; i++) {
       Document doc = new Document();
-      doc.add(new DocValuesField("docId", i, DocValues.Type.VAR_INTS));
-      doc.add(new TextField("docId", "" + i));
+      doc.add(new PackedLongDocValuesField("docId", i));
+      doc.add(new TextField("docId", "" + i, Field.Store.NO));
       writer.addDocument(doc);
     }
     writer.commit();
@@ -108,30 +102,68 @@ public class TestDocValuesIndexing extends LuceneTestCase {
   }
 
   public void testIndexBytesNoDeletes() throws IOException {
-    runTestIndexBytes(writerConfig(random.nextBoolean()), false);
+    runTestIndexBytes(writerConfig(random().nextBoolean()), false);
   }
 
   public void testIndexBytesDeletes() throws IOException {
-    runTestIndexBytes(writerConfig(random.nextBoolean()), true);
+    runTestIndexBytes(writerConfig(random().nextBoolean()), true);
   }
 
   public void testIndexNumericsNoDeletes() throws IOException {
-    runTestNumerics(writerConfig(random.nextBoolean()), false);
+    runTestNumerics(writerConfig(random().nextBoolean()), false);
   }
 
   public void testIndexNumericsDeletes() throws IOException {
-    runTestNumerics(writerConfig(random.nextBoolean()), true);
+    runTestNumerics(writerConfig(random().nextBoolean()), true);
   }
 
   public void testAddIndexes() throws IOException {
+    Directory d1 = newDirectory();
+    RandomIndexWriter w = new RandomIndexWriter(random(), d1);
+    Document doc = new Document();
+    doc.add(newStringField("id", "1", Field.Store.YES));
+    doc.add(new PackedLongDocValuesField("dv", 1));
+    w.addDocument(doc);
+    IndexReader r1 = w.getReader();
+    w.close();
+
+    Directory d2 = newDirectory();
+    w = new RandomIndexWriter(random(), d2);
+    doc = new Document();
+    doc.add(newStringField("id", "2", Field.Store.YES));
+    doc.add(new PackedLongDocValuesField("dv", 2));
+    w.addDocument(doc);
+    IndexReader r2 = w.getReader();
+    w.close();
+
+    Directory d3 = newDirectory();
+    w = new RandomIndexWriter(random(), d3);
+    w.addIndexes(SlowCompositeReaderWrapper.wrap(r1), SlowCompositeReaderWrapper.wrap(r2));
+    r1.close();
+    d1.close();
+    r2.close();
+    d2.close();
+
+    w.forceMerge(1);
+    DirectoryReader r3 = w.getReader();
+    w.close();
+    AtomicReader sr = getOnlySegmentReader(r3);
+    assertEquals(2, sr.numDocs());
+    DocValues docValues = sr.docValues("dv");
+    assertNotNull(docValues);
+    r3.close();
+    d3.close();
+  }
+
+  public void testAddIndexesRandom() throws IOException {
     int valuesPerIndex = 10;
     List<Type> values = Arrays.asList(Type.values());
-    Collections.shuffle(values, random);
+    Collections.shuffle(values, random());
     Type first = values.get(0);
     Type second = values.get(1);
     // index first index
     Directory d_1 = newDirectory();
-    IndexWriter w_1 = new IndexWriter(d_1, writerConfig(random.nextBoolean()));
+    IndexWriter w_1 = new IndexWriter(d_1, writerConfig(random().nextBoolean()));
     indexValues(w_1, valuesPerIndex, first, values, false, 7);
     w_1.commit();
     assertEquals(valuesPerIndex, w_1.maxDoc());
@@ -139,17 +171,17 @@ public class TestDocValuesIndexing extends LuceneTestCase {
 
     // index second index
     Directory d_2 = newDirectory();
-    IndexWriter w_2 = new IndexWriter(d_2, writerConfig(random.nextBoolean()));
+    IndexWriter w_2 = new IndexWriter(d_2, writerConfig(random().nextBoolean()));
     indexValues(w_2, valuesPerIndex, second, values, false, 7);
     w_2.commit();
     assertEquals(valuesPerIndex, w_2.maxDoc());
     _TestUtil.checkIndex(d_2);
 
     Directory target = newDirectory();
-    IndexWriter w = new IndexWriter(target, writerConfig(random.nextBoolean()));
-    IndexReader r_1 = IndexReader.open(w_1, true);
-    IndexReader r_2 = IndexReader.open(w_2, true);
-    if (random.nextBoolean()) {
+    IndexWriter w = new IndexWriter(target, writerConfig(random().nextBoolean()));
+    DirectoryReader r_1 = DirectoryReader.open(w_1, true);
+    DirectoryReader r_2 = DirectoryReader.open(w_2, true);
+    if (random().nextBoolean()) {
       w.addIndexes(d_1, d_2);
     } else {
       w.addIndexes(r_1, r_2);
@@ -162,7 +194,7 @@ public class TestDocValuesIndexing extends LuceneTestCase {
 
     // check values
     
-    IndexReader merged = IndexReader.open(w, true);
+    DirectoryReader merged = DirectoryReader.open(w, true);
     Source source_1 = getSource(getDocValues(r_1, first.name()));
     Source source_2 = getSource(getDocValues(r_2, second.name()));
     Source source_1_merged = getSource(getDocValues(merged, first.name()));
@@ -237,8 +269,8 @@ public class TestDocValuesIndexing extends LuceneTestCase {
 
   private IndexWriterConfig writerConfig(boolean useCompoundFile) {
     final IndexWriterConfig cfg = newIndexWriterConfig(TEST_VERSION_CURRENT,
-        new MockAnalyzer(random));
-    cfg.setMergePolicy(newLogMergePolicy(random));
+        new MockAnalyzer(random()));
+    cfg.setMergePolicy(newLogMergePolicy(random()));
     LogMergePolicy policy = new LogDocMergePolicy();
     cfg.setMergePolicy(policy);
     policy.setUseCompoundFile(useCompoundFile);
@@ -254,12 +286,12 @@ public class TestDocValuesIndexing extends LuceneTestCase {
     final List<Type> numVariantList = new ArrayList<Type>(NUMERICS);
 
     // run in random order to test if fill works correctly during merges
-    Collections.shuffle(numVariantList, random);
+    Collections.shuffle(numVariantList, random());
     for (Type val : numVariantList) {
       FixedBitSet deleted = indexValues(w, numValues, val, numVariantList,
           withDeletions, 7);
       List<Closeable> closeables = new ArrayList<Closeable>();
-      IndexReader r = IndexReader.open(w, true);
+      DirectoryReader r = DirectoryReader.open(w, true);
       final int numRemainingValues = numValues - deleted.cardinality();
       final int base = r.numDocs() - numRemainingValues;
       // for FIXED_INTS_8 we use value mod 128 - to enable testing in 
@@ -330,14 +362,14 @@ public class TestDocValuesIndexing extends LuceneTestCase {
     IndexWriter w = new IndexWriter(d, cfg);
     final List<Type> byteVariantList = new ArrayList<Type>(BYTES);
     // run in random order to test if fill works correctly during merges
-    Collections.shuffle(byteVariantList, random);
+    Collections.shuffle(byteVariantList, random());
     final int numValues = 50 + atLeast(10);
     for (Type byteIndexValue : byteVariantList) {
       List<Closeable> closeables = new ArrayList<Closeable>();
       final int bytesSize = 1 + atLeast(50);
       FixedBitSet deleted = indexValues(w, numValues, byteIndexValue,
           byteVariantList, withDeletions, bytesSize);
-      final IndexReader r = IndexReader.open(w, withDeletions);
+      final DirectoryReader r = DirectoryReader.open(w, withDeletions);
       assertEquals(0, r.numDeletedDocs());
       final int numRemainingValues = numValues - deleted.cardinality();
       final int base = r.numDocs() - numRemainingValues;
@@ -413,21 +445,20 @@ public class TestDocValuesIndexing extends LuceneTestCase {
   
   public void testGetArrayNumerics() throws CorruptIndexException, IOException {
     Directory d = newDirectory();
-    IndexWriterConfig cfg = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random));
+    IndexWriterConfig cfg = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
     IndexWriter w = new IndexWriter(d, cfg);
     final int numValues = 50 + atLeast(10);
     final List<Type> numVariantList = new ArrayList<Type>(NUMERICS);
-    Collections.shuffle(numVariantList, random);
+    Collections.shuffle(numVariantList, random());
     for (Type val : numVariantList) {
       indexValues(w, numValues, val, numVariantList,
           false, 7);
-      IndexReader r = IndexReader.open(w, true);
+      DirectoryReader r = DirectoryReader.open(w, true);
       DocValues docValues = getDocValues(r, val.name());
       assertNotNull(docValues);
       // make sure we don't get a direct source since they don't support getArray()
       Source source = docValues.getSource();
-      
-      switch (source.type()) {
+      switch (source.getType()) {
       case FIXED_INTS_8:
       {
         assertTrue(source.hasArray());
@@ -464,7 +495,7 @@ public class TestDocValuesIndexing extends LuceneTestCase {
         }
       }
       break;
-      case VAR_INTS: 
+      case VAR_INTS:
         assertFalse(source.hasArray());
         break;
       case FLOAT_32:
@@ -486,7 +517,7 @@ public class TestDocValuesIndexing extends LuceneTestCase {
       }
         break;
       default:
-        fail("unexpected value " + source.type());
+        fail("unexpected value " + source.getType());
       }
       r.close();
     }
@@ -497,32 +528,33 @@ public class TestDocValuesIndexing extends LuceneTestCase {
   public void testGetArrayBytes() throws CorruptIndexException, IOException {
     Directory d = newDirectory();
     IndexWriterConfig cfg = newIndexWriterConfig(TEST_VERSION_CURRENT,
-        new MockAnalyzer(random));
+        new MockAnalyzer(random()));
     IndexWriter w = new IndexWriter(d, cfg);
     final int numValues = 50 + atLeast(10);
     // only single byte fixed straight supports getArray()
     indexValues(w, numValues, Type.BYTES_FIXED_STRAIGHT, null, false, 1);
-    IndexReader r = IndexReader.open(w, true);
+    DirectoryReader r = DirectoryReader.open(w, true);
     DocValues docValues = getDocValues(r, Type.BYTES_FIXED_STRAIGHT.name());
     assertNotNull(docValues);
     // make sure we don't get a direct source since they don't support
     // getArray()
     Source source = docValues.getSource();
 
-    switch (source.type()) {
+    switch (source.getType()) {
     case BYTES_FIXED_STRAIGHT: {
       BytesRef ref = new BytesRef();
-      assertTrue(source.hasArray());
-      byte[] values = (byte[]) source.getArray();
-      for (int i = 0; i < numValues; i++) {
-        source.getBytes(i, ref);
-        assertEquals(1, ref.length);
-        assertEquals(values[i], ref.bytes[ref.offset]);
+      if (source.hasArray()) {
+        byte[] values = (byte[]) source.getArray();
+        for (int i = 0; i < numValues; i++) {
+          source.getBytes(i, ref);
+          assertEquals(1, ref.length);
+          assertEquals(values[i], ref.bytes[ref.offset]);
+        }
       }
     }
       break;
     default:
-      fail("unexpected value " + source.type());
+      fail("unexpected value " + source.getType());
     }
     r.close();
     w.close();
@@ -536,13 +568,13 @@ public class TestDocValuesIndexing extends LuceneTestCase {
   @SuppressWarnings("fallthrough")
   private Source getSource(DocValues values) throws IOException {
     // getSource uses cache internally
-    switch(random.nextInt(5)) {
+    switch(random().nextInt(5)) {
     case 3:
       return values.load();
     case 2:
       return values.getDirectSource();
     case 1:
-      if(values.type() == Type.BYTES_VAR_SORTED || values.type() == Type.BYTES_FIXED_SORTED) {
+      if(values.getType() == Type.BYTES_VAR_SORTED || values.getType() == Type.BYTES_FIXED_SORTED) {
         return values.getSource().asSortedSource();
       }
     default:
@@ -568,36 +600,58 @@ public class TestDocValuesIndexing extends LuceneTestCase {
     final boolean isNumeric = NUMERICS.contains(valueType);
     FixedBitSet deleted = new FixedBitSet(numValues);
     Document doc = new Document();
-    final DocValuesField valField;
+    final Field valField;
     if (isNumeric) {
       switch (valueType) {
       case VAR_INTS:
-        valField = new DocValuesField(valueType.name(), (long) 0, valueType);
+        valField = new PackedLongDocValuesField(valueType.name(), (long) 0);
         break;
       case FIXED_INTS_16:
-        valField = new DocValuesField(valueType.name(), (short) 0, valueType);
+        valField = new ShortDocValuesField(valueType.name(), (short) 0);
         break;
       case FIXED_INTS_32:
-        valField = new DocValuesField(valueType.name(), 0, valueType);
+        valField = new IntDocValuesField(valueType.name(), 0);
         break;
       case FIXED_INTS_64:
-        valField = new DocValuesField(valueType.name(), (long) 0, valueType);
+        valField = new LongDocValuesField(valueType.name(), (long) 0);
         break;
       case FIXED_INTS_8:
-        valField = new DocValuesField(valueType.name(), (byte) 0, valueType);
+        valField = new ByteDocValuesField(valueType.name(), (byte) 0);
         break;
       case FLOAT_32:
-        valField = new DocValuesField(valueType.name(), (float) 0, valueType);
+        valField = new FloatDocValuesField(valueType.name(), (float) 0);
         break;
       case FLOAT_64:
-        valField = new DocValuesField(valueType.name(), (double) 0, valueType);
+        valField = new DoubleDocValuesField(valueType.name(), (double) 0);
         break;
       default:
         valField = null;
         fail("unhandled case");
       }
     } else {
-      valField = new DocValuesField(valueType.name(), new BytesRef(), valueType);
+      switch (valueType) {
+      case BYTES_FIXED_STRAIGHT:
+        valField = new StraightBytesDocValuesField(valueType.name(), new BytesRef(), true);
+        break;
+      case BYTES_VAR_STRAIGHT:
+        valField = new StraightBytesDocValuesField(valueType.name(), new BytesRef(), false);
+        break;
+      case BYTES_FIXED_DEREF:
+        valField = new DerefBytesDocValuesField(valueType.name(), new BytesRef(), true);
+        break;
+      case BYTES_VAR_DEREF:
+        valField = new DerefBytesDocValuesField(valueType.name(), new BytesRef(), false);
+        break;
+      case BYTES_FIXED_SORTED:
+        valField = new SortedBytesDocValuesField(valueType.name(), new BytesRef(), true);
+        break;
+      case BYTES_VAR_SORTED:
+        valField = new SortedBytesDocValuesField(valueType.name(), new BytesRef(), false);
+        break;
+      default:
+        valField = null;
+        fail("unhandled case");
+      }
     }
     doc.add(valField);
     final BytesRef bytesRef = new BytesRef();
@@ -614,25 +668,25 @@ public class TestDocValuesIndexing extends LuceneTestCase {
       if (isNumeric) {
         switch (valueType) {
         case VAR_INTS:
-          valField.setValue((long)i);
+          valField.setLongValue((long)i);
           break;
         case FIXED_INTS_16:
-          valField.setValue((short)i);
+          valField.setShortValue((short)i);
           break;
         case FIXED_INTS_32:
-          valField.setValue(i);
+          valField.setIntValue(i);
           break;
         case FIXED_INTS_64:
-          valField.setValue((long)i);
+          valField.setLongValue((long)i);
           break;
         case FIXED_INTS_8:
-          valField.setValue((byte)(0xFF & (i % 128)));
+          valField.setByteValue((byte)(0xFF & (i % 128)));
           break;
         case FLOAT_32:
-          valField.setValue(2.0f * i);
+          valField.setFloatValue(2.0f * i);
           break;
         case FLOAT_64:
-          valField.setValue(2.0d * i);
+          valField.setDoubleValue(2.0d * i);
           break;
         default:
           fail("unexpected value " + valueType);
@@ -642,25 +696,25 @@ public class TestDocValuesIndexing extends LuceneTestCase {
           b[j] = upto++;
         }
         if (bytesRef != null) {
-          valField.setValue(bytesRef);
+          valField.setBytesValue(bytesRef);
         }
       }
       doc.removeFields("id");
-      doc.add(new Field("id", idBase + i, StringField.TYPE_STORED));
+      doc.add(new StringField("id", idBase + i, Field.Store.YES));
       w.addDocument(doc);
 
       if (i % 7 == 0) {
-        if (withDeletions && random.nextBoolean()) {
-          Type val = valueVarList.get(random.nextInt(1 + valueVarList
+        if (withDeletions && random().nextBoolean()) {
+          Type val = valueVarList.get(random().nextInt(1 + valueVarList
               .indexOf(valueType)));
-          final int randInt = val == valueType ? random.nextInt(1 + i) : random
+          final int randInt = val == valueType ? random().nextInt(1 + i) : random()
               .nextInt(numValues);
           w.deleteDocuments(new Term("id", val.name() + "_" + randInt));
           if (val == valueType) {
             deleted.set(randInt);
           }
         }
-        if (random.nextInt(10) == 0) {
+        if (random().nextInt(10) == 0) {
           w.commit();
         }
       }
@@ -668,7 +722,7 @@ public class TestDocValuesIndexing extends LuceneTestCase {
     w.commit();
 
     // TODO test multi seg with deletions
-    if (withDeletions || random.nextBoolean()) {
+    if (withDeletions || random().nextBoolean()) {
       w.forceMerge(1, true);
     }
     return deleted;
@@ -676,9 +730,9 @@ public class TestDocValuesIndexing extends LuceneTestCase {
 
   public void testMultiValuedDocValuesField() throws Exception {
     Directory d = newDirectory();
-    RandomIndexWriter w = new RandomIndexWriter(random, d);
+    RandomIndexWriter w = new RandomIndexWriter(random(), d);
     Document doc = new Document();
-    DocValuesField f = new DocValuesField("field", 17, Type.VAR_INTS);
+    Field f = new PackedLongDocValuesField("field", 17);
     // Index doc values are single-valued so we should not
     // be able to add same field more than once:
     doc.add(f);
@@ -703,13 +757,13 @@ public class TestDocValuesIndexing extends LuceneTestCase {
 
   public void testDifferentTypedDocValuesField() throws Exception {
     Directory d = newDirectory();
-    RandomIndexWriter w = new RandomIndexWriter(random, d);
+    RandomIndexWriter w = new RandomIndexWriter(random(), d);
     Document doc = new Document();
     // Index doc values are single-valued so we should not
     // be able to add same field more than once:
     Field f;
-    doc.add(f = new DocValuesField("field", 17, Type.VAR_INTS));
-    doc.add(new DocValuesField("field", 22.0, Type.FLOAT_32));
+    doc.add(f = new PackedLongDocValuesField("field", 17));
+    doc.add(new FloatDocValuesField("field", 22.0f));
     try {
       w.addDocument(doc);
       fail("didn't hit expected exception");
@@ -734,19 +788,19 @@ public class TestDocValuesIndexing extends LuceneTestCase {
       boolean fixed = type == Type.BYTES_FIXED_SORTED;
       final Directory d = newDirectory();
       IndexWriterConfig cfg = newIndexWriterConfig(TEST_VERSION_CURRENT,
-          new MockAnalyzer(random));
+          new MockAnalyzer(random()));
       IndexWriter w = new IndexWriter(d, cfg);
       int numDocs = atLeast(100);
       BytesRefHash hash = new BytesRefHash();
       Map<String, String> docToString = new HashMap<String, String>();
-      int len = 1 + random.nextInt(50);
+      int len = 1 + random().nextInt(50);
       for (int i = 0; i < numDocs; i++) {
         Document doc = new Document();
-        doc.add(newField("id", "" + i, TextField.TYPE_STORED));
-        String string =fixed ? _TestUtil.randomFixedByteLengthUnicodeString(random,
-            len) : _TestUtil.randomRealisticUnicodeString(random, 1, len);
+        doc.add(newTextField("id", "" + i, Field.Store.YES));
+        String string = fixed ? _TestUtil.randomFixedByteLengthUnicodeString(random(),
+            len) : _TestUtil.randomRealisticUnicodeString(random(), 1, len);
         BytesRef br = new BytesRef(string);
-        doc.add(new DocValuesField("field", br, type));
+        doc.add(new SortedBytesDocValuesField("field", br, type == Type.BYTES_FIXED_SORTED));
         hash.add(br);
         docToString.put("" + i, string);
         w.addDocument(doc);
@@ -757,7 +811,7 @@ public class TestDocValuesIndexing extends LuceneTestCase {
       int numDocsNoValue = atLeast(10);
       for (int i = 0; i < numDocsNoValue; i++) {
         Document doc = new Document();
-        doc.add(newField("id", "noValue", TextField.TYPE_STORED));
+        doc.add(newTextField("id", "noValue", Field.Store.YES));
         w.addDocument(doc);
       }
       BytesRef bytesRef = new BytesRef(fixed ? len : 0);
@@ -770,13 +824,13 @@ public class TestDocValuesIndexing extends LuceneTestCase {
       for (int i = 0; i < numDocs; i++) {
         Document doc = new Document();
         String id = "" + i + numDocs;
-        doc.add(newField("id", id, TextField.TYPE_STORED));
-        String string = fixed ? _TestUtil.randomFixedByteLengthUnicodeString(random,
-            len) : _TestUtil.randomRealisticUnicodeString(random, 1, len);
+        doc.add(newTextField("id", id, Field.Store.YES));
+        String string = fixed ? _TestUtil.randomFixedByteLengthUnicodeString(random(),
+            len) : _TestUtil.randomRealisticUnicodeString(random(), 1, len);
         BytesRef br = new BytesRef(string);
         hash.add(br);
         docToString.put(id, string);
-        doc.add( new DocValuesField("field", br, type));
+        doc.add(new SortedBytesDocValuesField("field", br, type == Type.BYTES_FIXED_SORTED));
         w.addDocument(doc);
       }
       w.commit();
@@ -792,7 +846,7 @@ public class TestDocValuesIndexing extends LuceneTestCase {
         hash.get(sort[i], expected);
         asSortedSource.getByOrd(i, actual);
         assertEquals(expected.utf8ToString(), actual.utf8ToString());
-        int ord = asSortedSource.getByValue(expected, actual);
+        int ord = asSortedSource.getOrdByValue(expected, actual);
         assertEquals(i, ord);
       }
       AtomicReader slowR = SlowCompositeReaderWrapper.wrap(reader);
@@ -800,7 +854,7 @@ public class TestDocValuesIndexing extends LuceneTestCase {
 
       for (Entry<String, String> entry : entrySet) {
         int docId = docId(slowR, new Term("id", entry.getKey()));
-        expected.copyChars(entry.getValue());
+        expected = new BytesRef(entry.getValue());
         assertEquals(expected, asSortedSource.getBytes(docId, actual));
       }
 
@@ -815,8 +869,145 @@ public class TestDocValuesIndexing extends LuceneTestCase {
     assertEquals(1, docFreq);
     DocsEnum termDocsEnum = reader.termDocsEnum(null, term.field, term.bytes, false);
     int nextDoc = termDocsEnum.nextDoc();
-    assertEquals(DocsEnum.NO_MORE_DOCS, termDocsEnum.nextDoc());
+    assertEquals(DocIdSetIterator.NO_MORE_DOCS, termDocsEnum.nextDoc());
     return nextDoc;
+  }
+
+  public void testWithThreads() throws Exception {
+    Random random = random();
+    final int NUM_DOCS = atLeast(100);
+    final Directory dir = newDirectory();
+    final RandomIndexWriter writer = new RandomIndexWriter(random, dir);
+    final boolean allowDups = random.nextBoolean();
+    final Set<String> seen = new HashSet<String>();
+    if (VERBOSE) {
+      System.out.println("TEST: NUM_DOCS=" + NUM_DOCS + " allowDups=" + allowDups);
+    }
+    int numDocs = 0;
+    final List<BytesRef> docValues = new ArrayList<BytesRef>();
+
+    // TODO: deletions
+    while (numDocs < NUM_DOCS) {
+      final String s;
+      if (random.nextBoolean()) {
+        s = _TestUtil.randomSimpleString(random);
+      } else {
+        s = _TestUtil.randomUnicodeString(random);
+      }
+      final BytesRef br = new BytesRef(s);
+
+      if (!allowDups) {
+        if (seen.contains(s)) {
+          continue;
+        }
+        seen.add(s);
+      }
+
+      if (VERBOSE) {
+        System.out.println("  " + numDocs + ": s=" + s);
+      }
+      
+      final Document doc = new Document();
+      doc.add(new SortedBytesDocValuesField("stringdv", br));
+      doc.add(new PackedLongDocValuesField("id", numDocs));
+      docValues.add(br);
+      writer.addDocument(doc);
+      numDocs++;
+
+      if (random.nextInt(40) == 17) {
+        // force flush
+        writer.getReader().close();
+      }
+    }
+
+    writer.forceMerge(1);
+    final DirectoryReader r = writer.getReader();
+    writer.close();
     
+    final AtomicReader sr = getOnlySegmentReader(r);
+    final DocValues dv = sr.docValues("stringdv");
+    assertNotNull(dv);
+
+    final long END_TIME = System.currentTimeMillis() + (TEST_NIGHTLY ? 30 : 1);
+
+    final DocValues.Source docIDToID = sr.docValues("id").getSource();
+
+    final int NUM_THREADS = _TestUtil.nextInt(random(), 1, 10);
+    Thread[] threads = new Thread[NUM_THREADS];
+    for(int thread=0;thread<NUM_THREADS;thread++) {
+      threads[thread] = new Thread() {
+          @Override
+          public void run() {
+            Random random = random();            
+            final DocValues.Source stringDVSource;
+            final DocValues.Source stringDVDirectSource;
+            try {
+              stringDVSource = dv.getSource();
+              assertNotNull(stringDVSource);
+              stringDVDirectSource = dv.getDirectSource();
+              assertNotNull(stringDVDirectSource);
+            } catch (IOException ioe) {
+              throw new RuntimeException(ioe);
+            }
+            while(System.currentTimeMillis() < END_TIME) {
+              final DocValues.Source source;
+              if (random.nextBoolean()) {
+                source = stringDVSource;
+              } else {
+                source = stringDVDirectSource;
+              }
+
+              final DocValues.SortedSource sortedSource = source.asSortedSource();
+              assertNotNull(sortedSource);
+
+              final BytesRef scratch = new BytesRef();
+
+              for(int iter=0;iter<100;iter++) {
+                final int docID = random.nextInt(sr.maxDoc());
+                final BytesRef br = sortedSource.getBytes(docID, scratch);
+                assertEquals(docValues.get((int) docIDToID.getInt(docID)), br);
+              }
+            }
+          }
+        };
+      threads[thread].start();
+    }
+
+    for(Thread thread : threads) {
+      thread.join();
+    }
+
+    r.close();
+    dir.close();
+  }
+
+  // LUCENE-3870
+  public void testLengthPrefixAcrossTwoPages() throws Exception {
+    Directory d = newDirectory();
+    IndexWriter w = new IndexWriter(d, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
+    Document doc = new Document();
+    byte[] bytes = new byte[32764];
+    BytesRef b = new BytesRef();
+    b.bytes = bytes;
+    b.length = bytes.length;
+    doc.add(new DerefBytesDocValuesField("field", b));
+    w.addDocument(doc);
+    bytes[0] = 1;
+    w.addDocument(doc);
+    DirectoryReader r = w.getReader();
+    Source s = r.getSequentialSubReaders()[0].docValues("field").getSource();
+
+    BytesRef bytes1 = s.getBytes(0, new BytesRef());
+    assertEquals(bytes.length, bytes1.length);
+    bytes[0] = 0;
+    assertEquals(b, bytes1);
+    
+    bytes1 = s.getBytes(1, new BytesRef());
+    assertEquals(bytes.length, bytes1.length);
+    bytes[0] = 1;
+    assertEquals(b, bytes1);
+    r.close();
+    w.close();
+    d.close();
   }
 }

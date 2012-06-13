@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -50,7 +50,7 @@ public class CoreDescriptor {
     if(coreContainer != null && coreContainer.getZkController() != null) {
       this.cloudDesc = new CloudDescriptor();
       // cloud collection defaults to core name
-      cloudDesc.setCollectionName(name.isEmpty() ? coreContainer.getDefaultCoreName() : name);
+      cloudDesc.setCollectionName(name);
     }
 
     if (instanceDir == null) {

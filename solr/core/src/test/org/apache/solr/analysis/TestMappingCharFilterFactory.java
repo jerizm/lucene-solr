@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,6 +17,7 @@
 
 package org.apache.solr.analysis;
 
+import org.apache.lucene.analysis.util.InitializationException;
 import org.apache.lucene.util.LuceneTestCase;
 
 public class TestMappingCharFilterFactory extends LuceneTestCase {
@@ -28,7 +29,7 @@ public class TestMappingCharFilterFactory extends LuceneTestCase {
       f.parseString( "\\" );
       fail( "escape character cannot be alone." );
     }
-    catch( RuntimeException expected ){}
+    catch (InitializationException expected) {}
     
     assertEquals( "unexpected escaped characters",
         "\\\"\n\t\r\b\f", f.parseString( "\\\\\\\"\\n\\t\\r\\b\\f" ) );
@@ -41,7 +42,7 @@ public class TestMappingCharFilterFactory extends LuceneTestCase {
       f.parseString( "\\u000" );
       fail( "invalid length check." );
     }
-    catch( RuntimeException expected ){}
+    catch (InitializationException expected) {}
 
     try {
       f.parseString( "\\u123x" );

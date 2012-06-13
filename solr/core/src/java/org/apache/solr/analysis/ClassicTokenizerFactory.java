@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,6 +20,8 @@ package org.apache.solr.analysis;
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.standard.ClassicTokenizer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
+import org.apache.lucene.analysis.util.TokenizerFactory;
+
 import java.io.Reader;
 import java.util.Map;
 
@@ -35,7 +37,7 @@ import java.util.Map;
  *
  */
 
-public class ClassicTokenizerFactory extends BaseTokenizerFactory {
+public class ClassicTokenizerFactory extends TokenizerFactory {
 
   private int maxTokenLength;
 

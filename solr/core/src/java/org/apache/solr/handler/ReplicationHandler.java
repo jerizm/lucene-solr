@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -45,6 +45,7 @@ import org.apache.lucene.index.IndexDeletionPolicy;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.solr.common.SolrException;
+import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.SolrParams;
@@ -105,6 +106,8 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
   private boolean replicateOnCommit = false;
 
   private boolean replicateOnStart = false;
+  
+  private int numberBackupsToKeep = 0; //zero: do not delete old backups
 
   private int numTimesReplicated = 0;
 
@@ -147,7 +150,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
         // the CMD_GET_FILE_LIST command.
         //
         core.getDeletionPolicy().setReserveDuration(commitPoint.getGeneration(), reserveCommitDuration);
-        rsp.add(CMD_INDEX_VERSION, core.getDeletionPolicy().getCommitTimestamp(commitPoint));
+        rsp.add(CMD_INDEX_VERSION, IndexDeletionPolicyWrapper.getCommitTimestamp(commitPoint));
         rsp.add(GENERATION, commitPoint.getGeneration());
       } else {
         // This happens when replication is not configured to happen after startup and no commit/optimize
@@ -226,7 +229,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
     for (IndexCommit c : commits.values()) {
       try {
         NamedList<Object> nl = new NamedList<Object>();
-        nl.add("indexVersion", core.getDeletionPolicy().getCommitTimestamp(c));
+        nl.add("indexVersion", IndexDeletionPolicyWrapper.getCommitTimestamp(c));
         nl.add(GENERATION, c.getGeneration());
         nl.add(CMD_GET_FILE_LIST, c.getFileNames());
         l.add(nl);
@@ -296,7 +299,9 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
     } catch (Exception e) {
       SolrException.log(LOG, "SnapPull failed ", e);
     } finally {
-      tempSnapPuller = snapPuller;
+      if (snapPuller != null) {
+        tempSnapPuller = snapPuller;
+      }
       snapPullLock.unlock();
     }
     return false;
@@ -306,18 +311,31 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
     return snapPullLock.isLocked();
   }
 
-  private void doSnapShoot(SolrParams params, SolrQueryResponse rsp, SolrQueryRequest req) {
+  private void doSnapShoot(SolrParams params, SolrQueryResponse rsp,
+      SolrQueryRequest req) {
     try {
-      int numberToKeep = params.getInt(NUMBER_BACKUPS_TO_KEEP, Integer.MAX_VALUE);
+      int numberToKeep = params.getInt(NUMBER_BACKUPS_TO_KEEP_REQUEST_PARAM, 0);
+      if (numberToKeep > 0 && numberBackupsToKeep > 0) {
+        throw new SolrException(ErrorCode.BAD_REQUEST, "Cannot use "
+            + NUMBER_BACKUPS_TO_KEEP_REQUEST_PARAM + " if "
+            + NUMBER_BACKUPS_TO_KEEP_INIT_PARAM
+            + " was specified in the configuration.");
+      }
+      numberToKeep = Math.max(numberToKeep, numberBackupsToKeep);
+      if (numberToKeep < 1) {
+        numberToKeep = Integer.MAX_VALUE;
+      }
+      
       IndexDeletionPolicyWrapper delPolicy = core.getDeletionPolicy();
       IndexCommit indexCommit = delPolicy.getLatestCommit();
       
-      if(indexCommit == null) {
+      if (indexCommit == null) {
         indexCommit = req.getSearcher().getIndexReader().getIndexCommit();
       }
       
       // small race here before the commit point is saved
-      new SnapShooter(core, params.get("location")).createSnapAsync(indexCommit, numberToKeep, this);
+      new SnapShooter(core, params.get("location")).createSnapAsync(
+          indexCommit, numberToKeep, this);
       
     } catch (Exception e) {
       LOG.warn("Exception during creating a snapshot", e);
@@ -372,7 +390,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
                + gen, e);
     }
     rsp.add(CMD_GET_FILE_LIST, result);
-    if (confFileNameAlias.size() < 1)
+    if (confFileNameAlias.size() < 1 || core.getCoreDescriptor().getCoreContainer().isZooKeeperAware())
       return;
     LOG.debug("Adding config files to list: " + includeConfFiles);
     //if configuration files need to be included get their details
@@ -444,6 +462,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
   }
 
   boolean isPollingDisabled() {
+    if (snapPuller == null) return true;
     return snapPuller.isPollingDisabled();
   }
 
@@ -476,18 +495,8 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
   }
 
   @Override
-  public String getSourceId() {
-    return "$Id$";
-  }
-
-  @Override
   public String getSource() {
     return "$URL$";
-  }
-
-  @Override
-  public String getVersion() {
-    return "$Revision$";
   }
 
   private long[] getIndexVersion() {
@@ -623,6 +632,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
       addVal(slave, SnapPuller.REPLICATION_FAILED_AT, props, Date.class);
       addVal(slave, SnapPuller.PREVIOUS_CYCLE_TIME_TAKEN, props, Long.class);
 
+      slave.add("currentDate", new Date().toString());
       slave.add("isPollingDisabled", String.valueOf(isPollingDisabled()));
       boolean isReplicating = isReplicating();
       slave.add("isReplicating", String.valueOf(isReplicating));
@@ -787,6 +797,12 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
     this.core = core;
     registerFileStreamResponseWriter();
     registerCloseHook();
+    Object nbtk = initArgs.get(NUMBER_BACKUPS_TO_KEEP_INIT_PARAM);
+    if(nbtk!=null) {
+      numberBackupsToKeep = Integer.parseInt(nbtk.toString());
+    } else {
+      numberBackupsToKeep = 0;
+    }
     NamedList slave = (NamedList) initArgs.get("slave");
     boolean enableSlave = isEnabled( slave );
     if (enableSlave) {
@@ -807,7 +823,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
         List<String> files = Arrays.asList(includeConfFiles.split(","));
         for (String file : files) {
           if (file.trim().length() == 0) continue;
-          String[] strs = file.split(":");
+          String[] strs = file.trim().split(":");
           // if there is an alias add it or it is null
           confFileNameAlias.add(strs[0], strs.length > 1 ? strs[1] : null);
         }
@@ -977,9 +993,13 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
           ***/
         }
         if (snapshoot) {
-          try {
+          try {            
+            int numberToKeep = numberBackupsToKeep;
+            if (numberToKeep < 1) {
+              numberToKeep = Integer.MAX_VALUE;
+            }            
             SnapShooter snapShooter = new SnapShooter(core, null);
-            snapShooter.createSnapAsync(currentCommitPoint, ReplicationHandler.this);
+            snapShooter.createSnapAsync(currentCommitPoint, numberToKeep, ReplicationHandler.this);
           } catch (Exception e) {
             LOG.error("Exception while snapshooting", e);
           }
@@ -1176,5 +1196,7 @@ public class ReplicationHandler extends RequestHandlerBase implements SolrCoreAw
 
   public static final String NEXT_EXECUTION_AT = "nextExecutionAt";
   
-  public static final String NUMBER_BACKUPS_TO_KEEP = "numberToKeep";
+  public static final String NUMBER_BACKUPS_TO_KEEP_REQUEST_PARAM = "numberToKeep";
+  
+  public static final String NUMBER_BACKUPS_TO_KEEP_INIT_PARAM = "maxNumberOfBackups";
 }

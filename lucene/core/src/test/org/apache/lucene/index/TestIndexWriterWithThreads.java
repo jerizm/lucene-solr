@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -25,6 +25,7 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.TextField;
+import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MockDirectoryWrapper;
@@ -125,7 +126,7 @@ public class TestIndexWriterWithThreads extends LuceneTestCase {
       MockDirectoryWrapper dir = newDirectory();
       IndexWriter writer = new IndexWriter(
           dir,
-          newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).
+          newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).
               setMaxBufferedDocs(2).
               setMergeScheduler(new ConcurrentMergeScheduler()).
               setMergePolicy(newLogMergePolicy(4))
@@ -169,7 +170,7 @@ public class TestIndexWriterWithThreads extends LuceneTestCase {
 
       IndexWriter writer = new IndexWriter(
           dir,
-          newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).
+          newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).
               setMaxBufferedDocs(10).
               setMergeScheduler(new ConcurrentMergeScheduler()).
               setMergePolicy(newLogMergePolicy(4))
@@ -209,15 +210,15 @@ public class TestIndexWriterWithThreads extends LuceneTestCase {
       }
 
       // Quick test to make sure index is not corrupt:
-      IndexReader reader = IndexReader.open(dir);
-      DocsEnum tdocs = _TestUtil.docs(random, reader,
+      IndexReader reader = DirectoryReader.open(dir);
+      DocsEnum tdocs = _TestUtil.docs(random(), reader,
                                       "field",
                                       new BytesRef("aaa"),
                                       MultiFields.getLiveDocs(reader),
                                       null,
                                       false);
       int count = 0;
-      while(tdocs.nextDoc() != DocsEnum.NO_MORE_DOCS) {
+      while(tdocs.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
         count++;
       }
       assertTrue(count > 0);
@@ -241,7 +242,7 @@ public class TestIndexWriterWithThreads extends LuceneTestCase {
 
       IndexWriter writer = new IndexWriter(
           dir,
-          newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).
+          newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).
               setMaxBufferedDocs(2).
               setMergeScheduler(new ConcurrentMergeScheduler()).
               setMergePolicy(newLogMergePolicy(4))
@@ -276,7 +277,7 @@ public class TestIndexWriterWithThreads extends LuceneTestCase {
       }
 
       if (success) {
-        IndexReader reader = IndexReader.open(dir);
+        IndexReader reader = DirectoryReader.open(dir);
         final Bits delDocs = MultiFields.getLiveDocs(reader);
         for(int j=0;j<reader.maxDoc();j++) {
           if (delDocs == null || !delDocs.get(j)) {
@@ -296,7 +297,7 @@ public class TestIndexWriterWithThreads extends LuceneTestCase {
   public void _testSingleThreadFailure(MockDirectoryWrapper.Failure failure) throws IOException {
     MockDirectoryWrapper dir = newDirectory();
 
-    IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random))
+    IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random()))
       .setMaxBufferedDocs(2).setMergeScheduler(new ConcurrentMergeScheduler()));
     final Document doc = new Document();
     FieldType customType = new FieldType(TextField.TYPE_STORED);
@@ -447,7 +448,7 @@ public class TestIndexWriterWithThreads extends LuceneTestCase {
      assertFalse("Failed due to: " + thread1.failure, thread1.failed);
      assertFalse("Failed due to: " + thread2.failure, thread2.failed);
      // now verify that we have two documents in the index
-     IndexReader reader = IndexReader.open(dir);
+     IndexReader reader = DirectoryReader.open(dir);
      assertEquals("IndexReader should have one document per thread running", 2,
          reader.numDocs());
      
@@ -476,10 +477,10 @@ public class TestIndexWriterWithThreads extends LuceneTestCase {
      public void run() {
        try {
          Document doc = new Document();
-         Field field = newField("field", "testData", TextField.TYPE_STORED);
+         Field field = newTextField("field", "testData", Field.Store.YES);
          doc.add(field);
          IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(
-             TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+             TEST_VERSION_CURRENT, new MockAnalyzer(random())));
          iwConstructed.countDown();
          startIndexing.await();
          writer.addDocument(doc);

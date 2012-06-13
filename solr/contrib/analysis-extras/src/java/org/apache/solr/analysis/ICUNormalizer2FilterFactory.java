@@ -1,6 +1,6 @@
 package org.apache.solr.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,8 +21,11 @@ import java.util.Map;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.icu.ICUNormalizer2Filter;
+import org.apache.lucene.analysis.util.AbstractAnalysisFactory;
+import org.apache.lucene.analysis.util.MultiTermAwareComponent;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 import com.ibm.icu.text.FilteredNormalizer2;
 import com.ibm.icu.text.Normalizer2;
@@ -44,7 +47,7 @@ import com.ibm.icu.text.UnicodeSet;
  * @see Normalizer2
  * @see FilteredNormalizer2
  */
-public class ICUNormalizer2FilterFactory extends BaseTokenFilterFactory {
+public class ICUNormalizer2FilterFactory extends TokenFilterFactory implements MultiTermAwareComponent {
   private Normalizer2 normalizer;
 
   // TODO: support custom normalization
@@ -77,5 +80,9 @@ public class ICUNormalizer2FilterFactory extends BaseTokenFilterFactory {
   
   public TokenStream create(TokenStream input) {
     return new ICUNormalizer2Filter(input, normalizer);
+  }
+
+  public AbstractAnalysisFactory getMultiTermComponent() {
+    return this;
   }
 }

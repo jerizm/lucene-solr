@@ -1,5 +1,5 @@
 package org.apache.solr.spelling;
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -24,6 +24,7 @@ import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.params.GroupParams;
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.common.params.SpellingParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.core.SolrCore;
@@ -39,7 +40,7 @@ import org.junit.Test;
 public class SpellCheckCollatorTest extends SolrTestCaseJ4 {
 	@BeforeClass
 	public static void beforeClass() throws Exception {
-		initCore("solrconfig.xml", "schema.xml");
+ 		initCore("solrconfig-spellcheckcomponent.xml", "schema.xml");
 		assertNull(h.validateUpdate(adoc("id", "0", "lowerfilt", "faith hope and love")));
 		assertNull(h.validateUpdate(adoc("id", "1", "lowerfilt", "faith hope and loaves")));
 		assertNull(h.validateUpdate(adoc("id", "2", "lowerfilt", "fat hops and loaves")));
@@ -47,6 +48,13 @@ public class SpellCheckCollatorTest extends SolrTestCaseJ4 {
 		assertNull(h.validateUpdate(adoc("id", "4", "lowerfilt", "fat of homer")));
 		assertNull(h.validateUpdate(adoc("id", "5", "lowerfilt1", "peace")));
 		assertNull(h.validateUpdate(adoc("id", "6", "lowerfilt", "hyphenated word")));
+ 		assertNull(h.validateUpdate(adoc("id", "7", "teststop", "Jane filled out a form at Charles De Gaulle")));
+ 		assertNull(h.validateUpdate(adoc("id", "8", "teststop", "Dick flew from Heathrow")));
+ 		assertNull(h.validateUpdate(adoc("id", "9", "teststop", "Jane is stuck in customs because Spot chewed up the form")));
+ 		assertNull(h.validateUpdate(adoc("id", "10", "teststop", "Once in Paris Dick built a fire on the hearth")));
+ 		assertNull(h.validateUpdate(adoc("id", "11", "teststop", "Dick waited for Jane as he watched the sparks flow upward")));
+ 		assertNull(h.validateUpdate(adoc("id", "12", "teststop", "This June parisian rendez-vous is ruined because of a customs snafu")));
+ 		assertNull(h.validateUpdate(adoc("id", "13", "teststop", "partisan political machine")));
 		assertNull(h.validateUpdate(commit()));
 	}
 
@@ -59,9 +67,9 @@ public class SpellCheckCollatorTest extends SolrTestCaseJ4 {
     
     ModifiableSolrParams params = new ModifiableSolrParams();   
     params.add(SpellCheckComponent.COMPONENT_NAME, "true");
-    params.add(SpellCheckComponent.SPELLCHECK_BUILD, "true");
-    params.add(SpellCheckComponent.SPELLCHECK_COUNT, "10");   
-    params.add(SpellCheckComponent.SPELLCHECK_COLLATE, "true");
+    params.add(SpellingParams.SPELLCHECK_BUILD, "true");
+    params.add(SpellingParams.SPELLCHECK_COUNT, "10");   
+    params.add(SpellingParams.SPELLCHECK_COLLATE, "true");
     
     params.add(CommonParams.Q, "lowerfilt:(hypenated-wotd)");
     {
@@ -101,6 +109,44 @@ public class SpellCheckCollatorTest extends SolrTestCaseJ4 {
     }
 
   }
+	
+	public void testCollateWithOverride() throws Exception
+	{
+	  assertQ(
+      req(
+    	  SpellCheckComponent.COMPONENT_NAME, "true",
+        SpellCheckComponent.SPELLCHECK_DICT, "direct",
+        SpellingParams.SPELLCHECK_COUNT, "10",   
+        SpellingParams.SPELLCHECK_COLLATE, "true",
+        SpellingParams.SPELLCHECK_MAX_COLLATION_TRIES, "10",
+        SpellingParams.SPELLCHECK_MAX_COLLATIONS, "10",
+        "qt", "spellCheckCompRH",
+        "defType", "edismax",
+        "qf", "teststop",
+        "mm", "1",
+        CommonParams.Q, "partisian politcal mashine"
+      ),
+      "//lst[@name='spellcheck']/lst[@name='suggestions']/str[@name='collation']='parisian political machine'"
+    );
+	  assertQ(
+	      req(
+	        SpellCheckComponent.COMPONENT_NAME, "true",
+	        SpellCheckComponent.SPELLCHECK_DICT, "direct",
+	        SpellingParams.SPELLCHECK_COUNT, "10",   
+	        SpellingParams.SPELLCHECK_COLLATE, "true",
+	        SpellingParams.SPELLCHECK_MAX_COLLATION_TRIES, "10",
+	        SpellingParams.SPELLCHECK_MAX_COLLATIONS, "10",
+	        "qt", "spellCheckCompRH",
+	        "defType", "edismax",
+	        "qf", "teststop",
+	        "mm", "1",
+	        SpellingParams.SPELLCHECK_COLLATE_PARAM_OVERRIDE + "mm", "100%",
+	        CommonParams.Q, "partisian politcal mashine"
+	      ),
+	     "//lst[@name='spellcheck']/lst[@name='suggestions']/str[@name='collation']='partisan political machine'"
+	   );
+    
+	}
 
 	@Test
 	public void testCollateWithFilter() throws Exception
@@ -111,11 +157,11 @@ public class SpellCheckCollatorTest extends SolrTestCaseJ4 {
 		
 		ModifiableSolrParams params = new ModifiableSolrParams();		
 		params.add(SpellCheckComponent.COMPONENT_NAME, "true");
-		params.add(SpellCheckComponent.SPELLCHECK_BUILD, "true");
-		params.add(SpellCheckComponent.SPELLCHECK_COUNT, "10");		
-		params.add(SpellCheckComponent.SPELLCHECK_COLLATE, "true");
-		params.add(SpellCheckComponent.SPELLCHECK_MAX_COLLATION_TRIES, "10");
-		params.add(SpellCheckComponent.SPELLCHECK_MAX_COLLATIONS, "10");
+		params.add(SpellingParams.SPELLCHECK_BUILD, "true");
+		params.add(SpellingParams.SPELLCHECK_COUNT, "10");		
+		params.add(SpellingParams.SPELLCHECK_COLLATE, "true");
+		params.add(SpellingParams.SPELLCHECK_MAX_COLLATION_TRIES, "10");
+		params.add(SpellingParams.SPELLCHECK_MAX_COLLATIONS, "10");
 		params.add(CommonParams.Q, "lowerfilt:(+fauth +home +loane)");
 		params.add(CommonParams.FQ, "NOT(id:1)");
 		
@@ -146,12 +192,12 @@ public class SpellCheckCollatorTest extends SolrTestCaseJ4 {
 		
 		ModifiableSolrParams params = new ModifiableSolrParams();		
 		params.add(SpellCheckComponent.COMPONENT_NAME, "true");
-		params.add(SpellCheckComponent.SPELLCHECK_DICT, "multipleFields");
-		params.add(SpellCheckComponent.SPELLCHECK_BUILD, "true");
-		params.add(SpellCheckComponent.SPELLCHECK_COUNT, "10");		
-		params.add(SpellCheckComponent.SPELLCHECK_COLLATE, "true");
-		params.add(SpellCheckComponent.SPELLCHECK_MAX_COLLATION_TRIES, "1");
-		params.add(SpellCheckComponent.SPELLCHECK_MAX_COLLATIONS, "1");
+		params.add(SpellingParams.SPELLCHECK_DICT, "multipleFields");
+		params.add(SpellingParams.SPELLCHECK_BUILD, "true");
+		params.add(SpellingParams.SPELLCHECK_COUNT, "10");		
+		params.add(SpellingParams.SPELLCHECK_COLLATE, "true");
+		params.add(SpellingParams.SPELLCHECK_MAX_COLLATION_TRIES, "1");
+		params.add(SpellingParams.SPELLCHECK_MAX_COLLATIONS, "1");
 		params.add(CommonParams.Q, "peac");	
 		
 		//SpellCheckCompRH has no "qf" defined.  It will not find "peace" from "peac" despite it being in the dictionary
@@ -170,7 +216,7 @@ public class SpellCheckCollatorTest extends SolrTestCaseJ4 {
 		
 		//SpellCheckCompRH1 has "lowerfilt1" defined in the "qf" param.  It will find "peace" from "peac" because
 		//requrying field "lowerfilt1" returns the hit.
-		params.remove(SpellCheckComponent.SPELLCHECK_BUILD);
+		params.remove(SpellingParams.SPELLCHECK_BUILD);
 		handler = core.getRequestHandler("spellCheckCompRH1");
 		rsp = new SolrQueryResponse();
 		rsp.add("responseHeader", new SimpleOrderedMap());
@@ -193,11 +239,11 @@ public class SpellCheckCollatorTest extends SolrTestCaseJ4 {
 		ModifiableSolrParams params = new ModifiableSolrParams();
 		params.add(CommonParams.QT, "spellCheckCompRH");
 		params.add(CommonParams.Q, "lowerfilt:(+fauth +home +loane)");
-		params.add(SpellCheckComponent.SPELLCHECK_EXTENDED_RESULTS, "true");
+		params.add(SpellingParams.SPELLCHECK_EXTENDED_RESULTS, "true");
 		params.add(SpellCheckComponent.COMPONENT_NAME, "true");
-		params.add(SpellCheckComponent.SPELLCHECK_BUILD, "true");
-		params.add(SpellCheckComponent.SPELLCHECK_COUNT, "10");
-		params.add(SpellCheckComponent.SPELLCHECK_COLLATE, "true");
+		params.add(SpellingParams.SPELLCHECK_BUILD, "true");
+		params.add(SpellingParams.SPELLCHECK_COUNT, "10");
+		params.add(SpellingParams.SPELLCHECK_COLLATE, "true");
 
 		// Testing backwards-compatible behavior.
 		// Returns 1 collation as a single string.
@@ -217,9 +263,9 @@ public class SpellCheckCollatorTest extends SolrTestCaseJ4 {
 
 		// Testing backwards-compatible response format but will only return a
 		// collation that would return results.
-		params.remove(SpellCheckComponent.SPELLCHECK_BUILD);
-		params.add(SpellCheckComponent.SPELLCHECK_MAX_COLLATION_TRIES, "5");
-		params.add(SpellCheckComponent.SPELLCHECK_MAX_COLLATIONS, "1");
+		params.remove(SpellingParams.SPELLCHECK_BUILD);
+		params.add(SpellingParams.SPELLCHECK_MAX_COLLATION_TRIES, "5");
+		params.add(SpellingParams.SPELLCHECK_MAX_COLLATIONS, "1");
 		handler = core.getRequestHandler("spellCheckCompRH");
 		rsp = new SolrQueryResponse();
 		rsp.add("responseHeader", new SimpleOrderedMap());
@@ -234,10 +280,10 @@ public class SpellCheckCollatorTest extends SolrTestCaseJ4 {
 
 		// Testing returning multiple collations if more than one valid
 		// combination exists.
-		params.remove(SpellCheckComponent.SPELLCHECK_MAX_COLLATION_TRIES);
-		params.remove(SpellCheckComponent.SPELLCHECK_MAX_COLLATIONS);
-		params.add(SpellCheckComponent.SPELLCHECK_MAX_COLLATION_TRIES, "10");
-		params.add(SpellCheckComponent.SPELLCHECK_MAX_COLLATIONS, "2");
+		params.remove(SpellingParams.SPELLCHECK_MAX_COLLATION_TRIES);
+		params.remove(SpellingParams.SPELLCHECK_MAX_COLLATIONS);
+		params.add(SpellingParams.SPELLCHECK_MAX_COLLATION_TRIES, "10");
+		params.add(SpellingParams.SPELLCHECK_MAX_COLLATIONS, "2");
 		handler = core.getRequestHandler("spellCheckCompRH");
 		rsp = new SolrQueryResponse();
 		rsp.add("responseHeader", new SimpleOrderedMap());
@@ -256,7 +302,7 @@ public class SpellCheckCollatorTest extends SolrTestCaseJ4 {
 
 		// Testing return multiple collations with expanded collation response
 		// format.
-		params.add(SpellCheckComponent.SPELLCHECK_COLLATE_EXTENDED_RESULTS, "true");
+		params.add(SpellingParams.SPELLCHECK_COLLATE_EXTENDED_RESULTS, "true");
 		handler = core.getRequestHandler("spellCheckCompRH");
 		rsp = new SolrQueryResponse();
 		rsp.add("responseHeader", new SimpleOrderedMap());
@@ -300,11 +346,11 @@ public class SpellCheckCollatorTest extends SolrTestCaseJ4 {
 		
 		ModifiableSolrParams params = new ModifiableSolrParams();		
 		params.add(SpellCheckComponent.COMPONENT_NAME, "true");
-		params.add(SpellCheckComponent.SPELLCHECK_BUILD, "true");
-		params.add(SpellCheckComponent.SPELLCHECK_COUNT, "10");		
-		params.add(SpellCheckComponent.SPELLCHECK_COLLATE, "true");
-		params.add(SpellCheckComponent.SPELLCHECK_MAX_COLLATION_TRIES, "5");
-		params.add(SpellCheckComponent.SPELLCHECK_MAX_COLLATIONS, "1");
+		params.add(SpellingParams.SPELLCHECK_BUILD, "true");
+		params.add(SpellingParams.SPELLCHECK_COUNT, "10");		
+		params.add(SpellingParams.SPELLCHECK_COLLATE, "true");
+		params.add(SpellingParams.SPELLCHECK_MAX_COLLATION_TRIES, "5");
+		params.add(SpellingParams.SPELLCHECK_MAX_COLLATIONS, "1");
 		params.add(CommonParams.Q, "lowerfilt:(+fauth)");
 		params.add(GroupParams.GROUP, "true");
 		params.add(GroupParams.GROUP_FIELD, "id");
@@ -322,5 +368,63 @@ public class SpellCheckCollatorTest extends SolrTestCaseJ4 {
 		NamedList suggestions = (NamedList) spellCheck.get("suggestions");
 		List<String> collations = suggestions.getAll("collation");
 		assertTrue(collations.size() == 1);
+	}
+	
+	@Test
+	public void testContextSensitiveCollate() throws Exception {
+		//                     DirectSolrSpellChecker   IndexBasedSpellChecker
+		String[] dictionary = {"direct",                "default_teststop" };
+		for(int i=0 ; i<1 ; i++) {		
+			assertQ(
+				req(
+					"q", "teststop:(flew AND form AND heathrow)", 
+					"qt", "spellCheckCompRH",
+					"indent", "true",
+					SpellCheckComponent.COMPONENT_NAME, "true",
+					SpellCheckComponent.SPELLCHECK_DICT, dictionary[i],
+					SpellCheckComponent.SPELLCHECK_EXTENDED_RESULTS, "true", 
+					SpellCheckComponent.SPELLCHECK_COUNT, "10",
+					SpellCheckComponent.SPELLCHECK_ALTERNATIVE_TERM_COUNT, "5",
+					SpellCheckComponent.SPELLCHECK_MAX_RESULTS_FOR_SUGGEST, "0",
+					SpellCheckComponent.SPELLCHECK_COLLATE, "true",
+					SpellCheckComponent.SPELLCHECK_MAX_COLLATION_TRIES, "10",
+					SpellCheckComponent.SPELLCHECK_MAX_COLLATIONS, "1",
+					SpellCheckComponent.SPELLCHECK_COLLATE_EXTENDED_RESULTS, "true"
+				),
+				"//lst[@name='spellcheck']/lst[@name='suggestions']/lst[@name='flew']/arr[@name='suggestion']/lst/str[@name='word']='flow'",
+				"//lst[@name='spellcheck']/lst[@name='suggestions']/lst[@name='form']/arr[@name='suggestion']/lst/str[@name='word']='from'",
+/* DirectSolrSpellChecker won't suggest if the edit distance > 2, so we can't test for this one...
+				"//lst[@name='spellcheck']/lst[@name='suggestions']/lst[@name='heathrow']/arr[@name='suggestion']/lst/str[@name='word']='hearth'",
+*/
+				"//lst[@name='spellcheck']/lst[@name='suggestions']/bool[@name='correctlySpelled']='false'",
+				"//lst[@name='spellcheck']/lst[@name='suggestions']/lst[@name='collation']/str[@name='collationQuery']='teststop:(flew AND from AND heathrow)'",
+				"//lst[@name='spellcheck']/lst[@name='suggestions']/lst[@name='collation']/int[@name='hits']=1",
+				"//lst[@name='spellcheck']/lst[@name='suggestions']/lst[@name='collation']/lst[@name='misspellingsAndCorrections']/str[@name='form']='from'"		
+			);
+			
+			assertQ(
+				req(
+					"q", "teststop:(june AND customs)", 
+					"qt", "spellCheckCompRH",
+					"indent", "true",
+					SpellCheckComponent.COMPONENT_NAME, "true",
+					SpellCheckComponent.SPELLCHECK_DICT, dictionary[i],
+					SpellCheckComponent.SPELLCHECK_EXTENDED_RESULTS, "true", 
+					SpellCheckComponent.SPELLCHECK_COUNT, "10",
+					SpellCheckComponent.SPELLCHECK_ALTERNATIVE_TERM_COUNT, "5",
+					SpellCheckComponent.SPELLCHECK_MAX_RESULTS_FOR_SUGGEST, "1",
+					SpellCheckComponent.SPELLCHECK_COLLATE, "true",
+					SpellCheckComponent.SPELLCHECK_MAX_COLLATION_TRIES, "10",
+					SpellCheckComponent.SPELLCHECK_MAX_COLLATIONS, "1",
+					SpellCheckComponent.SPELLCHECK_COLLATE_EXTENDED_RESULTS, "true"
+				),
+				"//result[@numFound=1]",
+				"//lst[@name='spellcheck']/lst[@name='suggestions']/lst[@name='june']/arr[@name='suggestion']/lst/str[@name='word']='jane'",
+				"//lst[@name='spellcheck']/lst[@name='suggestions']/bool[@name='correctlySpelled']='false'",
+				"//lst[@name='spellcheck']/lst[@name='suggestions']/lst[@name='collation']/str[@name='collationQuery']='teststop:(jane AND customs)'",
+				"//lst[@name='spellcheck']/lst[@name='suggestions']/lst[@name='collation']/int[@name='hits']=1",
+				"//lst[@name='spellcheck']/lst[@name='suggestions']/lst[@name='collation']/lst[@name='misspellingsAndCorrections']/str[@name='june']='jane'"
+			);
+		}				
 	}
 }

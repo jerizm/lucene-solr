@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -24,6 +24,20 @@ import java.util.Locale;
  * Parameters used across many handlers
  */
 public interface CommonParams {
+
+  /** 
+   * Override for the concept of "NOW" to be used throughout this request, 
+   * expressed as milliseconds since epoch.  This is primarily used in 
+   * distributed search to ensure consistent time values are used across 
+   * multiple sub-requests.
+   */
+  public static final String NOW = "NOW";
+
+  /** 
+   * Specifies the TimeZone used by the client for the purposes of 
+   * any DateMath rounding that may take place when executing the request
+   */
+  public static final String TZ = "TZ";
 
   /** the query type - which query handler should handle the request */
   public static final String QT ="qt";
@@ -65,6 +79,9 @@ public interface CommonParams {
   
   /** default query field */
   public static final String DF = "df";
+
+  /** Transformer param -- used with XSLT */
+  public static final String TR = "tr";
   
   /** whether to include debug data for all components pieces, including doing explains*/
   public static final String DEBUG_QUERY = "debugQuery";

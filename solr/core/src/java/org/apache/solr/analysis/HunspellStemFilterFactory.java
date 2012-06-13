@@ -1,6 +1,6 @@
 package org.apache.solr.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -24,10 +24,10 @@ import java.util.List;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.hunspell.HunspellDictionary;
 import org.apache.lucene.analysis.hunspell.HunspellStemFilter;
-import org.apache.solr.common.ResourceLoader;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.SolrException.ErrorCode;
-import org.apache.solr.util.plugin.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.InitializationException;
+import org.apache.lucene.analysis.util.ResourceLoader;
+import org.apache.lucene.analysis.util.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
  * TokenFilterFactory that creates instances of {@link org.apache.lucene.analysis.hunspell.HunspellStemFilter}.
@@ -40,16 +40,20 @@ import org.apache.solr.util.plugin.ResourceLoaderAware;
  * Both parameters dictionary and affix are mandatory.
  * <br/>
  * The parameter ignoreCase (true/false) controls whether matching is case sensitive or not. Default false.
- * <br/> 
+ * <br/>
+ * The parameter strictAffixParsing (true/false) controls whether the affix parsing is strict or not. Default true.
+ * If strict an error while reading an affix rule causes a ParseException, otherwise is ignored.
+ * <br/>
  * Dictionaries for many languages are available through the OpenOffice project.
  * 
  * See <a href="http://wiki.apache.org/solr/Hunspell">http://wiki.apache.org/solr/Hunspell</a>
  */
-public class HunspellStemFilterFactory extends BaseTokenFilterFactory implements ResourceLoaderAware {
+public class HunspellStemFilterFactory extends TokenFilterFactory implements ResourceLoaderAware {
   
   private static final String PARAM_DICTIONARY = "dictionary";
   private static final String PARAM_AFFIX = "affix";
   private static final String PARAM_IGNORE_CASE = "ignoreCase";
+  private static final String PARAM_STRICT_AFFIX_PARSING = "strictAffixParsing";
   private static final String TRUE = "true";
   private static final String FALSE = "false";
   
@@ -69,7 +73,16 @@ public class HunspellStemFilterFactory extends BaseTokenFilterFactory implements
     if(pic != null) {
       if(pic.equalsIgnoreCase(TRUE)) ignoreCase = true;
       else if(pic.equalsIgnoreCase(FALSE)) ignoreCase = false;
-      else throw new SolrException(ErrorCode.UNKNOWN, "Unknown value for "+PARAM_IGNORE_CASE+": "+pic+". Must be true or false");
+      else throw new InitializationException("Unknown value for " + PARAM_IGNORE_CASE + ": " + pic + ". Must be true or false");
+    }
+
+
+    String strictAffixParsingParam = args.get(PARAM_STRICT_AFFIX_PARSING);
+    boolean strictAffixParsing = true;
+    if(strictAffixParsingParam != null) {
+      if(strictAffixParsingParam.equalsIgnoreCase(FALSE)) strictAffixParsing = false;
+      else if(strictAffixParsingParam.equalsIgnoreCase(TRUE)) strictAffixParsing = true;
+      else throw new InitializationException("Unknown value for " + PARAM_STRICT_AFFIX_PARSING + ": " + strictAffixParsingParam + ". Must be true or false");
     }
 
     try {
@@ -77,9 +90,9 @@ public class HunspellStemFilterFactory extends BaseTokenFilterFactory implements
       for (String file : dictionaryFiles) {
         dictionaries.add(loader.openResource(file));
       }
-      this.dictionary = new HunspellDictionary(loader.openResource(affixFile), dictionaries, luceneMatchVersion, ignoreCase);
+      this.dictionary = new HunspellDictionary(loader.openResource(affixFile), dictionaries, luceneMatchVersion, ignoreCase, strictAffixParsing);
     } catch (Exception e) {
-      throw new RuntimeException("Unable to load hunspell data! [dictionary=" + args.get("dictionary") + ",affix=" + affixFile + "]", e);
+      throw new InitializationException("Unable to load hunspell data! [dictionary=" + args.get("dictionary") + ",affix=" + affixFile + "]", e);
     }
   }
 

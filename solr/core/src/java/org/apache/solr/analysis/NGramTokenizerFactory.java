@@ -1,6 +1,6 @@
 package org.apache.solr.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,6 +19,7 @@ package org.apache.solr.analysis;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.ngram.NGramTokenizer;
+import org.apache.lucene.analysis.util.TokenizerFactory;
 
 import java.io.Reader;
 import java.util.Map;
@@ -33,7 +34,7 @@ import java.util.Map;
  * &lt;/fieldType&gt;</pre> 
  *
  */
-public class NGramTokenizerFactory extends BaseTokenizerFactory {
+public class NGramTokenizerFactory extends TokenizerFactory {
     private int maxGramSize = 0;
     private int minGramSize = 0;
     

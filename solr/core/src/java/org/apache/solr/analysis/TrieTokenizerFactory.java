@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,6 +19,7 @@ package org.apache.solr.analysis;
 import org.apache.lucene.analysis.NumericTokenStream;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.Tokenizer;
+import org.apache.lucene.analysis.util.TokenizerFactory;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.schema.DateField;
 import static org.apache.solr.schema.TrieField.TrieTypes;
@@ -38,7 +39,7 @@ import java.io.Reader;
  * @see org.apache.solr.schema.TrieField
  * @since solr 1.4
  */
-public class TrieTokenizerFactory extends BaseTokenizerFactory {
+public class TrieTokenizerFactory extends TokenizerFactory {
   protected final int precisionStep;
   protected final TrieTypes type;
 

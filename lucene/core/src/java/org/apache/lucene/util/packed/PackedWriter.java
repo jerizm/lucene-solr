@@ -1,6 +1,6 @@
 package org.apache.lucene.util.packed;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -50,6 +50,11 @@ class PackedWriter extends PackedInts.Writer {
       v *= 2;
       masks[i] = v - 1;
     }
+  }
+
+  @Override
+  protected int getFormat() {
+    return PackedInts.PACKED;
   }
 
   /**

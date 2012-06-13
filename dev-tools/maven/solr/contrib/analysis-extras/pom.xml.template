@@ -33,8 +33,21 @@
   <description>Apache Solr Analysis Extras</description>
   <properties>
     <module-directory>solr/contrib/analysis-extras</module-directory>
-    <build-directory>../../build/contrib/analysis-extras</build-directory>
+    <top-level>../../../..</top-level>
+    <module-path>${top-level}/${module-directory}</module-path>
+    <surefire-top-level>${top-level}/../..</surefire-top-level>
   </properties>
+  <scm>
+    <connection>
+      scm:svn:http://svn.apache.org/repos/asf/lucene/dev/trunk/${module-directory}
+    </connection>
+    <developerConnection>
+      scm:svn:https://svn.apache.org/repos/asf/lucene/dev/trunk/${module-directory}
+    </developerConnection>
+    <url>
+      http://svn.apache.org/viewvc/lucene/dev/trunk/${module-directory}
+    </url>
+  </scm>
   <dependencies>
     <dependency>
       <!-- lucene-test-framework dependency must be declared before lucene-core -->
@@ -71,19 +84,22 @@
       <artifactId>lucene-analyzers-stempel</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <!-- SOLR-3263: Test scope dep is required to avoid jar signing conflicts -->
+      <groupId>javax.servlet</groupId>
+      <artifactId>servlet-api</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
   <build>
-    <directory>${build-directory}</directory>
-    <outputDirectory>${build-directory}/classes/java</outputDirectory>
-    <testOutputDirectory>${build-directory}/classes/test</testOutputDirectory>
-    <sourceDirectory>src/java</sourceDirectory>
-    <testSourceDirectory>src/test</testSourceDirectory>
+    <sourceDirectory>${module-path}/src/java</sourceDirectory>
+    <testSourceDirectory>${module-path}/src/test</testSourceDirectory>
     <testResources>
       <testResource>
-        <directory>src/test-files</directory>
+        <directory>${module-path}/src/test-files</directory>
       </testResource>
       <testResource>
-        <directory>../../core/src/test-files</directory>
+        <directory>${top-level}/solr/core/src/test-files</directory>
       </testResource>
     </testResources>
     <plugins>
@@ -92,7 +108,7 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
           <systemPropertyVariables>
-            <java.util.logging.config.file>../../../../testlogging.properties</java.util.logging.config.file>
+            <java.util.logging.config.file>${surefire-top-level}/solr/testlogging.properties</java.util.logging.config.file>
           </systemPropertyVariables>
         </configuration>
       </plugin>

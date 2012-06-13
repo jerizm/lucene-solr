@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -31,7 +31,6 @@ import org.apache.solr.util.plugin.SolrCoreAware;
 /**
  * A special Handler that registers all standard admin handlers
  * 
- *
  * @since solr 1.3
  */
 public class AdminHandlers implements SolrCoreAware, SolrRequestHandler
@@ -86,6 +85,7 @@ public class AdminHandlers implements SolrCoreAware, SolrRequestHandler
       new StandardHandler( "plugins", new PluginInfoHandler() ),
       new StandardHandler( "threads", new ThreadDumpHandler() ),
       new StandardHandler( "properties", new PropertiesRequestHandler() ),
+      new StandardHandler( "logging", new LoggingHandler() ),
       new StandardHandler( "file", new ShowFileRequestHandler() )
     };
     
@@ -94,7 +94,7 @@ public class AdminHandlers implements SolrCoreAware, SolrRequestHandler
         handler.handler.init( initArgs );
         core.registerRequestHandler( path+handler.name, handler.handler );
         if( handler.handler instanceof SolrCoreAware ) {
-          ((SolrCoreAware)handler).inform(core);
+          ((SolrCoreAware)handler.handler).inform(core);
         }
       }
     }
@@ -111,13 +111,9 @@ public class AdminHandlers implements SolrCoreAware, SolrRequestHandler
   public String getDescription() {
     return "Register Standard Admin Handlers";
   }
-
+  
   public String getVersion() {
-      return "$Revision$";
-  }
-
-  public String getSourceId() {
-    return "$Id$";
+    return getClass().getPackage().getSpecificationVersion();
   }
 
   public String getSource() {

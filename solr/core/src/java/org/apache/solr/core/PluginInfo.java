@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,7 +17,7 @@
 package org.apache.solr.core;
 
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.DOMUtil;
+import org.apache.solr.util.DOMUtil;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 

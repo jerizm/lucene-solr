@@ -1,5 +1,5 @@
 package org.apache.solr.handler.extraction;
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -180,7 +180,7 @@ public class ExtractingRequestHandlerTest extends SolrTestCaseJ4 {
       "commit", "true"  // test immediate commit
     );
     assertQ(req("id:simple2"), "//*[@numFound='1']");
-    assertQ(req("defaultExtr:http\\://www.apache.org"), "//*[@numFound='1']");
+    assertQ(req("defaultExtr:http\\:\\/\\/www.apache.org"), "//*[@numFound='1']");
 
     //Test when both uprefix and default are specified.
     loadLocal("extraction/simple.html",
@@ -301,7 +301,7 @@ public class ExtractingRequestHandlerTest extends SolrTestCaseJ4 {
     BufferingRequestProcessor p = new BufferingRequestProcessor(null);
 
     ExtractingDocumentLoader loader = (ExtractingDocumentLoader) handler.newLoader(req, p);
-    loader.load(req, rsp, new ContentStreamBase.FileStream(getFile("extraction/version_control.txt")));
+    loader.load(req, rsp, new ContentStreamBase.FileStream(getFile("extraction/version_control.txt")),p);
 
     AddUpdateCommand add = p.addCommands.get(0);
     assertEquals(200, add.commitWithin);

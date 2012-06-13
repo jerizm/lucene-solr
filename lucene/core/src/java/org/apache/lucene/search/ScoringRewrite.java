@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -47,7 +47,7 @@ public abstract class ScoringRewrite<Q extends Query> extends TermCollectingRewr
    *  BooleanQuery.TooManyClauses} if the number of terms
    *  exceeds {@link BooleanQuery#getMaxClauseCount}.
    *
-   *  @see #setRewriteMethod */
+   *  @see MultiTermQuery#setRewriteMethod */
   public final static ScoringRewrite<BooleanQuery> SCORING_BOOLEAN_QUERY_REWRITE = new ScoringRewrite<BooleanQuery>() {
     @Override
     protected BooleanQuery getTopLevelQuery() {
@@ -67,11 +67,6 @@ public abstract class ScoringRewrite<Q extends Query> extends TermCollectingRewr
       if (count > BooleanQuery.getMaxClauseCount())
         throw new BooleanQuery.TooManyClauses();
     }
-    
-    // Make sure we are still a singleton even after deserializing
-    protected Object readResolve() {
-      return SCORING_BOOLEAN_QUERY_REWRITE;
-    }    
   };
   
   /** Like {@link #SCORING_BOOLEAN_QUERY_REWRITE} except
@@ -83,7 +78,7 @@ public abstract class ScoringRewrite<Q extends Query> extends TermCollectingRewr
    *  BooleanQuery.TooManyClauses} if the number of terms
    *  exceeds {@link BooleanQuery#getMaxClauseCount}.
    *
-   *  @see #setRewriteMethod */
+   *  @see MultiTermQuery#setRewriteMethod */
   public final static RewriteMethod CONSTANT_SCORE_BOOLEAN_QUERY_REWRITE = new RewriteMethod() {
     @Override
     public Query rewrite(IndexReader reader, MultiTermQuery query) throws IOException {
@@ -95,11 +90,6 @@ public abstract class ScoringRewrite<Q extends Query> extends TermCollectingRewr
       final Query result = new ConstantScoreQuery(bq);
       result.setBoost(query.getBoost());
       return result;
-    }
-
-    // Make sure we are still a singleton even after deserializing
-    protected Object readResolve() {
-      return CONSTANT_SCORE_BOOLEAN_QUERY_REWRITE;
     }
   };
 

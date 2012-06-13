@@ -33,8 +33,20 @@
   <description>Apache Solr Test Framework</description>
   <properties>
     <module-directory>solr/test-framework</module-directory>
-    <build-directory>../build/solr-test-framework</build-directory>
+    <top-level>../../..</top-level>
+    <module-path>${top-level}/${module-directory}</module-path>
   </properties>
+  <scm>
+    <connection>
+      scm:svn:http://svn.apache.org/repos/asf/lucene/dev/trunk/${module-directory}
+    </connection>
+    <developerConnection>
+      scm:svn:https://svn.apache.org/repos/asf/lucene/dev/trunk/${module-directory}
+    </developerConnection>
+    <url>
+      http://svn.apache.org/viewvc/lucene/dev/trunk/${module-directory}
+    </url>
+  </scm>
   <dependencies>
     <!-- These dependencies are compile scope because this is a test framework. -->
     <dependency>
@@ -52,16 +64,30 @@
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
     </dependency>
+    <!-- If your tests don't use BaseDistributedSearchTestCase or SolrJettyTestBase,
+         you can exclude the three Jetty dependencies below. -->
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-server</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-util</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-webapp</artifactId>
+      <scope>runtime</scope>
+    </dependency>
   </dependencies>
   <build>
-    <directory>${build-directory}</directory>
-    <outputDirectory>${build-directory}/classes/java</outputDirectory>
-    <testOutputDirectory>${build-directory}/classes/test</testOutputDirectory>
-    <sourceDirectory>src/java</sourceDirectory>
-    <testSourceDirectory/>
+    <sourceDirectory>${module-path}/src/java</sourceDirectory>
+    <testSourceDirectory>${module-path}/src/test</testSourceDirectory>
     <resources>
       <resource>
-        <directory>.</directory>
+        <directory>${module-path}</directory>
         <excludes>
           <exclude>**/*.java</exclude>
         </excludes>

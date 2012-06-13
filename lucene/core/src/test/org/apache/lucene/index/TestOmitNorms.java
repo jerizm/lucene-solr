@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -34,16 +34,16 @@ public class TestOmitNorms extends LuceneTestCase {
   // omitNorms bit in the FieldInfo
   public void testOmitNorms() throws Exception {
     Directory ram = newDirectory();
-    Analyzer analyzer = new MockAnalyzer(random);
+    Analyzer analyzer = new MockAnalyzer(random());
     IndexWriter writer = new IndexWriter(ram, newIndexWriterConfig(TEST_VERSION_CURRENT, analyzer));
     Document d = new Document();
         
     // this field will have norms
-    Field f1 = newField("f1", "This field has norms", TextField.TYPE_UNSTORED);
+    Field f1 = newTextField("f1", "This field has norms", Field.Store.NO);
     d.add(f1);
        
     // this field will NOT have norms
-    FieldType customType = new FieldType(TextField.TYPE_UNSTORED);
+    FieldType customType = new FieldType(TextField.TYPE_NOT_STORED);
     customType.setOmitNorms(true);
     Field f2 = newField("f2", "This field has NO norms in all docs", customType);
     d.add(f2);
@@ -57,7 +57,7 @@ public class TestOmitNorms extends LuceneTestCase {
     // Reverse
     d.add(newField("f1", "This field has norms", customType));
         
-    d.add(newField("f2", "This field has NO norms in all docs", TextField.TYPE_UNSTORED));
+    d.add(newTextField("f2", "This field has NO norms in all docs", Field.Store.NO));
         
     writer.addDocument(d);
 
@@ -66,10 +66,10 @@ public class TestOmitNorms extends LuceneTestCase {
     // flush
     writer.close();
 
-    SegmentReader reader = getOnlySegmentReader(IndexReader.open(ram));
+    SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(ram));
     FieldInfos fi = reader.getFieldInfos();
-    assertTrue("OmitNorms field bit should be set.", fi.fieldInfo("f1").omitNorms);
-    assertTrue("OmitNorms field bit should be set.", fi.fieldInfo("f2").omitNorms);
+    assertTrue("OmitNorms field bit should be set.", fi.fieldInfo("f1").omitsNorms());
+    assertTrue("OmitNorms field bit should be set.", fi.fieldInfo("f2").omitsNorms());
         
     reader.close();
     ram.close();
@@ -79,7 +79,7 @@ public class TestOmitNorms extends LuceneTestCase {
   // omitNorms for the same field works
   public void testMixedMerge() throws Exception {
     Directory ram = newDirectory();
-    Analyzer analyzer = new MockAnalyzer(random);
+    Analyzer analyzer = new MockAnalyzer(random());
     IndexWriter writer = new IndexWriter(
         ram,
         newIndexWriterConfig(TEST_VERSION_CURRENT, analyzer).
@@ -89,11 +89,11 @@ public class TestOmitNorms extends LuceneTestCase {
     Document d = new Document();
         
     // this field will have norms
-    Field f1 = newField("f1", "This field has norms", TextField.TYPE_UNSTORED);
+    Field f1 = newTextField("f1", "This field has norms", Field.Store.NO);
     d.add(f1);
        
     // this field will NOT have norms
-    FieldType customType = new FieldType(TextField.TYPE_UNSTORED);
+    FieldType customType = new FieldType(TextField.TYPE_NOT_STORED);
     customType.setOmitNorms(true);
     Field f2 = newField("f2", "This field has NO norms in all docs", customType);
     d.add(f2);
@@ -109,7 +109,7 @@ public class TestOmitNorms extends LuceneTestCase {
     // Reverese
     d.add(newField("f1", "This field has norms", customType));
         
-    d.add(newField("f2", "This field has NO norms in all docs", TextField.TYPE_UNSTORED));
+    d.add(newTextField("f2", "This field has NO norms in all docs", Field.Store.NO));
         
     for (int i = 0; i < 30; i++) {
       writer.addDocument(d);
@@ -120,10 +120,10 @@ public class TestOmitNorms extends LuceneTestCase {
     // flush
     writer.close();
 
-    SegmentReader reader = getOnlySegmentReader(IndexReader.open(ram));
+    SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(ram));
     FieldInfos fi = reader.getFieldInfos();
-    assertTrue("OmitNorms field bit should be set.", fi.fieldInfo("f1").omitNorms);
-    assertTrue("OmitNorms field bit should be set.", fi.fieldInfo("f2").omitNorms);
+    assertTrue("OmitNorms field bit should be set.", fi.fieldInfo("f1").omitsNorms());
+    assertTrue("OmitNorms field bit should be set.", fi.fieldInfo("f2").omitsNorms());
         
     reader.close();
     ram.close();
@@ -134,7 +134,7 @@ public class TestOmitNorms extends LuceneTestCase {
   // field, 
   public void testMixedRAM() throws Exception {
     Directory ram = newDirectory();
-    Analyzer analyzer = new MockAnalyzer(random);
+    Analyzer analyzer = new MockAnalyzer(random());
     IndexWriter writer = new IndexWriter(
         ram,
         newIndexWriterConfig(TEST_VERSION_CURRENT, analyzer).
@@ -144,12 +144,12 @@ public class TestOmitNorms extends LuceneTestCase {
     Document d = new Document();
         
     // this field will have norms
-    Field f1 = newField("f1", "This field has norms", TextField.TYPE_UNSTORED);
+    Field f1 = newTextField("f1", "This field has norms", Field.Store.NO);
     d.add(f1);
        
     // this field will NOT have norms
 
-    FieldType customType = new FieldType(TextField.TYPE_UNSTORED);
+    FieldType customType = new FieldType(TextField.TYPE_NOT_STORED);
     customType.setOmitNorms(true);
     Field f2 = newField("f2", "This field has NO norms in all docs", customType);
     d.add(f2);
@@ -168,10 +168,10 @@ public class TestOmitNorms extends LuceneTestCase {
     // flush
     writer.close();
 
-    SegmentReader reader = getOnlySegmentReader(IndexReader.open(ram));
+    SegmentReader reader = getOnlySegmentReader(DirectoryReader.open(ram));
     FieldInfos fi = reader.getFieldInfos();
-    assertTrue("OmitNorms field bit should not be set.", !fi.fieldInfo("f1").omitNorms);
-    assertTrue("OmitNorms field bit should be set.", fi.fieldInfo("f2").omitNorms);
+    assertTrue("OmitNorms field bit should not be set.", !fi.fieldInfo("f1").omitsNorms());
+    assertTrue("OmitNorms field bit should be set.", fi.fieldInfo("f2").omitsNorms());
         
     reader.close();
     ram.close();
@@ -188,7 +188,7 @@ public class TestOmitNorms extends LuceneTestCase {
   // Verifies no *.nrm exists when all fields omit norms:
   public void testNoNrmFile() throws Throwable {
     Directory ram = newDirectory();
-    Analyzer analyzer = new MockAnalyzer(random);
+    Analyzer analyzer = new MockAnalyzer(random());
     IndexWriter writer = new IndexWriter(ram, newIndexWriterConfig(
             TEST_VERSION_CURRENT, analyzer).setMaxBufferedDocs(3).setMergePolicy(newLogMergePolicy()));
     LogMergePolicy lmp = (LogMergePolicy) writer.getConfig().getMergePolicy();
@@ -196,7 +196,7 @@ public class TestOmitNorms extends LuceneTestCase {
     lmp.setUseCompoundFile(false);
     Document d = new Document();
 
-    FieldType customType = new FieldType(TextField.TYPE_UNSTORED);
+    FieldType customType = new FieldType(TextField.TYPE_NOT_STORED);
     customType.setOmitNorms(true);
     Field f1 = newField("f1", "This field has no norms", customType);
     d.add(f1);
@@ -265,10 +265,10 @@ public class TestOmitNorms extends LuceneTestCase {
    * Indexes at least 1 document with f1, and at least 1 document with f2.
    * returns the norms for "field".
    */
-  static byte[] getNorms(String field, Field f1, Field f2) throws IOException {
+  byte[] getNorms(String field, Field f1, Field f2) throws IOException {
     Directory dir = newDirectory();
-    IndexWriterConfig iwc = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setMergePolicy(newLogMergePolicy());
-    RandomIndexWriter riw = new RandomIndexWriter(random, dir, iwc);
+    IndexWriterConfig iwc = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMergePolicy(newLogMergePolicy());
+    RandomIndexWriter riw = new RandomIndexWriter(random(), dir, iwc);
     
     // add f1
     Document d = new Document();
@@ -281,10 +281,10 @@ public class TestOmitNorms extends LuceneTestCase {
     riw.addDocument(d);
     
     // add a mix of f1's and f2's
-    int numExtraDocs = _TestUtil.nextInt(random, 1, 1000);
+    int numExtraDocs = _TestUtil.nextInt(random(), 1, 1000);
     for (int i = 0; i < numExtraDocs; i++) {
       d = new Document();
-      d.add(random.nextBoolean() ? f1 : f2);
+      d.add(random().nextBoolean() ? f1 : f2);
       riw.addDocument(d);
     }
 

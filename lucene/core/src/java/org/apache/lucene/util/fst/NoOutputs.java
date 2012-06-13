@@ -1,6 +1,6 @@
 package org.apache.lucene.util.fst;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,7 +21,8 @@ import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
 
 /**
- * Use this if you just want to build an FSA.
+ * A null FST {@link Outputs} implementation; use this if
+ * you just want to build an FSA.
  *
  * @lucene.experimental
  */

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -25,7 +25,7 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.common.util.RTimer;
+import org.apache.solr.util.RTimer;
 import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.request.SolrRequestInfo;
@@ -168,10 +168,14 @@ public class ResponseBuilder
 
   // Context fields for grouping
   public final Map<String, Collection<SearchGroup<BytesRef>>> mergedSearchGroups = new HashMap<String, Collection<SearchGroup<BytesRef>>>();
+  public final Map<String, Integer> mergedGroupCounts = new HashMap<String, Integer>();
   public final Map<String, Map<SearchGroup<BytesRef>, Set<String>>> searchGroupToShards = new HashMap<String, Map<SearchGroup<BytesRef>, Set<String>>>();
   public final Map<String, TopGroups<BytesRef>> mergedTopGroups = new HashMap<String, TopGroups<BytesRef>>();
   public final Map<String, QueryCommandResult> mergedQueryCommandResults = new HashMap<String, QueryCommandResult>();
   public final Map<Object, SolrDocument> retrievedDocuments = new HashMap<Object, SolrDocument>();
+  public int totalHitCount; // Hit count used when distributed grouping is performed.
+  // Used for timeAllowed parameter. First phase elapsed time is subtracted from the time allowed for the second phase.
+  public int firstPhaseElapsedTime;
 
   /**
    * Utility function to add debugging info.  This will make sure a valid
@@ -394,6 +398,13 @@ public class ResponseBuilder
     if (result.isPartialResults()) {
       rsp.getResponseHeader().add("partialResults", Boolean.TRUE);
     }
+  }
+  
+  public long getNumberDocumentsFound() {
+    if (_responseDocs == null) {
+      return 0;
+    }
+    return _responseDocs.getNumFound();
   }
 
   public ScoreDoc getScoreDoc()

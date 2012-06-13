@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.util.Comparator;
 
 import org.apache.lucene.index.DocsAndPositionsEnum;
-import org.apache.lucene.index.DocsEnum;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.Fields;
@@ -30,6 +29,7 @@ import org.apache.lucene.index.FieldsEnum;
 import org.apache.lucene.index.MergeState;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
@@ -49,7 +49,7 @@ import org.apache.lucene.util.BytesRef;
  *   <li>If offsets and/or positions are enabled, then 
  *       {@link #addPosition(int, int, int)} will be called for each term
  *       occurrence.
- *   <li>After all documents have been written, {@link #finish(int)} 
+ *   <li>After all documents have been written, {@link #finish(FieldInfos, int)} 
  *       is called for verification/sanity-checks.
  *   <li>Finally the writer is closed ({@link #close()})
  * </ol>
@@ -90,7 +90,7 @@ public abstract class TermVectorsWriter implements Closeable {
    *  calls to {@link #startDocument(int)}, but a Codec should
    *  check that this is the case to detect the JRE bug described 
    *  in LUCENE-1282. */
-  public abstract void finish(int numDocs) throws IOException;
+  public abstract void finish(FieldInfos fis, int numDocs) throws IOException;
   
   /** 
    * Called by IndexWriter when writing new segments.
@@ -137,7 +137,7 @@ public abstract class TermVectorsWriter implements Closeable {
    *  over deleted documents, and uses {@link #startDocument(int)},
    *  {@link #startField(FieldInfo, int, boolean, boolean)}, 
    *  {@link #startTerm(BytesRef, int)}, {@link #addPosition(int, int, int)},
-   *  and {@link #finish(int)},
+   *  and {@link #finish(FieldInfos, int)},
    *  returning the number of documents that were written.
    *  Implementations can override this method for more sophisticated
    *  merging (bulk-byte copying, etc). */
@@ -159,24 +159,24 @@ public abstract class TermVectorsWriter implements Closeable {
         mergeState.checkAbort.work(300);
       }
     }
-    finish(docCount);
+    finish(mergeState.fieldInfos, docCount);
     return docCount;
   }
   
   /** Safe (but, slowish) default method to write every
    *  vector field in the document.  This default
    *  implementation requires that the vectors implement
-   *  both Fields.getUniqueFieldCount and
-   *  Terms.getUniqueTermCount. */
+   *  both Fields.size and
+   *  Terms.size. */
   protected final void addAllDocVectors(Fields vectors, FieldInfos fieldInfos) throws IOException {
     if (vectors == null) {
       startDocument(0);
       return;
     }
 
-    final int numFields = vectors.getUniqueFieldCount();
+    final int numFields = vectors.size();
     if (numFields == -1) {
-      throw new IllegalStateException("vectors.getUniqueFieldCount() must be implemented (it returned -1)");
+      throw new IllegalStateException("vectors.size() must be implemented (it returned -1)");
     }
     startDocument(numFields);
     
@@ -195,9 +195,9 @@ public abstract class TermVectorsWriter implements Closeable {
         // FieldsEnum shouldn't lie...
         continue;
       }
-      final int numTerms = (int) terms.getUniqueTermCount();
+      final int numTerms = (int) terms.size();
       if (numTerms == -1) {
-        throw new IllegalStateException("vector.getUniqueTermCount() must be implemented (it returned -1)");
+        throw new IllegalStateException("terms.size() must be implemented (it returned -1)");
       }
       final TermsEnum termsEnum = terms.iterator(null);
 
@@ -236,7 +236,7 @@ public abstract class TermVectorsWriter implements Closeable {
 
         if (docsAndPositionsEnum != null) {
           final int docID = docsAndPositionsEnum.nextDoc();
-          assert docID != DocsEnum.NO_MORE_DOCS;
+          assert docID != DocIdSetIterator.NO_MORE_DOCS;
           assert docsAndPositionsEnum.freq() == freq;
 
           for(int posUpto=0; posUpto<freq; posUpto++) {

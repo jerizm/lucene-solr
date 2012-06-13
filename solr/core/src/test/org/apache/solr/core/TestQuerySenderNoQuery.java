@@ -1,6 +1,6 @@
 package org.apache.solr.core;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -75,7 +75,7 @@ public class TestQuerySenderNoQuery extends SolrTestCaseJ4 {
     assertNotNull("Mock is null", mock);
     assertNull("Req (firstsearcher) is not null", mock.req);
 
-    SolrIndexSearcher newSearcher = new SolrIndexSearcher(core, core.getNewIndexDir(), core.getSchema(), core.getSolrConfig().mainIndexConfig, "testQuerySenderNoQuery", false, core.getDirectoryFactory());
+    SolrIndexSearcher newSearcher = new SolrIndexSearcher(core, core.getNewIndexDir(), core.getSchema(), core.getSolrConfig().indexConfig, "testQuerySenderNoQuery", false, core.getDirectoryFactory());
 
     qsl.newSearcher(newSearcher, currentSearcher); // get newSearcher.
     assertNull("Req (newsearcher) is not null", mock.req);

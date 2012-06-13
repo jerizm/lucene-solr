@@ -1,5 +1,5 @@
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,8 +18,10 @@
 
 
 package org.apache.solr.analysis;
+
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.br.BrazilianStemFilter;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /** 
  * Factory for {@link BrazilianStemFilter}.
@@ -33,7 +35,7 @@ import org.apache.lucene.analysis.br.BrazilianStemFilter;
  * &lt;/fieldType&gt;</pre>
  *
  */
-public class BrazilianStemFilterFactory extends BaseTokenFilterFactory {
+public class BrazilianStemFilterFactory extends TokenFilterFactory {
   public BrazilianStemFilter create(TokenStream in) {
     return new BrazilianStemFilter(in);
   }

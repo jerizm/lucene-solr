@@ -1,14 +1,34 @@
 package org.apache.lucene.util.junitcompat;
 
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
 
 import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.util.TestRuleIgnoreTestSuites;
 import org.junit.After;
 import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Before;
+import org.junit.Rule;
+
+import com.carrotsearch.randomizedtesting.rules.SystemPropertiesRestoreRule;
 
 /**
  * An abstract test class that prepares nested test classes to run.
@@ -23,21 +43,11 @@ import org.junit.Before;
  * cause havoc (static fields).
  */
 public abstract class WithNestedTests {
-  public static ThreadLocal<Boolean> runsAsNested = new ThreadLocal<Boolean>() {
-    @Override
-    protected Boolean initialValue() {
-      return false;
-    }
-  };
 
-  public static abstract class AbstractNestedTest extends LuceneTestCase {
-    @Before
-    public void before() {
-      Assume.assumeTrue(isRunningNested());
-    }
-
+  public static abstract class AbstractNestedTest extends LuceneTestCase 
+    implements TestRuleIgnoreTestSuites.NestedTestSuite {
     protected static boolean isRunningNested() {
-      return runsAsNested.get() != null && runsAsNested.get();
+      return TestRuleIgnoreTestSuites.isRunningNested();
     }
   }
 
@@ -52,6 +62,12 @@ public abstract class WithNestedTests {
   private ByteArrayOutputStream sysout;
   private ByteArrayOutputStream syserr;
 
+  /**
+   * Restore properties after test.
+   */
+  @Rule
+  public SystemPropertiesRestoreRule restoreProperties = new SystemPropertiesRestoreRule();
+  
   @Before
   public final void before() {
     if (suppressOutputStreams) {
@@ -68,13 +84,11 @@ public abstract class WithNestedTests {
       }
     }
 
-    runsAsNested.set(true);
+    System.setProperty(TestRuleIgnoreTestSuites.PROPERTY_RUN_NESTED, "true");
   }
 
   @After
   public final void after() {
-    runsAsNested.set(false);
-    
     if (suppressOutputStreams) {
       System.out.flush();
       System.err.flush();

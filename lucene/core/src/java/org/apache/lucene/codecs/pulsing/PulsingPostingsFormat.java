@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.pulsing;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,7 +18,6 @@ package org.apache.lucene.codecs.pulsing;
  */
 
 import java.io.IOException;
-import java.util.Set;
 
 import org.apache.lucene.codecs.BlockTreeTermsReader;
 import org.apache.lucene.codecs.BlockTreeTermsWriter;
@@ -28,9 +27,9 @@ import org.apache.lucene.codecs.PostingsBaseFormat;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.PostingsReaderBase;
 import org.apache.lucene.codecs.PostingsWriterBase;
-import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.SegmentWriteState;
+import org.apache.lucene.util.IOUtils;
 
 /** This postings format "inlines" the postings for terms that have
  *  low docFreq.  It wraps another postings format, which is used for
@@ -67,33 +66,39 @@ public abstract class PulsingPostingsFormat extends PostingsFormat {
 
   @Override
   public FieldsConsumer fieldsConsumer(SegmentWriteState state) throws IOException {
-    PostingsWriterBase docsWriter = wrappedPostingsBaseFormat.postingsWriterBase(state);
+    PostingsWriterBase docsWriter = null;
 
     // Terms that have <= freqCutoff number of docs are
     // "pulsed" (inlined):
-    PostingsWriterBase pulsingWriter = new PulsingPostingsWriter(freqCutoff, docsWriter);
+    PostingsWriterBase pulsingWriter = null;
 
     // Terms dict
     boolean success = false;
     try {
+      docsWriter = wrappedPostingsBaseFormat.postingsWriterBase(state);
+
+      // Terms that have <= freqCutoff number of docs are
+      // "pulsed" (inlined):
+      pulsingWriter = new PulsingPostingsWriter(freqCutoff, docsWriter);
       FieldsConsumer ret = new BlockTreeTermsWriter(state, pulsingWriter, minBlockSize, maxBlockSize);
       success = true;
       return ret;
     } finally {
       if (!success) {
-        pulsingWriter.close();
+        IOUtils.closeWhileHandlingException(docsWriter, pulsingWriter);
       }
     }
   }
 
   @Override
   public FieldsProducer fieldsProducer(SegmentReadState state) throws IOException {
-
-    PostingsReaderBase docsReader = wrappedPostingsBaseFormat.postingsReaderBase(state);
-    PostingsReaderBase pulsingReader = new PulsingPostingsReader(docsReader);
+    PostingsReaderBase docsReader = null;
+    PostingsReaderBase pulsingReader = null;
 
     boolean success = false;
     try {
+      docsReader = wrappedPostingsBaseFormat.postingsReaderBase(state);
+      pulsingReader = new PulsingPostingsReader(docsReader);
       FieldsProducer ret = new BlockTreeTermsReader(
                                                     state.dir, state.fieldInfos, state.segmentInfo.name,
                                                     pulsingReader,
@@ -104,18 +109,12 @@ public abstract class PulsingPostingsFormat extends PostingsFormat {
       return ret;
     } finally {
       if (!success) {
-        pulsingReader.close();
+        IOUtils.closeWhileHandlingException(docsReader, pulsingReader);
       }
     }
   }
 
   public int getFreqCutoff() {
     return freqCutoff;
-  }
-
-  @Override
-  public void files(SegmentInfo segmentInfo, String segmentSuffix, Set<String> files) throws IOException {
-    wrappedPostingsBaseFormat.files(segmentInfo, segmentSuffix, files);
-    BlockTreeTermsReader.files(segmentInfo, segmentSuffix, files);
   }
 }

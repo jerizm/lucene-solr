@@ -1,6 +1,6 @@
 package org.apache.lucene.store;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -25,7 +25,8 @@ import java.util.Map;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.TextField;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -43,14 +44,14 @@ public class TestLockFactory extends LuceneTestCase {
     // methods are called at the right time, locks are created, etc.
 
     public void testCustomLockFactory() throws IOException {
-        Directory dir = new MockDirectoryWrapper(random, new RAMDirectory());
+        Directory dir = new MockDirectoryWrapper(random(), new RAMDirectory());
         MockLockFactory lf = new MockLockFactory();
         dir.setLockFactory(lf);
 
         // Lock prefix should have been set:
         assertTrue("lock prefix was not set by the RAMDirectory", lf.lockPrefixSet);
 
-        IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+        IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
 
         // add 100 documents (so that commit lock is used)
         for (int i = 0; i < 100; i++) {
@@ -76,19 +77,19 @@ public class TestLockFactory extends LuceneTestCase {
     // exceptions raised:
     // Verify: NoLockFactory allows two IndexWriters
     public void testRAMDirectoryNoLocking() throws IOException {
-        Directory dir = new MockDirectoryWrapper(random, new RAMDirectory());
+        Directory dir = new MockDirectoryWrapper(random(), new RAMDirectory());
         dir.setLockFactory(NoLockFactory.getNoLockFactory());
 
         assertTrue("RAMDirectory.setLockFactory did not take",
                    NoLockFactory.class.isInstance(dir.getLockFactory()));
 
-        IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+        IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
         writer.commit(); // required so the second open succeed 
         // Create a 2nd IndexWriter.  This is normally not allowed but it should run through since we're not
         // using any locks:
         IndexWriter writer2 = null;
         try {
-            writer2 = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setOpenMode(OpenMode.APPEND));
+            writer2 = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setOpenMode(OpenMode.APPEND));
         } catch (Exception e) {
             e.printStackTrace(System.out);
             fail("Should not have hit an IOException with no locking");
@@ -108,12 +109,12 @@ public class TestLockFactory extends LuceneTestCase {
         assertTrue("RAMDirectory did not use correct LockFactory: got " + dir.getLockFactory(),
                    SingleInstanceLockFactory.class.isInstance(dir.getLockFactory()));
 
-        IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+        IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
 
         // Create a 2nd IndexWriter.  This should fail:
         IndexWriter writer2 = null;
         try {
-            writer2 = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setOpenMode(OpenMode.APPEND));
+            writer2 = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setOpenMode(OpenMode.APPEND));
             fail("Should have hit an IOException with two IndexWriters on default SingleInstanceLockFactory");
         } catch (IOException e) {
         }
@@ -151,7 +152,7 @@ public class TestLockFactory extends LuceneTestCase {
         Directory dir = newFSDirectory(indexDir, lockFactory);
 
         // First create a 1 doc index:
-        IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setOpenMode(OpenMode.CREATE));
+        IndexWriter w = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setOpenMode(OpenMode.CREATE));
         addDoc(w);
         w.close();
 
@@ -289,7 +290,7 @@ public class TestLockFactory extends LuceneTestCase {
             IndexWriter writer = null;
             for(int i=0;i<this.numIteration;i++) {
                 try {
-                    writer = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setOpenMode(OpenMode.APPEND));
+                    writer = new IndexWriter(dir, new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setOpenMode(OpenMode.APPEND));
                 } catch (IOException e) {
                     if (e.toString().indexOf(" timed out:") == -1) {
                         hitException = true;
@@ -347,7 +348,7 @@ public class TestLockFactory extends LuceneTestCase {
             Query query = new TermQuery(new Term("content", "aaa"));
             for(int i=0;i<this.numIteration;i++) {
                 try{
-                    reader = IndexReader.open(dir);
+                    reader = DirectoryReader.open(dir);
                     searcher = new IndexSearcher(reader);
                 } catch (Exception e) {
                     hitException = true;
@@ -420,7 +421,7 @@ public class TestLockFactory extends LuceneTestCase {
 
     private void addDoc(IndexWriter writer) throws IOException {
         Document doc = new Document();
-        doc.add(newField("content", "aaa", TextField.TYPE_UNSTORED));
+        doc.add(newTextField("content", "aaa", Field.Store.NO));
         writer.addDocument(doc);
     }
 }

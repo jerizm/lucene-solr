@@ -1,6 +1,6 @@
 package org.apache.lucene.util.fst;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,9 +23,8 @@ import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
 
 /**
- * Output is a long, for each input term.  NOTE: the
- * resulting FST is not guaranteed to be minimal!  See
- * {@link Builder}.
+ * An FST {@link Outputs} implementation where each output
+ * is a non-negative long value.
  *
  * @lucene.experimental
  */
@@ -110,7 +109,6 @@ public final class PositiveIntOutputs extends Outputs<Long> {
 
   private boolean valid(Long o) {
     assert o != null;
-    assert o instanceof Long;
     assert o == NO_OUTPUT || o > 0;
     return true;
   }

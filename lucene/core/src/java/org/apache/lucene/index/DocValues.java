@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,10 +18,20 @@ package org.apache.lucene.index;
  */
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Comparator;
 
 import org.apache.lucene.codecs.DocValuesFormat;
-import org.apache.lucene.document.DocValuesField;
+import org.apache.lucene.document.ByteDocValuesField; // javadocs
+import org.apache.lucene.document.DerefBytesDocValuesField; // javadocs
+import org.apache.lucene.document.DoubleDocValuesField; // javadocs
+import org.apache.lucene.document.FloatDocValuesField; // javadocs
+import org.apache.lucene.document.IntDocValuesField; // javadocs
+import org.apache.lucene.document.LongDocValuesField; // javadocs
+import org.apache.lucene.document.PackedLongDocValuesField; // javadocs
+import org.apache.lucene.document.ShortDocValuesField; // javadocs
+import org.apache.lucene.document.SortedBytesDocValuesField; // javadocs
+import org.apache.lucene.document.StraightBytesDocValuesField; // javadocs
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.packed.PackedInts;
 
@@ -38,9 +48,29 @@ import org.apache.lucene.util.packed.PackedInts;
  * IndexReader.
  * <p>
  * {@link DocValues} are fully integrated into the {@link DocValuesFormat} API.
+ * <p>
+ * NOTE: DocValues is a strongly typed per-field API. Type changes within an
+ * indexing session can result in exceptions if the type has changed in a way that
+ * the previously give type for a field can't promote the value without losing
+ * information. For instance a field initially indexed with {@link Type#FIXED_INTS_32}
+ * can promote a value with {@link Type#FIXED_INTS_8} but can't promote
+ * {@link Type#FIXED_INTS_64}. During segment merging type-promotion exceptions are suppressed. 
+ * Fields will be promoted to their common denominator or automatically transformed
+ * into a 3rd type like {@link Type#BYTES_VAR_STRAIGHT} to prevent data loss and merge exceptions.
+ * This behavior is considered <i>best-effort</i> might change in future releases.
+ * </p>
  * 
  * @see Type for limitations and default implementation documentation
- * @see DocValuesField for adding values to the index
+ * @see ByteDocValuesField for adding byte values to the index
+ * @see ShortDocValuesField for adding short values to the index
+ * @see IntDocValuesField for adding int values to the index
+ * @see LongDocValuesField for adding long values to the index
+ * @see FloatDocValuesField for adding float values to the index
+ * @see DoubleDocValuesField for adding double values to the index
+ * @see PackedLongDocValuesField for adding packed long values to the index
+ * @see SortedBytesDocValuesField for adding sorted {@link BytesRef} values to the index
+ * @see StraightBytesDocValuesField for adding straight {@link BytesRef} values to the index
+ * @see DerefBytesDocValuesField for adding deref {@link BytesRef} values to the index
  * @see DocValuesFormat#docsConsumer(org.apache.lucene.index.PerDocWriteState) for
  *      customization
  * @lucene.experimental
@@ -90,7 +120,7 @@ public abstract class DocValues implements Closeable {
   /**
    * Returns the {@link Type} of this {@link DocValues} instance
    */
-  public abstract Type type();
+  public abstract Type getType();
 
   /**
    * Closes this {@link DocValues} instance. This method should only be called
@@ -148,6 +178,7 @@ public abstract class DocValues implements Closeable {
     protected Source(Type type) {
       this.type = type;
     }
+
     /**
      * Returns a <tt>long</tt> for the given document id or throws an
      * {@link UnsupportedOperationException} if this source doesn't support
@@ -190,7 +221,7 @@ public abstract class DocValues implements Closeable {
      * 
      * @return the {@link Type} of this source.
      */
-    public Type type() {
+    public Type getType() {
       return type;
     }
 
@@ -239,9 +270,10 @@ public abstract class DocValues implements Closeable {
     public BytesRef getBytes(int docID, BytesRef bytesRef) {
       final int ord = ord(docID);
       if (ord < 0) {
+        // Negative ord means doc was missing?
         bytesRef.length = 0;
       } else {
-        getByOrd(ord , bytesRef);
+        getByOrd(ord, bytesRef);
       }
       return bytesRef;
     }
@@ -253,7 +285,7 @@ public abstract class DocValues implements Closeable {
     public abstract int ord(int docID);
 
     /** Returns value for specified ord. */
-    public abstract BytesRef getByOrd(int ord, BytesRef bytesRef);
+    public abstract BytesRef getByOrd(int ord, BytesRef result);
 
     /** Return true if it's safe to call {@link
      *  #getDocToOrd}. */
@@ -274,7 +306,7 @@ public abstract class DocValues implements Closeable {
     }
 
     /**
-     * Performs a lookup by value.
+     * Lookup ord by value.
      * 
      * @param value
      *          the value to look up
@@ -283,11 +315,11 @@ public abstract class DocValues implements Closeable {
      *          values to the given value. Must not be <code>null</code>
      * @return the given values ordinal if found or otherwise
      *         <code>(-(ord)-1)</code>, defined as the ordinal of the first
-     *         element that is greater than the given value. This guarantees
-     *         that the return value will always be &gt;= 0 if the given value
-     *         is found.
+     *         element that is greater than the given value (the insertion
+     *         point). This guarantees that the return value will always be
+     *         &gt;= 0 if the given value is found.
      */
-    public int getByValue(BytesRef value, BytesRef spare) {
+    public int getOrdByValue(BytesRef value, BytesRef spare) {
       return binarySearch(value, spare, 0, getValueCount() - 1);
     }    
 
@@ -372,6 +404,13 @@ public abstract class DocValues implements Closeable {
       public Object getArray() {
         return null;
       }
+
+      @Override
+      public int get(int index, long[] arr, int off, int len) {
+        len = Math.min(len, size() - index);
+        Arrays.fill(arr, off, off+len, 0);
+        return len;
+      }
     };
 
     return new SortedSource(type, BytesRef.getUTF8SortedAsUnicodeComparator()) {
@@ -405,7 +444,7 @@ public abstract class DocValues implements Closeable {
       }
 
       @Override
-      public int getByValue(BytesRef value, BytesRef spare) {
+      public int getOrdByValue(BytesRef value, BytesRef spare) {
         if (value.length == 0) {
           return 0;
         } else {
@@ -414,7 +453,7 @@ public abstract class DocValues implements Closeable {
       }
 
       @Override
-        public int getValueCount() {
+      public int getValueCount() {
         return 1;
       }
     };
@@ -546,7 +585,7 @@ public abstract class DocValues implements Closeable {
      * pointer per document to dereference the shared byte[].
      * Use this type if your documents may share the same byte[].
      * <p>
-     * NOTE: Fields of this type will not store values for documents without and
+     * NOTE: Fields of this type will not store values for documents without an
      * explicitly provided value. If a documents value is accessed while no
      * explicit value is stored the returned {@link BytesRef} will be a 0-length
      * reference. Custom default values must be assigned explicitly.
@@ -573,7 +612,7 @@ public abstract class DocValues implements Closeable {
      * {@link #BYTES_FIXED_DEREF}, but allowing each
      * document's value to be a different length.
      * <p>
-     * NOTE: Fields of this type will not store values for documents without and
+     * NOTE: Fields of this type will not store values for documents without an
      * explicitly provided value. If a documents value is accessed while no
      * explicit value is stored the returned {@link BytesRef} will be a 0-length
      * reference. Custom default values must be assigned explicitly.
@@ -587,7 +626,7 @@ public abstract class DocValues implements Closeable {
      * {@link #BYTES_FIXED_SORTED}, but allowing each
      * document's value to be a different length.
      * <p>
-     * NOTE: Fields of this type will not store values for documents without and
+     * NOTE: Fields of this type will not store values for documents without an
      * explicitly provided value. If a documents value is accessed while no
      * explicit value is stored the returned {@link BytesRef} will be a 0-length
      * reference.Custom default values must be assigned explicitly.
@@ -605,7 +644,7 @@ public abstract class DocValues implements Closeable {
      * and allows access via document id, ordinal and by-value.
      * Use this type if your documents may share the same byte[].
      * <p>
-     * NOTE: Fields of this type will not store values for documents without and
+     * NOTE: Fields of this type will not store values for documents without an
      * explicitly provided value. If a documents value is accessed while no
      * explicit value is stored the returned {@link BytesRef} will be a 0-length
      * reference. Custom default values must be assigned

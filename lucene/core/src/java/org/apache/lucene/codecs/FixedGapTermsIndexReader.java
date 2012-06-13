@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,7 +22,6 @@ import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.FieldInfo;
-import org.apache.lucene.index.SegmentInfo;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CodecUtil;
 import org.apache.lucene.util.IOUtils;
@@ -30,13 +29,17 @@ import org.apache.lucene.util.PagedBytes;
 import org.apache.lucene.util.packed.PackedInts;
 
 import java.util.HashMap;
-import java.util.Collection;
 import java.util.Comparator;
 import java.io.IOException;
 
 import org.apache.lucene.index.IndexFileNames;
 
-/** @lucene.experimental */
+/** 
+ * TermsIndexReader for simple every-nth terms indexes.
+ *
+ * @see FixedGapTermsIndexWriter
+ * @lucene.experimental 
+ */
 public class FixedGapTermsIndexReader extends TermsIndexReaderBase {
 
   // NOTE: long is overkill here, since this number is 128
@@ -227,8 +230,6 @@ public class FixedGapTermsIndexReader extends TermsIndexReaderBase {
 
   private final class FieldIndexData {
 
-    final private FieldInfo fieldInfo;
-
     volatile CoreFieldIndex coreIndex;
 
     private final long indexStart;
@@ -241,7 +242,6 @@ public class FixedGapTermsIndexReader extends TermsIndexReaderBase {
     public FieldIndexData(FieldInfo fieldInfo, int numIndexTerms, long indexStart, long termsStart, long packedIndexStart,
                           long packedOffsetsStart) throws IOException {
 
-      this.fieldInfo = fieldInfo;
       this.termsStart = termsStart;
       this.indexStart = indexStart;
       this.packedIndexStart = packedIndexStart;
@@ -326,8 +326,8 @@ public class FixedGapTermsIndexReader extends TermsIndexReaderBase {
             // we'd have to try @ fewer bits and then grow
             // if we overflowed it.
 
-            PackedInts.Mutable termsDictOffsetsM = PackedInts.getMutable(this.numIndexTerms, termsDictOffsetsIter.getBitsPerValue());
-            PackedInts.Mutable termOffsetsM = PackedInts.getMutable(this.numIndexTerms+1, termOffsetsIter.getBitsPerValue());
+            PackedInts.Mutable termsDictOffsetsM = PackedInts.getMutable(this.numIndexTerms, termsDictOffsetsIter.getBitsPerValue(), PackedInts.DEFAULT);
+            PackedInts.Mutable termOffsetsM = PackedInts.getMutable(this.numIndexTerms+1, termOffsetsIter.getBitsPerValue(), PackedInts.DEFAULT);
 
             termsDictOffsets = termsDictOffsetsM;
             termOffsets = termOffsetsM;
@@ -387,17 +387,10 @@ public class FixedGapTermsIndexReader extends TermsIndexReaderBase {
     }
   }
 
-  public static void files(SegmentInfo info, String segmentSuffix, Collection<String> files) {
-    files.add(IndexFileNames.segmentFileName(info.name, segmentSuffix, FixedGapTermsIndexWriter.TERMS_INDEX_EXTENSION));
-  }
-
   @Override
   public void close() throws IOException {
     if (in != null && !indexLoaded) {
       in.close();
-    }
-    if (termBytesReader != null) {
-      termBytesReader.close();
     }
   }
 

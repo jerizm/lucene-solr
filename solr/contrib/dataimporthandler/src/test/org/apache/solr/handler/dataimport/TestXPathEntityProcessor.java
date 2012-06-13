@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -211,11 +211,11 @@ public class TestXPathEntityProcessor extends AbstractDataImportHandlerTestCase 
     tmpdir.delete();
     tmpdir.mkdir();
     tmpdir.deleteOnExit();
-    TestFileListEntityProcessor.createFile(tmpdir, "x.xsl", xsl.getBytes("UTF-8"),
+    AbstractDataImportHandlerTestCase.createFile(tmpdir, "x.xsl", xsl.getBytes("UTF-8"),
             false);
     Map entityAttrs = createMap("name", "e",
             XPathEntityProcessor.USE_SOLR_ADD_SCHEMA, "true", "xsl", ""
-            + new File(tmpdir, "x.xsl").getAbsolutePath(), "url", "cd.xml");
+            + new File(tmpdir, "x.xsl").toURI(), "url", "cd.xml");
     Context c = getContext(null,
             new VariableResolverImpl(), getDataSource(cdData), Context.FULL_DUMP, null, entityAttrs);
     XPathEntityProcessor xPathEntityProcessor = new XPathEntityProcessor();

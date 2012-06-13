@@ -25,23 +25,10 @@
 
 <config>
   <luceneMatchVersion>${tests.luceneMatchVersion:LUCENE_CURRENT}</luceneMatchVersion>
-  <indexDefaults>
-    <useCompoundFile>false</useCompoundFile>
-    <mergeFactor>10</mergeFactor>
-    <maxBufferedDocs>1000</maxBufferedDocs>
-    <maxMergeDocs>2147483647</maxMergeDocs>
-    <maxFieldLength>10000</maxFieldLength>
-    <writeLockTimeout>1000</writeLockTimeout>
-  </indexDefaults>
 
-  <mainIndex>
-    <useCompoundFile>false</useCompoundFile>
-    <mergeFactor>10</mergeFactor>
-    <maxBufferedDocs>1000</maxBufferedDocs>
-    <maxMergeDocs>2147483647</maxMergeDocs>
-    <maxFieldLength>10000</maxFieldLength>
-    <unlockOnStartup>true</unlockOnStartup>
-  </mainIndex>
+  <indexConfig>
+    <lockType>single</lockType>
+  </indexConfig>
 
   <updateHandler class="solr.DirectUpdateHandler2">
     <commitIntervalLowerBound>0</commitIntervalLowerBound>
@@ -62,7 +49,7 @@
       <str name="fl">implicit</str>
     </lst>
   </requestHandler>
-  <requestHandler name="/update" class="solr.XmlUpdateRequestHandler" />
+  <requestHandler name="/update" class="solr.UpdateRequestHandler"  />
   
   
   <queryResponseWriter name="standard" class="solr.XMLResponseWriter"/>

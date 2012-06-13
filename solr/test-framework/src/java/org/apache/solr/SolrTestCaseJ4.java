@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -15,62 +15,68 @@
  * limitations under the License.
  */
 
-
 package org.apache.solr;
 
+import java.io.*;
+import java.util.*;
+import java.util.logging.*;
 
-import org.apache.lucene.store.MockDirectoryWrapper;
+import javax.xml.xpath.XPathExpressionException;
+
 import org.apache.lucene.util.LuceneTestCase;
-import org.apache.noggit.CharArr;
-import org.apache.noggit.JSONUtil;
-import org.apache.noggit.ObjectBuilder;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.SolrInputDocument;
-import org.apache.solr.common.SolrInputField;
+import org.apache.noggit.*;
+import org.apache.solr.common.*;
 import org.apache.solr.common.cloud.SolrZkClient;
-import org.apache.solr.common.params.CommonParams;
-import org.apache.solr.common.params.ModifiableSolrParams;
-import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.params.*;
 import org.apache.solr.common.util.XML;
 import org.apache.solr.core.SolrConfig;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.handler.JsonUpdateRequestHandler;
-import org.apache.solr.request.LocalSolrQueryRequest;
-import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.request.SolrRequestHandler;
+import org.apache.solr.request.*;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.apache.solr.servlet.DirectSolrConnection;
+import org.apache.solr.util.AbstractSolrTestCase;
 import org.apache.solr.util.TestHarness;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
+import org.junit.*;
+import org.junit.rules.RuleChain;
+import org.junit.rules.TestRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
 
-import javax.xml.xpath.XPathExpressionException;
-import java.io.File;
-import java.io.IOException;
-import java.io.StringWriter;
-import java.util.*;
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeaks;
+import com.carrotsearch.randomizedtesting.rules.SystemPropertiesRestoreRule;
 
 /**
  * A junit4 Solr test harness that extends LuceneTestCaseJ4.
- * Unlike AbstractSolrTestCase, a new core is not created for each test method.
- *
+ * Unlike {@link AbstractSolrTestCase}, a new core is not created for each test method.
  */
 public abstract class SolrTestCaseJ4 extends LuceneTestCase {
+  public static int DEFAULT_CONNECTION_TIMEOUT = 500;  // default socket connection timeout in ms
 
-  @BeforeClass
-  public static void beforeClassSolrTestCase() throws Exception {
+
+  @ClassRule
+  public static TestRule solrClassRules = 
+    RuleChain.outerRule(new SystemPropertiesRestoreRule());
+
+  @Rule
+  public TestRule solrTestRules = 
+    RuleChain.outerRule(new SystemPropertiesRestoreRule());
+
+  @BeforeClass 
+  @SuppressWarnings("unused")
+  private static void beforeClass() throws Exception {
+    setupLogging();
     startTrackingSearchers();
     startTrackingZkClients();
     ignoreException("ignore_exception");
   }
 
   @AfterClass
-  public static void afterClassSolrTestCase() throws Exception {
+  @SuppressWarnings("unused")
+  private static void afterClass() throws Exception {
     deleteCore();
     resetExceptionIgnores();
     endTrackingSearchers();
@@ -80,14 +86,47 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
   @Override
   public void setUp() throws Exception {
     super.setUp();
-    log.info("###Starting " + getName());  // returns <unknown>???
+    log.info("###Starting " + getTestName());  // returns <unknown>???
   }
 
   @Override
   public void tearDown() throws Exception {
-    log.info("###Ending " + getName());    
+    log.info("###Ending " + getTestName());    
     super.tearDown();
   }
+
+  public static SolrLogFormatter formatter;
+
+  public static void setupLogging() {
+    boolean register = false;
+    Handler[] handlers = java.util.logging.Logger.getLogger("").getHandlers();
+    ConsoleHandler consoleHandler = null;
+    for (Handler handler : handlers) {
+      if (handler instanceof ConsoleHandler) {
+        consoleHandler = (ConsoleHandler)handler;
+        break;
+      }
+    }
+
+    if (consoleHandler == null) {
+      consoleHandler = new ConsoleHandler();
+      register = true;
+    }
+
+    consoleHandler.setLevel(Level.ALL);
+    formatter = new SolrLogFormatter();
+    consoleHandler.setFormatter(formatter);
+
+    if (register) {
+      java.util.logging.Logger.getLogger("").addHandler(consoleHandler);
+    }
+  }
+
+  public static void setLoggingLevel(Level level) {
+    java.util.logging.Logger logger = java.util.logging.Logger.getLogger("");
+    logger.setLevel(level);
+  }
+
 
   /** Call initCore in @BeforeClass to instantiate a solr core in your test class.
    * deleteCore will be called for you via SolrTestCaseJ4 @AfterClass */
@@ -148,8 +187,7 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
      if (endNumOpens-numOpens != endNumCloses-numCloses) {
        String msg = "ERROR: SolrIndexSearcher opens=" + (endNumOpens-numOpens) + " closes=" + (endNumCloses-numCloses);
        log.error(msg);
-        testsFailed = true;
-        fail(msg);
+       fail(msg);
      }
   }
   
@@ -160,11 +198,9 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
     SolrZkClient.numOpens.getAndSet(0);
     SolrZkClient.numCloses.getAndSet(0);
 
-    
     if (endNumOpens-zkClientNumOpens != endNumCloses-zkClientNumCloses) {
       String msg = "ERROR: SolrZkClient opens=" + (endNumOpens-zkClientNumOpens) + " closes=" + (endNumCloses-zkClientNumCloses);
       log.error(msg);
-      testsFailed = true;
       fail(msg);
     }
  }
@@ -176,32 +212,30 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
     SolrException.ignorePatterns.add(pattern);
   }
 
+  public static void unIgnoreException(String pattern) {
+    if (SolrException.ignorePatterns != null)
+      SolrException.ignorePatterns.remove(pattern);
+  }
+
+
   public static void resetExceptionIgnores() {
     SolrException.ignorePatterns = null;
     ignoreException("ignore_exception");  // always ignore "ignore_exception"    
   }
 
   protected static String getClassName() {
-    StackTraceElement[] stack = new RuntimeException("WhoAmI").fillInStackTrace().getStackTrace();
-    for (int i = stack.length-1; i>=0; i--) {
-      StackTraceElement ste = stack[i];
-      String cname = ste.getClassName();
-      if (cname.indexOf(".lucene.")>=0 || cname.indexOf(".solr.")>=0) {
-        return cname;
-      }
-    }
-    return SolrTestCaseJ4.class.getName();
+    return getTestClass().getName();
   }
 
   protected static String getSimpleClassName() {
-    String cname = getClassName();
-    return cname.substring(cname.lastIndexOf('.')+1);
+    return getTestClass().getSimpleName();
   }
 
   protected static String configString;
   protected static String schemaString;
 
   protected static SolrConfig solrConfig;
+
   /**
    * Harness initialized by initTestHarness.
    *
@@ -210,6 +244,7 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
    * </p>
    */
   protected static TestHarness h;
+
   /**
    * LocalRequestFactory initialized by initTestHarness using sensible
    * defaults.
@@ -225,17 +260,17 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
    * Subclasses must define this method to return the name of the
    * schema.xml they wish to use.
    */
-  public static  String getSchemaFile() {
+  public static String getSchemaFile() {
     return schemaString;
-  };
+  }
 
   /**
    * Subclasses must define this method to return the name of the
    * solrconfig.xml they wish to use.
    */
-  public static  String getSolrConfigFile() {
+  public static String getSolrConfigFile() {
     return configString;
-  };
+  }
 
   /**
    * The directory used to story the index managed by the TestHarness h
@@ -262,6 +297,7 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
     dataDir = new File(TEMP_DIR,
             "solrtest-" + cname + "-" + System.currentTimeMillis());
     dataDir.mkdirs();
+    System.err.println("Creating dataDir: " + dataDir.getAbsolutePath());
   }
 
   public static void initCore() throws Exception {
@@ -288,7 +324,7 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
   }
 
   public static void createCore() throws Exception {
-    solrConfig = h.createConfig(getSolrConfigFile());
+    solrConfig = TestHarness.createConfig(getSolrConfigFile());
     h = new TestHarness( dataDir.getAbsolutePath(),
             solrConfig,
             getSchemaFile());
@@ -300,7 +336,7 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
    * to log the fact that their setUp process has ended.
    */
   public void postSetUp() {
-    log.info("####POSTSETUP " + getName());
+    log.info("####POSTSETUP " + getTestName());
   }
 
 
@@ -310,7 +346,7 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
    * tearDown method.
    */
   public void preTearDown() {
-    log.info("####PRETEARDOWN " + getName());
+    log.info("####PRETEARDOWN " + getTestName());
   }
 
   /**
@@ -553,13 +589,13 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
    * @see TestHarness#optimize
    */
   public static String optimize(String... args) {
-    return h.optimize(args);
+    return TestHarness.optimize(args);
   }
   /**
    * @see TestHarness#commit
    */
   public static String commit(String... args) {
-    return h.commit(args);
+    return TestHarness.commit(args);
   }
 
   /**
@@ -624,7 +660,7 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
    * @see TestHarness#deleteById
    */
   public static String delI(String id) {
-    return h.deleteById(id);
+    return TestHarness.deleteById(id);
   }
   /**
    * Generates a &lt;delete&gt;... XML string for an query
@@ -632,7 +668,7 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
    * @see TestHarness#deleteByQuery
    */
   public static String delQ(String q) {
-    return h.deleteByQuery(q);
+    return TestHarness.deleteByQuery(q);
   }
 
   /**
@@ -643,7 +679,7 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
    */
   public static XmlDoc doc(String... fieldsAndValues) {
     XmlDoc d = new XmlDoc();
-    d.xml = h.makeSimpleDoc(fieldsAndValues).toString();
+    d.xml = TestHarness.makeSimpleDoc(fieldsAndValues).toString();
     return d;
   }
 
@@ -653,6 +689,15 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
       msp.add(params[i], params[i+1]);
     }
     return msp;
+  }
+
+  public static Map map(Object... params) {
+    LinkedHashMap ret = new LinkedHashMap();
+    for (int i=0; i<params.length; i+=2) {
+      Object o = ret.put(params[i], params[i+1]);
+      // TODO: handle multi-valued map?
+    }
+    return ret;
   }
 
   /**
@@ -752,17 +797,18 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
         else out.append(',');
         JSONUtil.writeString(sfield.getName(), 0, sfield.getName().length(), out);
         out.append(':');
+
         if (sfield.getValueCount() > 1) {
           out.append('[');
-        }
-        boolean firstVal = true;
-        for (Object val : sfield) {
-          if (firstVal) firstVal=false;
-          else out.append(',');
-          out.append(JSONUtil.toJSON(val));
-        }
-        if (sfield.getValueCount() > 1) {
+          boolean firstVal = true;
+          for (Object val : sfield) {
+            if (firstVal) firstVal=false;
+            else out.append(',');
+            out.append(JSONUtil.toJSON(val));
+          }
           out.append(']');
+        } else {
+          out.append(JSONUtil.toJSON(sfield.getValue()));
         }
       }
       out.append('}');
@@ -882,7 +928,7 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
     }
 
     protected int between(int min, int max) {
-      return min != max ? random.nextInt(max-min+1) + min : min;
+      return min != max ? random().nextInt(max-min+1) + min : min;
     }
   }
 
@@ -919,7 +965,7 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
 
     public float getFloat() {
       if (min >= max) return min;
-      return min + random.nextFloat() *  (max - min);
+      return min + random().nextFloat() *  (max - min);
     }
 
     @Override
@@ -1081,22 +1127,26 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
       model.put(doc.id, doc);
 
       // commit 10% of the time
-      if (random.nextInt(commitOneOutOf)==0) {
+      if (random().nextInt(commitOneOutOf)==0) {
         assertU(commit());
       }
 
       // duplicate 10% of the docs
-      if (random.nextInt(10)==0) {
+      if (random().nextInt(10)==0) {
         updateJ(toJSON(doc), null);
         model.put(doc.id, doc);        
       }
     }
 
     // optimize 10% of the time
-    if (random.nextInt(10)==0) {
+    if (random().nextInt(10)==0) {
       assertU(optimize());
     } else {
-      assertU(commit());
+      if (random().nextInt(10) == 0) {
+        assertU(commit());
+      } else {
+        assertU(commit("softCommit","true"));
+      }
     }
 
     // merging segments no longer selects just adjacent segments hence ids (doc.order) can be shuffled.
@@ -1137,13 +1187,13 @@ public abstract class SolrTestCaseJ4 extends LuceneTestCase {
 
   public static Comparator<Doc> createSort(IndexSchema schema, List<FldType> fieldTypes, String[] out) {
     StringBuilder sortSpec = new StringBuilder();
-    int nSorts = random.nextInt(4);
+    int nSorts = random().nextInt(4);
     List<Comparator<Doc>> comparators = new ArrayList<Comparator<Doc>>();
     for (int i=0; i<nSorts; i++) {
       if (i>0) sortSpec.append(',');
 
-      int which = random.nextInt(fieldTypes.size()+2);
-      boolean asc = random.nextBoolean();
+      int which = random().nextInt(fieldTypes.size()+2);
+      boolean asc = random().nextBoolean();
       if (which == fieldTypes.size()) {
         // sort by score
         sortSpec.append("score").append(asc ? " asc" : " desc");

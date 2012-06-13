@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,7 +23,6 @@ import org.apache.lucene.util.LuceneTestCase;
 import org.apache.solr.common.util.XML;
 
 /** Test (some of the) character escaping functions of the XML class
- *  $Id$
  */
 
 public class TestXMLEscaping extends LuceneTestCase {

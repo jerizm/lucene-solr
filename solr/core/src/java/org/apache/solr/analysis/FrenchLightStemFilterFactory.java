@@ -1,6 +1,6 @@
 package org.apache.solr.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,6 +19,7 @@ package org.apache.solr.analysis;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.fr.FrenchLightStemFilter;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
  * Factory for {@link FrenchLightStemFilter}.
@@ -33,7 +34,7 @@ import org.apache.lucene.analysis.fr.FrenchLightStemFilter;
  * &lt;/fieldType&gt;</pre> 
  *
  */
-public class FrenchLightStemFilterFactory extends BaseTokenFilterFactory {
+public class FrenchLightStemFilterFactory extends TokenFilterFactory {
   public TokenStream create(TokenStream input) {
     return new FrenchLightStemFilter(input);
   }

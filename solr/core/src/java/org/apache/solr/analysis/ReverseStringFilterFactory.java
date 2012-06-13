@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,6 +19,7 @@ package org.apache.solr.analysis;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.reverse.ReverseStringFilter;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 /**
  * Factory for {@link ReverseStringFilter}.
@@ -33,7 +34,7 @@ import org.apache.lucene.analysis.reverse.ReverseStringFilter;
  *
  * @since solr 1.4
  */
-public class ReverseStringFilterFactory extends BaseTokenFilterFactory {
+public class ReverseStringFilterFactory extends TokenFilterFactory {
   public ReverseStringFilter create(TokenStream in) {
     assureMatchVersion();
     return new ReverseStringFilter(luceneMatchVersion,in);

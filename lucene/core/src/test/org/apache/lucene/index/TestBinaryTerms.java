@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,7 +19,6 @@ package org.apache.lucene.index;
 
 import java.io.IOException;
 
-import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
@@ -35,12 +34,9 @@ import org.apache.lucene.util.LuceneTestCase;
  * Test indexing and searching some byte[] terms
  */
 public class TestBinaryTerms extends LuceneTestCase {
-  public void testBinary() throws IOException {
-    assumeFalse("PreFlex codec cannot work with binary terms!", 
-        Codec.getDefault().getName().equals("Lucene3x"));
-    
+  public void testBinary() throws IOException {    
     Directory dir = newDirectory();
-    RandomIndexWriter iw = new RandomIndexWriter(random, dir);
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir);
     BytesRef bytes = new BytesRef(2);
     BinaryTokenStream tokenStream = new BinaryTokenStream(bytes);
     

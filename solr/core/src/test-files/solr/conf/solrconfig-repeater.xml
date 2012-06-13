@@ -27,26 +27,9 @@
   <directoryFactory name="DirectoryFactory" class="${solr.directoryFactory:solr.RAMDirectoryFactory}"/>
   <dataDir>${solr.data.dir:}</dataDir>
 
-  <indexDefaults>
-    <useCompoundFile>false</useCompoundFile>
-    <mergeFactor>10</mergeFactor>
-    <ramBufferSizeMB>32</ramBufferSizeMB>
-    <maxMergeDocs>2147483647</maxMergeDocs>
-    <maxFieldLength>10000</maxFieldLength>
-    <writeLockTimeout>1000</writeLockTimeout>
-
+  <indexConfig>
     <lockType>single</lockType>
-  </indexDefaults>
-
-  <mainIndex>
-    <useCompoundFile>false</useCompoundFile>
-    <mergeFactor>10</mergeFactor>
-    <ramBufferSizeMB>32</ramBufferSizeMB>
-    <maxMergeDocs>2147483647</maxMergeDocs>
-    <maxFieldLength>10000</maxFieldLength>
-
-    <unlockOnStartup>true</unlockOnStartup>
-  </mainIndex>
+  </indexConfig>
 
   <updateHandler class="solr.DirectUpdateHandler2">
   </updateHandler>
@@ -64,7 +47,7 @@
   <requestHandler name="lazy" class="solr.StandardRequestHandler" startup="lazy">
   </requestHandler>
 
-  <requestHandler name="/update" class="solr.XmlUpdateRequestHandler"/>
+  <requestHandler name="/update" class="solr.UpdateRequestHandler"  />
 
   <requestHandler name="/replication" class="solr.ReplicationHandler">
     <lst name="master">

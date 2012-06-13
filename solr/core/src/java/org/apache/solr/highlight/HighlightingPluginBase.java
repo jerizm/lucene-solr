@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -49,9 +49,11 @@ public abstract class HighlightingPluginBase implements SolrInfoMBean
   }
 
   public abstract String getDescription();
-  public abstract String getSourceId();
   public abstract String getSource();
-  public abstract String getVersion();
+  
+  public String getVersion() {
+    return getClass().getPackage().getSpecificationVersion();
+  }
   
   public Category getCategory()
   {

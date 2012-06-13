@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.util.Random;
 
 import org.apache.lucene.analysis.MockAnalyzer;
-import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.TextField;
@@ -29,11 +28,12 @@ import org.apache.lucene.index.DocValues.Type;
 import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.similarities.PerFieldSimilarityWrapper;
 import org.apache.lucene.search.similarities.Similarity;
+import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MockDirectoryWrapper;
+import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LineFileDocs;
 import org.apache.lucene.util.LuceneTestCase;
-import org.junit.Before;
 
 /**
  * 
@@ -42,31 +42,20 @@ public class TestCustomNorms extends LuceneTestCase {
   final String floatTestField = "normsTestFloat";
   final String exceptionTestField = "normsTestExcp";
 
-  @Before
-  public void setUp() throws Exception {
-    super.setUp();
-    assumeFalse("cannot work with preflex codec", Codec.getDefault().getName()
-        .equals("Lucene3x"));
-    assumeFalse("cannot work with simple text codec", Codec.getDefault()
-        .getName().equals("SimpleText"));
-
-  }
-
   public void testFloatNorms() throws IOException {
 
     MockDirectoryWrapper dir = newDirectory();
-    dir.setCheckIndexOnClose(false); // can't set sim to checkindex yet
     IndexWriterConfig config = newIndexWriterConfig(TEST_VERSION_CURRENT,
-        new MockAnalyzer(random));
+        new MockAnalyzer(random()));
     Similarity provider = new MySimProvider();
     config.setSimilarity(provider);
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir, config);
-    final LineFileDocs docs = new LineFileDocs(random);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir, config);
+    final LineFileDocs docs = new LineFileDocs(random());
     int num = atLeast(100);
     for (int i = 0; i < num; i++) {
       Document doc = docs.nextDoc();
-      float nextFloat = random.nextFloat();
-      Field f = new Field(floatTestField, "" + nextFloat, TextField.TYPE_STORED);
+      float nextFloat = random().nextFloat();
+      Field f = new TextField(floatTestField, "" + nextFloat, Field.Store.YES);
       f.setBoost(nextFloat);
 
       doc.add(f);
@@ -83,7 +72,7 @@ public class TestCustomNorms extends LuceneTestCase {
     assertNotNull(normValues);
     Source source = normValues.getSource();
     assertTrue(source.hasArray());
-    assertEquals(Type.FLOAT_32, normValues.type());
+    assertEquals(Type.FLOAT_32, normValues.getType());
     float[] norms = (float[]) source.getArray();
     for (int i = 0; i < open.maxDoc(); i++) {
       Document document = open.document(i);
@@ -92,24 +81,23 @@ public class TestCustomNorms extends LuceneTestCase {
     }
     open.close();
     dir.close();
+    docs.close();
   }
 
   public void testExceptionOnRandomType() throws IOException {
     MockDirectoryWrapper dir = newDirectory();
-    dir.setCheckIndexOnClose(false); // can't set sim to checkindex yet
     IndexWriterConfig config = newIndexWriterConfig(TEST_VERSION_CURRENT,
-        new MockAnalyzer(random));
+        new MockAnalyzer(random()));
     Similarity provider = new MySimProvider();
     config.setSimilarity(provider);
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir, config);
-    final LineFileDocs docs = new LineFileDocs(random);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir, config);
+    final LineFileDocs docs = new LineFileDocs(random());
     int num = atLeast(100);
     try {
       for (int i = 0; i < num; i++) {
         Document doc = docs.nextDoc();
-        float nextFloat = random.nextFloat();
-        Field f = new Field(exceptionTestField, "" + nextFloat,
-            TextField.TYPE_STORED);
+        float nextFloat = random().nextFloat();
+        Field f = new TextField(exceptionTestField, "" + nextFloat, Field.Store.YES);
         f.setBoost(nextFloat);
 
         doc.add(f);
@@ -126,7 +114,59 @@ public class TestCustomNorms extends LuceneTestCase {
     writer.commit();
     writer.close();
     dir.close();
+    docs.close();
 
+  }
+  
+  public void testIllegalCustomEncoder() throws Exception {
+    Directory dir = newDirectory();
+    IllegalCustomEncodingSimilarity similarity = new IllegalCustomEncodingSimilarity();
+    IndexWriterConfig config = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
+    config.setSimilarity(similarity);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir, config);
+    Document doc = new Document();
+    Field foo = newTextField("foo", "", Field.Store.NO);
+    Field bar = newTextField("bar", "", Field.Store.NO);
+    doc.add(foo);
+    doc.add(bar);
+    
+    int numAdded = 0;
+    for (int i = 0; i < 100; i++) {
+      try {
+        bar.setStringValue("singleton");
+        similarity.useByte = random().nextBoolean();
+        writer.addDocument(doc);
+        numAdded++;
+      } catch (IllegalArgumentException e) {}
+    }
+    
+    
+    IndexReader reader = writer.getReader();
+    writer.close();
+    assertEquals(numAdded, reader.numDocs());
+    IndexReaderContext topReaderContext = reader.getTopReaderContext();
+    AtomicReaderContext[] leaves = topReaderContext.leaves();
+    for (int j = 0; j < leaves.length; j++) {
+      AtomicReader atomicReader = leaves[j].reader();
+    Source source = random().nextBoolean() ? atomicReader.normValues("foo").getSource() : atomicReader.normValues("foo").getDirectSource();
+    Bits liveDocs = atomicReader.getLiveDocs();
+    Type t = source.getType();
+    for (int i = 0; i < atomicReader.maxDoc(); i++) {
+        assertEquals(0, source.getFloat(i), 0.000f);
+    }
+    
+
+    source = random().nextBoolean() ? atomicReader.normValues("bar").getSource() : atomicReader.normValues("bar").getDirectSource();
+    for (int i = 0; i < atomicReader.maxDoc(); i++) {
+      if (liveDocs == null || liveDocs.get(i)) {
+        assertEquals("type: " + t, 1, source.getFloat(i), 0.000f);
+      } else {
+        assertEquals("type: " + t, 0, source.getFloat(i), 0.000f);
+      }
+    }
+    }
+    reader.close();
+    dir.close();
   }
 
   public class MySimProvider extends PerFieldSimilarityWrapper {
@@ -142,7 +182,7 @@ public class TestCustomNorms extends LuceneTestCase {
       if (floatTestField.equals(field)) {
         return new FloatEncodingBoostSimilarity();
       } else if (exceptionTestField.equals(field)) {
-        return new RandomTypeSimilarity(random);
+        return new RandomTypeSimilarity(random());
       } else {
         return delegate;
       }
@@ -198,6 +238,29 @@ public class TestCustomNorms extends LuceneTestCase {
         norm.setByte((byte) boost);
       }
 
+    }
+  }
+  
+  class IllegalCustomEncodingSimilarity extends DefaultSimilarity {
+    
+    public boolean useByte = false;
+    @Override
+    public byte encodeNormValue(float f) {
+      return (byte) f;
+    }
+    
+    @Override
+    public float decodeNormValue(byte b) {
+      return (float) b;
+    }
+
+    @Override
+    public void computeNorm(FieldInvertState state, Norm norm) {
+      if (useByte) {
+        norm.setByte(encodeNormValue((float) state.getLength()));
+      } else {
+        norm.setFloat((float)state.getLength());
+      }
     }
   }
 

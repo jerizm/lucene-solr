@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,11 +18,11 @@ package org.apache.lucene.index;
  */
 
 import org.apache.lucene.util.*;
+import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
 import org.apache.lucene.store.*;
 import org.apache.lucene.search.*;
 import org.apache.lucene.analysis.*;
 import org.apache.lucene.analysis.tokenattributes.*;
-import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.document.*;
 import org.apache.lucene.index.FieldInfo.IndexOptions;
 
@@ -31,21 +31,16 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
-import org.junit.Ignore;
 
-// NOTE: this test will fail w/ PreFlexRW codec!  (Because
-// this test uses full binary term space, but PreFlex cannot
-// handle this since it requires the terms are UTF8 bytes).
-//
-// Also, SimpleText codec will consume very large amounts of
+// NOTE: SimpleText codec will consume very large amounts of
 // disk (but, should run successfully).  Best to run w/
-// -Dtests.codec=Standard, and w/ plenty of RAM, eg:
+// -Dtests.codec=<current codec>, and w/ plenty of RAM, eg:
 //
 //   ant test -Dtest.slow=true -Dtests.heapsize=8g
 //
 //   java -server -Xmx8g -d64 -cp .:lib/junit-4.10.jar:./build/classes/test:./build/classes/test-framework:./build/classes/java -Dlucene.version=4.0-dev -Dtests.directory=MMapDirectory -DtempDir=build -ea org.junit.runner.JUnitCore org.apache.lucene.index.Test2BTerms
 //
-@LuceneTestCase.UseNoMemoryExpensiveCodec
+@SuppressCodecs({ "SimpleText", "Memory" })
 public class Test2BTerms extends LuceneTestCase {
 
   private final static int TOKEN_LEN = 10;
@@ -117,7 +112,7 @@ public class Test2BTerms extends LuceneTestCase {
       }
     
       @Override
-      public Object clone() {
+      public MyTermAttributeImpl clone() {
         throw new UnsupportedOperationException();
       }
     }
@@ -143,13 +138,10 @@ public class Test2BTerms extends LuceneTestCase {
   @Slow
   public void test2BTerms() throws IOException {
 
-    if ("Lucene3x".equals(Codec.getDefault().getName())) {
-      throw new RuntimeException("this test cannot run with PreFlex codec");
-    }
     System.out.println("Starting Test2B");
     final long TERM_COUNT = ((long) Integer.MAX_VALUE) + 100000000;
 
-    final int TERMS_PER_DOC = _TestUtil.nextInt(random, 100000, 1000000);
+    final int TERMS_PER_DOC = _TestUtil.nextInt(random(), 100000, 1000000);
 
     List<BytesRef> savedTerms = null;
 
@@ -161,7 +153,7 @@ public class Test2BTerms extends LuceneTestCase {
     if (true) {
 
       IndexWriter w = new IndexWriter(dir,
-                                      new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random))
+                                      new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()))
                                       .setMaxBufferedDocs(IndexWriterConfig.DISABLE_AUTO_FLUSH)
                                       .setRAMBufferSizeMB(256.0)
                                       .setMergeScheduler(new ConcurrentMergeScheduler())
@@ -175,9 +167,9 @@ public class Test2BTerms extends LuceneTestCase {
       }
 
       Document doc = new Document();
-      final MyTokenStream ts = new MyTokenStream(random, TERMS_PER_DOC);
+      final MyTokenStream ts = new MyTokenStream(random(), TERMS_PER_DOC);
 
-      FieldType customType = new FieldType(TextField.TYPE_UNSTORED);
+      FieldType customType = new FieldType(TextField.TYPE_NOT_STORED);
       customType.setIndexOptions(IndexOptions.DOCS_ONLY);
       customType.setOmitNorms(true);
       Field field = new Field("field", ts, customType);
@@ -202,7 +194,7 @@ public class Test2BTerms extends LuceneTestCase {
     }
 
     System.out.println("TEST: open reader");
-    final IndexReader r = IndexReader.open(dir);
+    final IndexReader r = DirectoryReader.open(dir);
     if (savedTerms == null) {
       savedTerms = findTerms(r);
     }
@@ -227,13 +219,13 @@ public class Test2BTerms extends LuceneTestCase {
     System.out.println("TEST: findTerms");
     final TermsEnum termsEnum = MultiFields.getTerms(r, "field").iterator(null);
     final List<BytesRef> savedTerms = new ArrayList<BytesRef>();
-    int nextSave = _TestUtil.nextInt(random, 500000, 1000000);
+    int nextSave = _TestUtil.nextInt(random(), 500000, 1000000);
     BytesRef term;
     while((term = termsEnum.next()) != null) {
       if (--nextSave == 0) {
         savedTerms.add(BytesRef.deepCopyOf(term));
         System.out.println("TEST: add " + term);
-        nextSave = _TestUtil.nextInt(random, 500000, 1000000);
+        nextSave = _TestUtil.nextInt(random(), 500000, 1000000);
       }
     }
     return savedTerms;
@@ -246,7 +238,7 @@ public class Test2BTerms extends LuceneTestCase {
     TermsEnum termsEnum = MultiFields.getTerms(r, "field").iterator(null);
     boolean failed = false;
     for(int iter=0;iter<10*terms.size();iter++) {
-      final BytesRef term = terms.get(random.nextInt(terms.size()));
+      final BytesRef term = terms.get(random().nextInt(terms.size()));
       System.out.println("TEST: search " + term);
       final long t0 = System.currentTimeMillis();
       final int count = s.search(new TermQuery(new Term("field", term)), 1).totalHits;

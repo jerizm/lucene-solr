@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,9 +23,7 @@ import org.apache.lucene.analysis.miscellaneous.KeywordMarkerFilter;
 import org.apache.lucene.analysis.TokenFilter;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.snowball.SnowballFilter;
-import org.apache.lucene.analysis.util.CharArraySet;
-import org.apache.solr.common.ResourceLoader;
-import org.apache.solr.util.plugin.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.*;
 import org.tartarus.snowball.SnowballProgram;
 
 /**
@@ -43,7 +41,7 @@ import org.tartarus.snowball.SnowballProgram;
  * 
  *
  */
-public class SnowballPorterFilterFactory extends BaseTokenFilterFactory implements ResourceLoaderAware {
+public class SnowballPorterFilterFactory extends TokenFilterFactory implements ResourceLoaderAware {
   public static final String PROTECTED_TOKENS = "protected";
 
   private String language = "English";
@@ -56,7 +54,7 @@ public class SnowballPorterFilterFactory extends BaseTokenFilterFactory implemen
       try {
         protectedWords = getWordSet(loader, wordFiles, false);
       } catch (IOException e) {
-        throw new RuntimeException(e);
+        throw new InitializationException("IOException thrown while loading protected words", e);
       }
     }
   }
@@ -72,7 +70,7 @@ public class SnowballPorterFilterFactory extends BaseTokenFilterFactory implemen
     try {
       stemClass = Class.forName("org.tartarus.snowball.ext." + language + "Stemmer");
     } catch (ClassNotFoundException e) {
-      throw new RuntimeException("Can't find class for stemmer language " + language, e);
+      throw new InitializationException("Can't find class for stemmer language " + language, e);
     }
   }
   
@@ -81,7 +79,7 @@ public class SnowballPorterFilterFactory extends BaseTokenFilterFactory implemen
     try {
       program = (SnowballProgram)stemClass.newInstance();
     } catch (Exception e) {
-      throw new RuntimeException("Error instantiating stemmer for language " + language + "from class " +stemClass, e);
+      throw new InitializationException("Error instantiating stemmer for language " + language + "from class " + stemClass, e);
     }
 
     if (protectedWords != null)

@@ -1,5 +1,5 @@
 package org.apache.solr.response;
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -25,7 +25,7 @@ import org.apache.solr.request.SolrQueryRequest;
 /**
  * Implementations of <code>BinaryQueryResponseWriter</code> are used to
  * write response in binary format
- * Functionality is exactly same as its parent class <code>QueryResponseWriter</code
+ * Functionality is exactly same as its parent class <code>QueryResponseWriter</code>
  * But it may not implement the <code>write(Writer writer, SolrQueryRequest request, SolrQueryResponse response)</code>
  * method  
  *

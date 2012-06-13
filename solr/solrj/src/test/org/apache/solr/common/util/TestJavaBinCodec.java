@@ -1,6 +1,6 @@
 package org.apache.solr.common.util;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -28,7 +28,7 @@ public class TestJavaBinCodec extends LuceneTestCase {
  public void testStrings() throws Exception {
     JavaBinCodec javabin = new JavaBinCodec();
     for (int i = 0; i < 10000*RANDOM_MULTIPLIER; i++) {
-      String s = _TestUtil.randomUnicodeString(random);
+      String s = _TestUtil.randomUnicodeString(random());
       ByteArrayOutputStream os = new ByteArrayOutputStream();
       javabin.marshal(s, os);
       ByteArrayInputStream is = new ByteArrayInputStream(os.toByteArray());

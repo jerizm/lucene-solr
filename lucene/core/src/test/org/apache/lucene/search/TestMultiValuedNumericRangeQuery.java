@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,8 +23,8 @@ import java.text.DecimalFormatSymbols;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.NumericField;
-import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.IntField;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.store.Directory;
@@ -40,19 +40,19 @@ public class TestMultiValuedNumericRangeQuery extends LuceneTestCase {
    */
   public void testMultiValuedNRQ() throws Exception {
     Directory directory = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, directory,
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random))
-        .setMaxBufferedDocs(_TestUtil.nextInt(random, 50, 1000)));
+    RandomIndexWriter writer = new RandomIndexWriter(random(), directory,
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()))
+        .setMaxBufferedDocs(_TestUtil.nextInt(random(), 50, 1000)));
     
     DecimalFormat format = new DecimalFormat("00000000000", new DecimalFormatSymbols(Locale.US));
     
     int num = atLeast(500);
     for (int l = 0; l < num; l++) {
       Document doc = new Document();
-      for (int m=0, c=random.nextInt(10); m<=c; m++) {
-        int value = random.nextInt(Integer.MAX_VALUE);
-        doc.add(newField("asc", format.format(value), StringField.TYPE_UNSTORED));
-        doc.add(new NumericField("trie", value));
+      for (int m=0, c=random().nextInt(10); m<=c; m++) {
+        int value = random().nextInt(Integer.MAX_VALUE);
+        doc.add(newStringField("asc", format.format(value), Field.Store.NO));
+        doc.add(new IntField("trie", value, Field.Store.NO));
       }
       writer.addDocument(doc);
     }
@@ -62,8 +62,8 @@ public class TestMultiValuedNumericRangeQuery extends LuceneTestCase {
     IndexSearcher searcher=newSearcher(reader);
     num = atLeast(50);
     for (int i = 0; i < num; i++) {
-      int lower=random.nextInt(Integer.MAX_VALUE);
-      int upper=random.nextInt(Integer.MAX_VALUE);
+      int lower=random().nextInt(Integer.MAX_VALUE);
+      int upper=random().nextInt(Integer.MAX_VALUE);
       if (lower>upper) {
         int a=lower; lower=upper; upper=a;
       }

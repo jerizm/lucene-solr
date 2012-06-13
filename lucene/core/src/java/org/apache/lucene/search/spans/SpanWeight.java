@@ -1,6 +1,6 @@
 package org.apache.lucene.search.spans;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -57,9 +57,12 @@ public class SpanWeight extends Weight {
       termContexts.put(term, state);
       i++;
     }
-    stats = similarity.computeWeight(query.getBoost(), 
-        searcher.collectionStatistics(query.getField()), 
-        termStats);
+    final String field = query.getField();
+    if (field != null) {
+      stats = similarity.computeWeight(query.getBoost(), 
+                                       searcher.collectionStatistics(query.getField()), 
+                                       termStats);
+    }
   }
 
   @Override
@@ -67,18 +70,24 @@ public class SpanWeight extends Weight {
 
   @Override
   public float getValueForNormalization() throws IOException {
-    return stats.getValueForNormalization();
+    return stats == null ? 1.0f : stats.getValueForNormalization();
   }
 
   @Override
   public void normalize(float queryNorm, float topLevelBoost) {
-    stats.normalize(queryNorm, topLevelBoost);
+    if (stats != null) {
+      stats.normalize(queryNorm, topLevelBoost);
+    }
   }
 
   @Override
   public Scorer scorer(AtomicReaderContext context, boolean scoreDocsInOrder,
       boolean topScorer, Bits acceptDocs) throws IOException {
-    return new SpanScorer(query.getSpans(context, acceptDocs, termContexts), this, similarity.sloppySimScorer(stats, context));
+    if (stats == null) {
+      return null;
+    } else {
+      return new SpanScorer(query.getSpans(context, acceptDocs, termContexts), this, similarity.sloppySimScorer(stats, context));
+    }
   }
 
   @Override

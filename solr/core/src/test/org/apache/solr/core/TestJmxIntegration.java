@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -101,10 +101,10 @@ public class TestJmxIntegration extends AbstractSolrTestCase {
 
     assertFalse("No mbean found for SolrIndexSearcher", mbeanServer.queryMBeans(searcher, null).isEmpty());
 
-    int oldNumDocs = Integer.valueOf((String) mbeanServer.getAttribute(searcher, "numDocs"));
+    int oldNumDocs =  (Integer)mbeanServer.getAttribute(searcher, "numDocs");
     assertU(adoc("id", "1"));
     assertU("commit", commit());
-    int numDocs = Integer.valueOf((String) mbeanServer.getAttribute(searcher, "numDocs"));
+    int numDocs = (Integer)mbeanServer.getAttribute(searcher, "numDocs");
     assertTrue("New numDocs is same as old numDocs as reported by JMX",
             numDocs > oldNumDocs);
   }
@@ -115,9 +115,6 @@ public class TestJmxIntegration extends AbstractSolrTestCase {
     MBeanServer mbeanServer = servers.get(0);
 
     String coreName = h.getCore().getName();
-    if (coreName.length() == 0) {
-      coreName = h.getCoreContainer().getDefaultCoreName().length() > 0 ? h.getCoreContainer().getDefaultCoreName() : "";
-    }
 
     Set<ObjectInstance> oldBeans = mbeanServer.queryMBeans(null, null);
     int oldNumberOfObjects = 0;

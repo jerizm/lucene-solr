@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -54,7 +54,7 @@ public interface IndexableField {
   /** Non-null if this field has a Reader value */
   public Reader readerValue();
 
-  /** Non-null if this field hasa numeric value */
+  /** Non-null if this field has a numeric value */
   public Number numericValue();
 
   /**

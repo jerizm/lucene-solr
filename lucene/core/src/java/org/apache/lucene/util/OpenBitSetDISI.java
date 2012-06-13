@@ -1,6 +1,6 @@
 package org.apache.lucene.util;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,7 +19,9 @@ package org.apache.lucene.util;
 
 import java.io.IOException;
 import org.apache.lucene.search.DocIdSetIterator;
- 
+
+/** OpenBitSet with added methods to bulk-update the bits
+ *  from a {@link DocIdSetIterator}. */ 
 public class OpenBitSetDISI extends OpenBitSet {
 
   /** Construct an OpenBitSetDISI with its bits set

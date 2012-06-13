@@ -1,5 +1,5 @@
 package org.apache.solr.util;
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -321,7 +321,7 @@ public class ConcurrentLRUCache<K,V> {
             // this loop so far.
             queue.myMaxSize = sz - lowerWaterMark - numRemoved;
             while (queue.size() > queue.myMaxSize && queue.size() > 0) {
-              CacheEntry otherEntry = (CacheEntry) queue.pop();
+              CacheEntry otherEntry = queue.pop();
               newOldestEntry = Math.min(otherEntry.lastAccessedCopy, newOldestEntry);
             }
             if (queue.myMaxSize <= 0) break;

@@ -1,6 +1,6 @@
 package org.apache.lucene.store;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -171,6 +171,7 @@ class NativeFSLock extends Lock {
         throw new IOException("Cannot create directory: " +
                               lockDir.getAbsolutePath());
     } else if (!lockDir.isDirectory()) {
+      // TODO: NoSuchDirectoryException instead?
       throw new IOException("Found regular file where directory expected: " + 
                             lockDir.getAbsolutePath());
     }

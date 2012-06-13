@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,7 +21,7 @@ import java.io.IOException;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.TextField;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.store.Directory;
 
@@ -34,7 +34,7 @@ public class TestIndexWriterMergePolicy extends LuceneTestCase {
     Directory dir = newDirectory();
 
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(
-        TEST_VERSION_CURRENT, new MockAnalyzer(random))
+        TEST_VERSION_CURRENT, new MockAnalyzer(random()))
         .setMaxBufferedDocs(10).setMergePolicy(new LogDocMergePolicy()));
 
     for (int i = 0; i < 100; i++) {
@@ -51,7 +51,7 @@ public class TestIndexWriterMergePolicy extends LuceneTestCase {
     Directory dir = newDirectory();
 
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(
-        TEST_VERSION_CURRENT, new MockAnalyzer(random))
+        TEST_VERSION_CURRENT, new MockAnalyzer(random()))
         .setMaxBufferedDocs(10).setMergePolicy(new LogDocMergePolicy()));
 
     boolean noOverMerge = false;
@@ -76,7 +76,7 @@ public class TestIndexWriterMergePolicy extends LuceneTestCase {
     mp.setMinMergeDocs(100);
     mp.setMergeFactor(10);
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(
-        TEST_VERSION_CURRENT, new MockAnalyzer(random))
+        TEST_VERSION_CURRENT, new MockAnalyzer(random()))
         .setMaxBufferedDocs(10).setMergePolicy(mp));
 
     for (int i = 0; i < 100; i++) {
@@ -86,7 +86,7 @@ public class TestIndexWriterMergePolicy extends LuceneTestCase {
       mp = new LogDocMergePolicy();
       mp.setMergeFactor(10);
       writer = new IndexWriter(dir, newIndexWriterConfig( TEST_VERSION_CURRENT,
-          new MockAnalyzer(random)).setOpenMode(
+          new MockAnalyzer(random())).setOpenMode(
           OpenMode.APPEND).setMaxBufferedDocs(10).setMergePolicy(mp));
       mp.setMinMergeDocs(100);
       checkInvariants(writer);
@@ -102,7 +102,7 @@ public class TestIndexWriterMergePolicy extends LuceneTestCase {
 
     IndexWriter writer = new IndexWriter(
         dir,
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).
             setMaxBufferedDocs(10).
             setMergePolicy(newLogMergePolicy()).
             setMergeScheduler(new SerialMergeScheduler())
@@ -131,7 +131,7 @@ public class TestIndexWriterMergePolicy extends LuceneTestCase {
     Directory dir = newDirectory();
 
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(
-        TEST_VERSION_CURRENT, new MockAnalyzer(random))
+        TEST_VERSION_CURRENT, new MockAnalyzer(random()))
         .setMaxBufferedDocs(101).setMergePolicy(new LogDocMergePolicy())
         .setMergeScheduler(new SerialMergeScheduler()));
 
@@ -145,7 +145,7 @@ public class TestIndexWriterMergePolicy extends LuceneTestCase {
       writer.close();
 
       writer = new IndexWriter(dir, newIndexWriterConfig( TEST_VERSION_CURRENT,
-          new MockAnalyzer(random)).setOpenMode(
+          new MockAnalyzer(random())).setOpenMode(
           OpenMode.APPEND).setMaxBufferedDocs(101).setMergePolicy(new LogDocMergePolicy())
                           .setMergeScheduler(new SerialMergeScheduler()));
     }
@@ -154,7 +154,7 @@ public class TestIndexWriterMergePolicy extends LuceneTestCase {
     LogDocMergePolicy ldmp = new LogDocMergePolicy();
     ldmp.setMergeFactor(10);
     writer = new IndexWriter(dir, newIndexWriterConfig( TEST_VERSION_CURRENT,
-        new MockAnalyzer(random)).setOpenMode(
+        new MockAnalyzer(random())).setOpenMode(
         OpenMode.APPEND).setMaxBufferedDocs(10).setMergePolicy(ldmp).setMergeScheduler(new SerialMergeScheduler()));
 
     // merge policy only fixes segments on levels where merges
@@ -183,7 +183,7 @@ public class TestIndexWriterMergePolicy extends LuceneTestCase {
     LogDocMergePolicy ldmp = new LogDocMergePolicy();
     ldmp.setMergeFactor(100);
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(
-        TEST_VERSION_CURRENT, new MockAnalyzer(random))
+        TEST_VERSION_CURRENT, new MockAnalyzer(random()))
         .setMaxBufferedDocs(10).setMergePolicy(ldmp));
 
     for (int i = 0; i < 250; i++) {
@@ -195,7 +195,7 @@ public class TestIndexWriterMergePolicy extends LuceneTestCase {
     // delete some docs without merging
     writer = new IndexWriter(
         dir,
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).
             setMergePolicy(NoMergePolicy.NO_COMPOUND_FILES)
     );
     writer.deleteDocuments(new Term("content", "aaa"));
@@ -204,7 +204,7 @@ public class TestIndexWriterMergePolicy extends LuceneTestCase {
     ldmp = new LogDocMergePolicy();
     ldmp.setMergeFactor(5);
     writer = new IndexWriter(dir, newIndexWriterConfig( TEST_VERSION_CURRENT,
-        new MockAnalyzer(random)).setOpenMode(
+        new MockAnalyzer(random())).setOpenMode(
         OpenMode.APPEND).setMaxBufferedDocs(10).setMergePolicy(ldmp).setMergeScheduler(new ConcurrentMergeScheduler()));
 
     // merge factor is changed, so check invariants after all adds
@@ -223,7 +223,7 @@ public class TestIndexWriterMergePolicy extends LuceneTestCase {
 
   private void addDoc(IndexWriter writer) throws IOException {
     Document doc = new Document();
-    doc.add(newField("content", "aaa", TextField.TYPE_UNSTORED));
+    doc.add(newTextField("content", "aaa", Field.Store.NO));
     writer.addDocument(doc);
   }
 

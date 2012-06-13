@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -27,6 +27,7 @@ import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.AtomicReader;
 import org.apache.lucene.index.MultiFields;
@@ -59,8 +60,9 @@ public class TestPositionIncrement extends LuceneTestCase {
       @Override
       public TokenStreamComponents createComponents(String fieldName, Reader reader) {
         return new TokenStreamComponents(new Tokenizer(reader) {
+          // TODO: use CannedTokenStream
           private final String[] TOKENS = {"1", "2", "3", "4", "5"};
-          private final int[] INCREMENTS = {0, 2, 1, 0, 1};
+          private final int[] INCREMENTS = {1, 2, 1, 0, 1};
           private int i = 0;
 
           PositionIncrementAttribute posIncrAtt = addAttribute(PositionIncrementAttribute.class);
@@ -88,9 +90,9 @@ public class TestPositionIncrement extends LuceneTestCase {
       }
     };
     Directory store = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, store, analyzer);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), store, analyzer);
     Document d = new Document();
-    d.add(newField("field", "bogus", TextField.TYPE_STORED));
+    d.add(newTextField("field", "bogus", Field.Store.YES));
     writer.addDocument(d);
     IndexReader reader = writer.getReader();
     writer.close();
@@ -203,10 +205,10 @@ public class TestPositionIncrement extends LuceneTestCase {
 
   public void testPayloadsPos0() throws Exception {
     Directory dir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir, new MockPayloadAnalyzer());
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir, new MockPayloadAnalyzer());
     Document doc = new Document();
     doc.add(new TextField("content", new StringReader(
-        "a a b c d e a f g h i j a b k k")));
+        "a a b c d e a f g h i j a b k k"), Field.Store.NO));
     writer.addDocument(doc);
 
     final IndexReader readerFromWriter = writer.getReader();
@@ -218,17 +220,16 @@ public class TestPositionIncrement extends LuceneTestCase {
                                                   false);
     
     int count = 0;
-    assertTrue(tp.nextDoc() != DocsAndPositionsEnum.NO_MORE_DOCS);
+    assertTrue(tp.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
     // "a" occurs 4 times
     assertEquals(4, tp.freq());
-    int expected = 0;
-    assertEquals(expected, tp.nextPosition());
+    assertEquals(0, tp.nextPosition());
     assertEquals(1, tp.nextPosition());
     assertEquals(3, tp.nextPosition());
     assertEquals(6, tp.nextPosition());
 
     // only one doc has "a"
-    assertEquals(DocsAndPositionsEnum.NO_MORE_DOCS, tp.nextDoc());
+    assertEquals(DocIdSetIterator.NO_MORE_DOCS, tp.nextDoc());
 
     IndexSearcher is = newSearcher(readerFromWriter);
   

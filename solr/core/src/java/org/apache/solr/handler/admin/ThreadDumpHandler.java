@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -29,13 +29,7 @@ import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 
 /**
- * Copied from "admin/threaddump.jsp"
  * 
- * NOTE: the response format is still likely to change.  It should be designed so
- * that it works nicely with an XSLT transformation.  Until we have a nice
- * XSLT front end for /admin, the format is still open to change.
- * 
- *
  * @since solr 1.2
  */
 public class ThreadDumpHandler extends RequestHandlerBase
@@ -62,7 +56,9 @@ public class ThreadDumpHandler extends RequestHandlerBase
       tinfos = tmbean.getThreadInfo(tids, Integer.MAX_VALUE);
       NamedList<SimpleOrderedMap<Object>> lst = new NamedList<SimpleOrderedMap<Object>>();
       for (ThreadInfo ti : tinfos) {
-        lst.add( "thread", getThreadInfo( ti, tmbean ) );
+        if (ti != null) {
+          lst.add( "thread", getThreadInfo( ti, tmbean ) );
+        }
       }
       system.add( "deadlocks", lst );
     }
@@ -72,7 +68,9 @@ public class ThreadDumpHandler extends RequestHandlerBase
     tinfos = tmbean.getThreadInfo(tids, Integer.MAX_VALUE);
     NamedList<SimpleOrderedMap<Object>> lst = new NamedList<SimpleOrderedMap<Object>>();
     for (ThreadInfo ti : tinfos) {
-      lst.add( "thread", getThreadInfo( ti, tmbean ) );
+      if (ti != null) {
+        lst.add( "thread", getThreadInfo( ti, tmbean ) );
+      }
     }
     system.add( "threadDump", lst );
     rsp.setHttpCaching(false);
@@ -130,16 +128,6 @@ public class ThreadDumpHandler extends RequestHandlerBase
   @Override
   public String getDescription() {
     return "Thread Dump";
-  }
-
-  @Override
-  public String getVersion() {
-      return "$Revision$";
-  }
-
-  @Override
-  public String getSourceId() {
-    return "$Id$";
   }
 
   @Override

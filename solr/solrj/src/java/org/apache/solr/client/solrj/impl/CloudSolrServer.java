@@ -1,6 +1,6 @@
 package org.apache.solr.client.solrj.impl;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -28,8 +28,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
 
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.MultiThreadedHttpConnectionManager;
+import org.apache.http.client.HttpClient;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServer;
 import org.apache.solr.client.solrj.SolrServerException;
@@ -47,26 +46,35 @@ import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.StrUtils;
 import org.apache.zookeeper.KeeperException;
 
+/**
+ * SolrJ client class to communicate with SolrCloud.
+ * Instances of this class communicate with Zookeeper to discover
+ * Solr endpoints for SolrCloud collections, and then use the 
+ * {@link LBHttpSolrServer} to issue requests.
+ */
 public class CloudSolrServer extends SolrServer {
   private volatile ZkStateReader zkStateReader;
   private String zkHost; // the zk server address
   private int zkConnectTimeout = 10000;
   private int zkClientTimeout = 10000;
-  private String defaultCollection;
+  private volatile String defaultCollection;
   private LBHttpSolrServer lbServer;
+  private HttpClient myClient;
   Random rand = new Random();
-  private MultiThreadedHttpConnectionManager connManager;
   /**
-   * @param zkHost The address of the zookeeper quorum containing the cloud state
+   * @param zkHost The client endpoint of the zookeeper quorum containing the cloud state,
+   * in the form HOST:PORT.
    */
   public CloudSolrServer(String zkHost) throws MalformedURLException {
-      connManager = new MultiThreadedHttpConnectionManager();
       this.zkHost = zkHost;
-      this.lbServer = new LBHttpSolrServer(new HttpClient(connManager));
+      this.myClient = HttpClientUtil.createClient(null);
+      this.lbServer = new LBHttpSolrServer(myClient);
   }
 
   /**
-   * @param zkHost The address of the zookeeper quorum containing the cloud state
+   * @param zkHost The client endpoint of the zookeeper quorum containing the cloud state,
+   * in the form HOST:PORT.
+   * @param lbServer LBHttpSolrServer instance for requests. 
    */
   public CloudSolrServer(String zkHost, LBHttpSolrServer lbServer) {
     this.zkHost = zkHost;
@@ -142,6 +150,10 @@ public class CloudSolrServer extends SolrServer {
     }
     String collection = reqParams.get("collection", defaultCollection);
     
+    if (collection == null) {
+      throw new SolrServerException("No collection param specified on request and no default collection has been set.");
+    }
+    
     // Extract each comma separated collection name and store in a List.
     List<String> collectionList = StrUtils.splitSmart(collection, ",", true);
     
@@ -185,7 +197,8 @@ public class CloudSolrServer extends SolrServer {
     return rsp.getResponse();
   }
 
-  public void close() {
+  @Override
+  public void shutdown() {
     if (zkStateReader != null) {
       synchronized(this) {
         if (zkStateReader!= null)
@@ -193,8 +206,8 @@ public class CloudSolrServer extends SolrServer {
         zkStateReader = null;
       }
     }
-    if (connManager != null) {
-      connManager.shutdown();
+    if (myClient!=null) {
+      myClient.getConnectionManager().shutdown();
     }
   }
 

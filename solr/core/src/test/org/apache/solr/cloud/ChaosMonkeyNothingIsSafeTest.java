@@ -1,6 +1,6 @@
 package org.apache.solr.cloud;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -25,12 +25,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.MultiThreadedHttpConnectionManager;
+import org.apache.http.client.HttpClient;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServer;
-import org.apache.solr.client.solrj.impl.CommonsHttpSolrServer;
-import org.apache.solr.client.solrj.impl.StreamingUpdateSolrServer;
+import org.apache.solr.client.solrj.impl.ConcurrentUpdateSolrServer;
+import org.apache.solr.client.solrj.impl.HttpClientUtil;
+import org.apache.solr.client.solrj.impl.HttpSolrServer;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.zookeeper.KeeperException;
 import org.junit.After;
@@ -42,15 +42,12 @@ import org.junit.Ignore;
 @Ignore("ignore while investigating jenkins fails")
 public class ChaosMonkeyNothingIsSafeTest extends FullSolrCloudTest {
 
-  
   @BeforeClass
   public static void beforeSuperClass() throws Exception {
-    
   }
   
   @AfterClass
   public static void afterSuperClass() throws Exception {
-    
   }
   
   @Before
@@ -65,6 +62,7 @@ public class ChaosMonkeyNothingIsSafeTest extends FullSolrCloudTest {
   @Override
   @After
   public void tearDown() throws Exception {
+    System.clearProperty("numShards");
     super.tearDown();
     resetExceptionIgnores();
   }
@@ -205,11 +203,10 @@ public class ChaosMonkeyNothingIsSafeTest extends FullSolrCloudTest {
   }
 
   class FullThrottleStopableIndexingThread extends StopableIndexingThread {
-    MultiThreadedHttpConnectionManager cm = new MultiThreadedHttpConnectionManager();
-    private HttpClient httpClient = new HttpClient(cm) ;
+    private HttpClient httpClient = HttpClientUtil.createClient(null);
     private volatile boolean stop = false;
     int clientIndex = 0;
-    private StreamingUpdateSolrServer suss;
+    private ConcurrentUpdateSolrServer suss;
     private List<SolrServer> clients;  
     
     public FullThrottleStopableIndexingThread(List<SolrServer> clients,
@@ -218,8 +215,8 @@ public class ChaosMonkeyNothingIsSafeTest extends FullSolrCloudTest {
       setName("FullThrottleStopableIndexingThread");
       setDaemon(true);
       this.clients = clients;
-      suss = new StreamingUpdateSolrServer(
-          ((CommonsHttpSolrServer) clients.get(0)).getBaseURL(), httpClient, 8,
+      suss = new ConcurrentUpdateSolrServer(
+          ((HttpSolrServer) clients.get(0)).getBaseURL(), httpClient, 8,
           2) {
         public void handleError(Throwable ex) {
           log.warn("suss error", ex);
@@ -236,7 +233,7 @@ public class ChaosMonkeyNothingIsSafeTest extends FullSolrCloudTest {
       while (true && !stop) {
         ++i;
         
-        if (doDeletes && random.nextBoolean() && deletes.size() > 0) {
+        if (doDeletes && random().nextBoolean() && deletes.size() > 0) {
           Integer delete = deletes.remove(0);
           try {
             numDeletes++;
@@ -270,7 +267,7 @@ public class ChaosMonkeyNothingIsSafeTest extends FullSolrCloudTest {
           fails.incrementAndGet();
         }
         
-        if (doDeletes && random.nextBoolean()) {
+        if (doDeletes && random().nextBoolean()) {
           deletes.add(i);
         }
         
@@ -287,8 +284,8 @@ public class ChaosMonkeyNothingIsSafeTest extends FullSolrCloudTest {
         }
         try {
           suss.shutdownNow();
-          suss = new StreamingUpdateSolrServer(
-              ((CommonsHttpSolrServer) clients.get(clientIndex)).getBaseURL(),
+          suss = new ConcurrentUpdateSolrServer(
+              ((HttpSolrServer) clients.get(clientIndex)).getBaseURL(),
               httpClient, 30, 3) {
             public void handleError(Throwable ex) {
               log.warn("suss error", ex);
@@ -303,7 +300,7 @@ public class ChaosMonkeyNothingIsSafeTest extends FullSolrCloudTest {
     public void safeStop() {
       stop = true;
       suss.shutdownNow();
-      cm.shutdown();
+      httpClient.getConnectionManager().shutdown();
     }
 
     public int getFails() {

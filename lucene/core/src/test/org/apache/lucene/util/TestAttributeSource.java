@@ -1,6 +1,6 @@
 package org.apache.lucene.util;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -126,7 +126,7 @@ public class TestAttributeSource extends LuceneTestCase {
       src.addAttribute(TypeAttribute.class) instanceof TypeAttributeImpl);
   }
   
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"rawtypes","unchecked"})
   public void testInvalidArguments() throws Exception {
     try {
       AttributeSource src = new AttributeSource();

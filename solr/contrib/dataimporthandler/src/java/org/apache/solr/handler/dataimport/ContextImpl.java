@@ -1,5 +1,5 @@
 package org.apache.solr.handler.dataimport;
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,11 +18,12 @@ package org.apache.solr.handler.dataimport;
 
 
 import org.apache.solr.core.SolrCore;
+import org.apache.solr.handler.dataimport.config.Script;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * <p>
@@ -33,7 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * @since solr 1.3
  */
 public class ContextImpl extends Context {
-  protected DataConfig.Entity entity;
+  protected EntityProcessorWrapper epw;
 
   private ContextImpl parent;
 
@@ -54,16 +55,16 @@ public class ContextImpl extends Context {
   DocBuilder docBuilder;
 
 
-  public ContextImpl(DataConfig.Entity entity, VariableResolverImpl resolver,
+  public ContextImpl(EntityProcessorWrapper epw, VariableResolverImpl resolver,
                      DataSource ds, String currProcess,
                      Map<String, Object> global, ContextImpl parentContext, DocBuilder docBuilder) {
-    this.entity = entity;
+    this.epw = epw;
     this.docBuilder = docBuilder;
     this.resolver = resolver;
     this.ds = ds;
     this.currProcess = currProcess;
     if (docBuilder != null) {
-      this.requestParams = docBuilder.requestParameters.requestParams;
+      this.requestParams = docBuilder.getReqParams().getRawParams();
       dataImporter = docBuilder.dataImporter;
     }
     globalSession = global;
@@ -72,17 +73,17 @@ public class ContextImpl extends Context {
 
   @Override
   public String getEntityAttribute(String name) {
-    return entity == null ? null : entity.allAttributes.get(name);
+    return epw==null || epw.getEntity() == null ? null : epw.getEntity().getAllAttributes().get(name);
   }
 
   @Override
   public String getResolvedEntityAttribute(String name) {
-    return entity == null ? null : resolver.replaceTokens(entity.allAttributes.get(name));
+    return epw==null || epw.getEntity() == null ? null : resolver.replaceTokens(epw.getEntity().getAllAttributes().get(name));
   }
 
   @Override
   public List<Map<String, String>> getAllEntityFields() {
-    return entity == null ? Collections.EMPTY_LIST : entity.allFieldsList;
+    return epw==null || epw.getEntity() == null ? Collections.EMPTY_LIST : epw.getEntity().getAllFieldsList();
   }
 
   @Override
@@ -93,26 +94,26 @@ public class ContextImpl extends Context {
   @Override
   public DataSource getDataSource() {
     if (ds != null) return ds;
-    if(entity == null) return  null;
-    if (entity.dataSrc == null) {
-      entity.dataSrc = dataImporter.getDataSourceInstance(entity, entity.dataSource, this);
+    if(epw==null) { return null; }
+    if (epw!=null && epw.getDatasource() == null) {
+      epw.setDatasource(dataImporter.getDataSourceInstance(epw.getEntity(), epw.getEntity().getDataSourceName(), this));
     }
-    if (entity.dataSrc != null && docBuilder != null && docBuilder.verboseDebug &&
+    if (epw!=null && epw.getDatasource() != null && docBuilder != null && docBuilder.verboseDebug &&
              Context.FULL_DUMP.equals(currentProcess())) {
       //debug is not yet implemented properly for deltas
-      entity.dataSrc = docBuilder.getDebugLogger().wrapDs(entity.dataSrc);
+      epw.setDatasource(docBuilder.getDebugLogger().wrapDs(epw.getDatasource()));
     }
-    return entity.dataSrc;
+    return epw.getDatasource();
   }
 
   @Override
   public DataSource getDataSource(String name) {
-    return dataImporter.getDataSourceInstance(entity, name, this);
+    return dataImporter.getDataSourceInstance(epw==null ? null : epw.getEntity(), name, this);
   }
 
   @Override
   public boolean isRootEntity() {
-    return entity.isDocRoot;
+    return epw==null ? false : epw.getEntity().isDocRoot();
   }
 
   @Override
@@ -127,35 +128,33 @@ public class ContextImpl extends Context {
 
   @Override
   public EntityProcessor getEntityProcessor() {
-    return entity == null ? null : entity.processor;
+    return epw;
   }
 
   @Override
   public void setSessionAttribute(String name, Object val, String scope) {
-    if(name == null) return;
+    if(name == null) {
+      return;
+    }
     if (Context.SCOPE_ENTITY.equals(scope)) {
-      if (entitySession == null)
-        entitySession = new ConcurrentHashMap<String, Object>();
-
-      putVal(name, val,entitySession);
+      if (entitySession == null) {
+        entitySession = new HashMap<String, Object>();
+      }
+      entitySession.put(name, val);
     } else if (Context.SCOPE_GLOBAL.equals(scope)) {
       if (globalSession != null) {
-        putVal(name, val,globalSession);
+        globalSession.put(name, val);
       }
     } else if (Context.SCOPE_DOC.equals(scope)) {
       DocBuilder.DocWrapper doc = getDocument();
-      if (doc != null)
+      if (doc != null) {
         doc.setSessionAttribute(name, val);
+      }
     } else if (SCOPE_SOLR_CORE.equals(scope)){
       if(dataImporter != null) {
-        putVal(name, val,dataImporter.getCoreScopeSession());
+        dataImporter.getCoreScopeSession().put(name, val);
       }
     }
-  }
-
-  private void putVal(String name, Object val, Map map) {
-    if(val == null) map.remove(name);
-    else map.put(name, val);
   }
 
   @Override
@@ -212,18 +211,18 @@ public class ContextImpl extends Context {
 
   @Override
   public String getScript() {
-    if(dataImporter != null) {
-      DataConfig.Script script = dataImporter.getConfig().script;
-      return script == null ? null : script.text;
+    if (dataImporter != null) {
+      Script script = dataImporter.getConfig().getScript();
+      return script == null ? null : script.getText();
     }
     return null;
   }
-
+  
   @Override
   public String getScriptLanguage() {
     if (dataImporter != null) {
-      DataConfig.Script script = dataImporter.getConfig().script;
-      return script == null ? null : script.language;
+      Script script = dataImporter.getConfig().getScript();
+      return script == null ? null : script.getLanguage();
     }
     return null;
   }

@@ -1,6 +1,6 @@
 package org.apache.lucene.util.fst;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -30,11 +30,12 @@ import java.io.IOException;
 abstract class FSTEnum<T> {
   protected final FST<T> fst;
 
-  @SuppressWarnings("unchecked") protected FST.Arc<T>[] arcs = new FST.Arc[10];
+  @SuppressWarnings({"rawtypes","unchecked"}) protected FST.Arc<T>[] arcs = new FST.Arc[10];
   // outputs are cumulative
-  @SuppressWarnings("unchecked") protected T[] output = (T[]) new Object[10];
+  @SuppressWarnings({"rawtypes","unchecked"}) protected T[] output = (T[]) new Object[10];
 
   protected final T NO_OUTPUT;
+  protected final FST.BytesReader fstReader;
   protected final FST.Arc<T> scratchArc = new FST.Arc<T>();
 
   protected int upto;
@@ -45,6 +46,7 @@ abstract class FSTEnum<T> {
    *  term before target.  */
   protected FSTEnum(FST<T> fst) {
     this.fst = fst;
+    fstReader = fst.getBytesReader(0);
     NO_OUTPUT = fst.outputs.getNoOutput();
     fst.getFirstArc(getArc(0));
     output[0] = NO_OUTPUT;
@@ -62,7 +64,7 @@ abstract class FSTEnum<T> {
     if (upto == 0) {
       //System.out.println("  init");
       upto = 1;
-      fst.readFirstTargetArc(getArc(0), getArc(1));
+      fst.readFirstTargetArc(getArc(0), getArc(1), fstReader);
       return;
     }
     //System.out.println("  rewind upto=" + upto + " vs targetLength=" + targetLength);
@@ -78,7 +80,7 @@ abstract class FSTEnum<T> {
       } else if (cmp > 0) {
         // seek backwards -- reset this arc to the first arc
         final FST.Arc<T> arc = getArc(upto);
-        fst.readFirstTargetArc(getArc(upto-1), arc);
+        fst.readFirstTargetArc(getArc(upto-1), arc, fstReader);
         //System.out.println("    seek first arc");
         break;
       }
@@ -92,7 +94,7 @@ abstract class FSTEnum<T> {
     if (upto == 0) {
       //System.out.println("  init");
       upto = 1;
-      fst.readFirstTargetArc(getArc(0), getArc(1));
+      fst.readFirstTargetArc(getArc(0), getArc(1), fstReader);
     } else {
       // pop
       //System.out.println("  check pop curArc target=" + arcs[upto].target + " label=" + arcs[upto].label + " isLast?=" + arcs[upto].isLast());
@@ -103,7 +105,7 @@ abstract class FSTEnum<T> {
           return;
         }
       }
-      fst.readNextArc(arcs[upto]);
+      fst.readNextArc(arcs[upto], fstReader);
     }
 
     pushFirst();
@@ -180,7 +182,7 @@ abstract class FSTEnum<T> {
           }
           setCurrentLabel(arc.label);
           incr();
-          arc = fst.readFirstTargetArc(arc, getArc(upto));
+          arc = fst.readFirstTargetArc(arc, getArc(upto), fstReader);
           targetLabel = getTargetLabel();
           continue;
         } else if (low == arc.numArcs) {
@@ -198,7 +200,7 @@ abstract class FSTEnum<T> {
             final FST.Arc<T> prevArc = getArc(upto);
             //System.out.println("  rollback upto=" + upto + " arc.label=" + prevArc.label + " isLast?=" + prevArc.isLast());
             if (!prevArc.isLast()) {
-              fst.readNextArc(prevArc);
+              fst.readNextArc(prevArc, fstReader);
               pushFirst();
               return;
             }
@@ -221,7 +223,7 @@ abstract class FSTEnum<T> {
           }
           setCurrentLabel(arc.label);
           incr();
-          arc = fst.readFirstTargetArc(arc, getArc(upto));
+          arc = fst.readFirstTargetArc(arc, getArc(upto), fstReader);
           targetLabel = getTargetLabel();
         } else if (arc.label > targetLabel) {
           pushFirst();
@@ -237,7 +239,7 @@ abstract class FSTEnum<T> {
             final FST.Arc<T> prevArc = getArc(upto);
             //System.out.println("  rollback upto=" + upto + " arc.label=" + prevArc.label + " isLast?=" + prevArc.isLast());
             if (!prevArc.isLast()) {
-              fst.readNextArc(prevArc);
+              fst.readNextArc(prevArc, fstReader);
               pushFirst();
               return;
             }
@@ -246,7 +248,7 @@ abstract class FSTEnum<T> {
         } else {
           // keep scanning
           //System.out.println("    next scan");
-          fst.readNextArc(arc);
+          fst.readNextArc(arc, fstReader);
         }
       }
     }
@@ -320,7 +322,7 @@ abstract class FSTEnum<T> {
           }
           setCurrentLabel(arc.label);
           incr();
-          arc = fst.readFirstTargetArc(arc, getArc(upto));
+          arc = fst.readFirstTargetArc(arc, getArc(upto), fstReader);
           targetLabel = getTargetLabel();
           continue;
         } else if (high == -1) {
@@ -333,12 +335,12 @@ abstract class FSTEnum<T> {
           while(true) {
             // First, walk backwards until we find a first arc
             // that's before our target label:
-            fst.readFirstTargetArc(getArc(upto-1), arc);
+            fst.readFirstTargetArc(getArc(upto-1), arc, fstReader);
             if (arc.label < targetLabel) {
               // Then, scan forwards to the arc just before
               // the targetLabel:
-              while(!arc.isLast() && fst.readNextArcLabel(arc) < targetLabel) {
-                fst.readNextArc(arc);
+              while(!arc.isLast() && fst.readNextArcLabel(arc, in) < targetLabel) {
+                fst.readNextArc(arc, fstReader);
               }
               pushLast();
               return;
@@ -355,7 +357,7 @@ abstract class FSTEnum<T> {
           arc.arcIdx = (low > high ? high : low)-1;
           //System.out.println(" hasFloor arcIdx=" + (arc.arcIdx+1));
           fst.readNextRealArc(arc, in);
-          assert arc.isLast() || fst.readNextArcLabel(arc) > targetLabel;
+          assert arc.isLast() || fst.readNextArcLabel(arc, in) > targetLabel;
           assert arc.label < targetLabel: "arc.label=" + arc.label + " vs targetLabel=" + targetLabel;
           pushLast();
           return;
@@ -370,7 +372,7 @@ abstract class FSTEnum<T> {
           }
           setCurrentLabel(arc.label);
           incr();
-          arc = fst.readFirstTargetArc(arc, getArc(upto));
+          arc = fst.readFirstTargetArc(arc, getArc(upto), fstReader);
           targetLabel = getTargetLabel();
         } else if (arc.label > targetLabel) {
           // TODO: if each arc could somehow read the arc just
@@ -380,12 +382,12 @@ abstract class FSTEnum<T> {
           while(true) {
             // First, walk backwards until we find a first arc
             // that's before our target label:
-            fst.readFirstTargetArc(getArc(upto-1), arc);
+            fst.readFirstTargetArc(getArc(upto-1), arc, fstReader);
             if (arc.label < targetLabel) {
               // Then, scan forwards to the arc just before
               // the targetLabel:
-              while(!arc.isLast() && fst.readNextArcLabel(arc) < targetLabel) {
-                fst.readNextArc(arc);
+              while(!arc.isLast() && fst.readNextArcLabel(arc, fstReader) < targetLabel) {
+                fst.readNextArc(arc, fstReader);
               }
               pushLast();
               return;
@@ -399,12 +401,12 @@ abstract class FSTEnum<T> {
           }
         } else if (!arc.isLast()) {
           //System.out.println("  check next label=" + fst.readNextArcLabel(arc) + " (" + (char) fst.readNextArcLabel(arc) + ")");
-          if (fst.readNextArcLabel(arc) > targetLabel) {
+          if (fst.readNextArcLabel(arc, fstReader) > targetLabel) {
             pushLast();
             return;
           } else {
             // keep scanning
-            fst.readNextArc(arc);
+            fst.readNextArc(arc, fstReader);
           }
         } else {
           pushLast();
@@ -441,7 +443,7 @@ abstract class FSTEnum<T> {
         // short circuit
         //upto--;
         //upto = 0;
-        fst.readFirstTargetArc(arc, getArc(upto));
+        fst.readFirstTargetArc(arc, getArc(upto), fstReader);
         //System.out.println("  no match upto=" + upto);
         return false;
       }
@@ -462,13 +464,13 @@ abstract class FSTEnum<T> {
     upto++;
     grow();
     if (arcs.length <= upto) {
-      @SuppressWarnings("unchecked") final FST.Arc<T>[] newArcs =
+      @SuppressWarnings({"rawtypes","unchecked"}) final FST.Arc<T>[] newArcs =
         new FST.Arc[ArrayUtil.oversize(1+upto, RamUsageEstimator.NUM_BYTES_OBJECT_REF)];
       System.arraycopy(arcs, 0, newArcs, 0, arcs.length);
       arcs = newArcs;
     }
     if (output.length <= upto) {
-      @SuppressWarnings("unchecked") final T[] newOutput =
+      @SuppressWarnings({"rawtypes","unchecked"}) final T[] newOutput =
         (T[]) new Object[ArrayUtil.oversize(1+upto, RamUsageEstimator.NUM_BYTES_OBJECT_REF)];
       System.arraycopy(output, 0, newOutput, 0, output.length);
       output = newOutput;
@@ -493,7 +495,7 @@ abstract class FSTEnum<T> {
       incr();
       
       final FST.Arc<T> nextArc = getArc(upto);
-      fst.readFirstTargetArc(arc, nextArc);
+      fst.readFirstTargetArc(arc, nextArc, fstReader);
       arc = nextArc;
     }
   }
@@ -514,7 +516,7 @@ abstract class FSTEnum<T> {
       }
       incr();
 
-      arc = fst.readLastTargetArc(arc, getArc(upto));
+      arc = fst.readLastTargetArc(arc, getArc(upto), fstReader);
     }
   }
 

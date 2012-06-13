@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -16,6 +16,10 @@
  */
 package org.apache.lucene.util.mutable;
 
+/**
+ * {@link MutableValue} implementation of type 
+ * <code>int</code>.
+ */
 public class MutableValueInt extends MutableValue {
   public int value;
   

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -60,7 +60,7 @@ public abstract class DataSource<T> {
    *              for HttpDataSource or a file location for FileDataSource or a custom
    *              format for your own custom DataSource.
    * @return Depends on the implementation. For instance JdbcDataSource returns
-   *         an Iterator<Map <String,Object>>
+   *         an Iterator&lt;Map &lt;String,Object&gt;&gt;
    */
   public abstract T getData(String query);
 

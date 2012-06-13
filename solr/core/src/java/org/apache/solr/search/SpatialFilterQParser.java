@@ -1,5 +1,5 @@
 package org.apache.solr.search;
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,8 +19,8 @@ package org.apache.solr.search;
 
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.spatial.geometry.DistanceUnits;
-import org.apache.lucene.spatial.DistanceUtils;
+import com.spatial4j.core.distance.DistanceUnits;
+import com.spatial4j.core.distance.DistanceUtils;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.params.SpatialParams;

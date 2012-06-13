@@ -17,7 +17,7 @@ import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.KeeperException.NodeExistsException;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -40,16 +40,25 @@ public abstract class ElectionContext {
   final ZkNodeProps leaderProps;
   final String id;
   final String leaderPath;
+  String leaderSeqPath;
+  private SolrZkClient zkClient;
   
   public ElectionContext(final String shardZkNodeName,
-      final String electionPath, final String leaderPath, final ZkNodeProps leaderProps) {
+      final String electionPath, final String leaderPath, final ZkNodeProps leaderProps, final SolrZkClient zkClient) {
     this.id = shardZkNodeName;
     this.electionPath = electionPath;
     this.leaderPath = leaderPath;
     this.leaderProps = leaderProps;
+    this.zkClient = zkClient;
   }
   
-  abstract void runLeaderProcess(String leaderSeqPath, boolean weAreReplacement) throws KeeperException, InterruptedException, IOException;
+  public void cancelElection() throws InterruptedException, KeeperException {
+    zkClient.delete(leaderSeqPath, -1, true);
+  }
+  // the given core may or may not be null - if you need access to the current core, you must pass
+  // the core container and core name to your context impl - then use this core ref if it is not null
+  // else access it from the core container
+  abstract void runLeaderProcess(boolean weAreReplacement) throws KeeperException, InterruptedException, IOException;
 }
 
 class ShardLeaderElectionContextBase extends ElectionContext {
@@ -63,7 +72,7 @@ class ShardLeaderElectionContextBase extends ElectionContext {
       final String collection, final String shardZkNodeName, ZkNodeProps props, ZkStateReader zkStateReader) {
     super(shardZkNodeName, ZkStateReader.COLLECTIONS_ZKNODE + "/" + collection + "/leader_elect/"
         + shardId, ZkStateReader.getShardLeadersPath(collection, shardId),
-        props);
+        props, zkStateReader.getZkClient());
     this.leaderElector = leaderElector;
     this.zkClient = zkStateReader.getZkClient();
     this.shardId = shardId;
@@ -71,7 +80,7 @@ class ShardLeaderElectionContextBase extends ElectionContext {
   }
 
   @Override
-  void runLeaderProcess(String leaderSeqPath, boolean weAreReplacement)
+  void runLeaderProcess(boolean weAreReplacement)
       throws KeeperException, InterruptedException, IOException {
 
     try {
@@ -86,6 +95,13 @@ class ShardLeaderElectionContextBase extends ElectionContext {
           leaderProps == null ? null : ZkStateReader.toJSON(leaderProps),
           CreateMode.EPHEMERAL, true);
     }
+    
+    ZkNodeProps m = new ZkNodeProps(Overseer.QUEUE_OPERATION,
+        "leader", ZkStateReader.SHARD_ID_PROP, shardId,
+        ZkStateReader.COLLECTION_PROP, collection, ZkStateReader.BASE_URL_PROP,
+        leaderProps.getProperties().get(ZkStateReader.BASE_URL_PROP),
+        ZkStateReader.CORE_NAME_PROP, leaderProps.getProperties().get(ZkStateReader.CORE_NAME_PROP));
+    Overseer.getInQueue(zkClient).offer(ZkStateReader.toJSON(m));
   } 
 
 }
@@ -106,15 +122,20 @@ final class ShardLeaderElectionContext extends ShardLeaderElectionContextBase {
   }
   
   @Override
-  void runLeaderProcess(String leaderSeqPath, boolean weAreReplacement)
+  void runLeaderProcess(boolean weAreReplacement)
       throws KeeperException, InterruptedException, IOException {
     if (cc != null) {
-      SolrCore core = null;
       String coreName = leaderProps.get(ZkStateReader.CORE_NAME_PROP);
+      SolrCore core = null;
       try {
+        // the first time we are run, we will get a startupCore - after
+        // we will get null and must use cc.getCore
+     
         core = cc.getCore(coreName);
+
         if (core == null) {
-          throw new SolrException(ErrorCode.SERVER_ERROR, "Core not found:" + coreName);
+          cancelElection();
+          throw new SolrException(ErrorCode.SERVER_ERROR, "Fatal Error, SolrCore not found:" + coreName + " in " + cc.getCoreNames());
         }
         // should I be leader?
         if (weAreReplacement && !shouldIBeLeader(leaderProps)) {
@@ -122,7 +143,7 @@ final class ShardLeaderElectionContext extends ShardLeaderElectionContextBase {
           rejoinLeaderElection(leaderSeqPath, core);
           return;
         }
-        
+
         if (weAreReplacement) {
           if (zkClient.exists(leaderPath, true)) {
             zkClient.delete(leaderPath, -1, true);
@@ -130,42 +151,39 @@ final class ShardLeaderElectionContext extends ShardLeaderElectionContextBase {
 //          System.out.println("I may be the new Leader:" + leaderPath
 //              + " - I need to try and sync");
           boolean success = syncStrategy.sync(zkController, core, leaderProps);
-          if (!success) {
-            // TODO: what if no one can be the leader in a loop?
-            // perhaps we look down the list and if no one is active, we
-            // accept leader role anyhow
-            core.getUpdateHandler().getSolrCoreState().doRecovery(core);
-            
+          if (!success && anyoneElseActive()) {
             rejoinLeaderElection(leaderSeqPath, core);
             return;
           } 
         }
         
         // If I am going to be the leader I have to be active
-        
+        // System.out.println("I am leader go active");
         core.getUpdateHandler().getSolrCoreState().cancelRecovery();
-        zkController.publish(core, ZkStateReader.ACTIVE);
+        zkController.publish(core.getCoreDescriptor(), ZkStateReader.ACTIVE);
         
       } finally {
-        if (core != null) {
+        if (core != null ) {
           core.close();
         }
       }
       
     }
     
-    super.runLeaderProcess(leaderSeqPath, weAreReplacement);
+    super.runLeaderProcess(weAreReplacement);
   }
 
   private void rejoinLeaderElection(String leaderSeqPath, SolrCore core)
       throws InterruptedException, KeeperException, IOException {
     // remove our ephemeral and re join the election
-   // System.out.println("sync failed, delete our election node:"
-   //     + leaderSeqPath);
-    zkController.publish(core, ZkStateReader.DOWN);
-    zkClient.delete(leaderSeqPath, -1, true);
+    // System.out.println("sync failed, delete our election node:"
+    // + leaderSeqPath);
+
+    zkController.publish(core.getCoreDescriptor(), ZkStateReader.DOWN);
     
-    core.getUpdateHandler().getSolrCoreState().doRecovery(core);
+    cancelElection();
+    
+    core.getUpdateHandler().getSolrCoreState().doRecovery(cc, core.getName());
     
     leaderElector.joinElection(this);
   }
@@ -201,6 +219,26 @@ final class ShardLeaderElectionContext extends ShardLeaderElectionContextBase {
     return !foundSomeoneElseActive;
   }
   
+  private boolean anyoneElseActive() {
+    CloudState cloudState = zkController.getZkStateReader().getCloudState();
+    Map<String,Slice> slices = cloudState.getSlices(this.collection);
+    Slice slice = slices.get(shardId);
+    Map<String,ZkNodeProps> shards = slice.getShards();
+
+    for (Map.Entry<String,ZkNodeProps> shard : shards.entrySet()) {
+      String state = shard.getValue().get(ZkStateReader.STATE_PROP);
+
+      
+      if ((state.equals(ZkStateReader.ACTIVE))
+          && cloudState.liveNodesContain(shard.getValue().get(
+              ZkStateReader.NODE_NAME_PROP))) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  
 }
 
 final class OverseerElectionContext extends ElectionContext {
@@ -208,14 +246,14 @@ final class OverseerElectionContext extends ElectionContext {
   private final SolrZkClient zkClient;
   private final ZkStateReader stateReader;
 
-  public OverseerElectionContext(final String zkNodeName, SolrZkClient zkClient, ZkStateReader stateReader) {
-    super(zkNodeName, "/overseer_elect", "/overseer_elect/leader", null);
-    this.zkClient = zkClient;
+  public OverseerElectionContext(final String zkNodeName, ZkStateReader stateReader) {
+    super(zkNodeName, "/overseer_elect", "/overseer_elect/leader", null, stateReader.getZkClient());
     this.stateReader = stateReader;
+    this.zkClient = stateReader.getZkClient();
   }
 
   @Override
-  void runLeaderProcess(String leaderSeqPath, boolean weAreReplacement) throws KeeperException, InterruptedException {
+  void runLeaderProcess(boolean weAreReplacement) throws KeeperException, InterruptedException {
     
     final String id = leaderSeqPath.substring(leaderSeqPath.lastIndexOf("/")+1);
     ZkNodeProps myProps = new ZkNodeProps("id", id);
@@ -233,7 +271,7 @@ final class OverseerElectionContext extends ElectionContext {
           CreateMode.EPHEMERAL, true);
     }
   
-    new Overseer(zkClient, stateReader, id);
+    new Overseer(stateReader, id);
   }
   
 }

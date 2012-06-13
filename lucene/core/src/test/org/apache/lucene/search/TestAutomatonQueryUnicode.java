@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,7 +21,6 @@ import java.io.IOException;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
@@ -46,38 +45,38 @@ public class TestAutomatonQueryUnicode extends LuceneTestCase {
   public void setUp() throws Exception {
     super.setUp();
     directory = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, directory);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), directory);
     Document doc = new Document();
-    Field titleField = newField("title", "some title", TextField.TYPE_UNSTORED);
-    Field field = newField(FN, "", TextField.TYPE_UNSTORED);
-    Field footerField = newField("footer", "a footer", TextField.TYPE_UNSTORED);
+    Field titleField = newTextField("title", "some title", Field.Store.NO);
+    Field field = newTextField(FN, "", Field.Store.NO);
+    Field footerField = newTextField("footer", "a footer", Field.Store.NO);
     doc.add(titleField);
     doc.add(field);
     doc.add(footerField);
-    field.setValue("\uD866\uDF05abcdef");
+    field.setStringValue("\uD866\uDF05abcdef");
     writer.addDocument(doc);
-    field.setValue("\uD866\uDF06ghijkl");
+    field.setStringValue("\uD866\uDF06ghijkl");
     writer.addDocument(doc);
     // this sorts before the previous two in UTF-8/UTF-32, but after in UTF-16!!!
-    field.setValue("\uFB94mnopqr"); 
+    field.setStringValue("\uFB94mnopqr"); 
     writer.addDocument(doc);
-    field.setValue("\uFB95stuvwx"); // this one too.
+    field.setStringValue("\uFB95stuvwx"); // this one too.
     writer.addDocument(doc);
-    field.setValue("a\uFFFCbc");
+    field.setStringValue("a\uFFFCbc");
     writer.addDocument(doc);
-    field.setValue("a\uFFFDbc");
+    field.setStringValue("a\uFFFDbc");
     writer.addDocument(doc);
-    field.setValue("a\uFFFEbc");
+    field.setStringValue("a\uFFFEbc");
     writer.addDocument(doc);
-    field.setValue("a\uFB94bc");
+    field.setStringValue("a\uFB94bc");
     writer.addDocument(doc);
-    field.setValue("bacadaba");
+    field.setStringValue("bacadaba");
     writer.addDocument(doc);
-    field.setValue("\uFFFD");
+    field.setStringValue("\uFFFD");
     writer.addDocument(doc);
-    field.setValue("\uFFFD\uD866\uDF05");
+    field.setStringValue("\uFFFD\uD866\uDF05");
     writer.addDocument(doc);
-    field.setValue("\uFFFD\uFFFD");
+    field.setStringValue("\uFFFD\uFFFD");
     writer.addDocument(doc);
     reader = writer.getReader();
     searcher = newSearcher(reader);

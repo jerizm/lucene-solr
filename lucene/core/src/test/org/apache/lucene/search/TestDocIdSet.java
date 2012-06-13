@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -25,7 +25,7 @@ import java.util.Iterator;
 import junit.framework.Assert;
 
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
@@ -101,9 +101,9 @@ public class TestDocIdSet extends LuceneTestCase {
     // Tests that if a Filter produces a null DocIdSet, which is given to
     // IndexSearcher, everything works fine. This came up in LUCENE-1754.
     Directory dir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir);
     Document doc = new Document();
-    doc.add(newField("c", "val", StringField.TYPE_UNSTORED));
+    doc.add(newStringField("c", "val", Field.Store.NO));
     writer.addDocument(doc);
     IndexReader reader = writer.getReader();
     writer.close();
@@ -117,6 +117,43 @@ public class TestDocIdSet extends LuceneTestCase {
       @Override
       public DocIdSet getDocIdSet(AtomicReaderContext context, Bits acceptDocs) throws IOException {
         return null;
+      }
+    };
+    
+    Assert.assertEquals(0, searcher.search(new MatchAllDocsQuery(), f, 10).totalHits);
+    reader.close();
+    dir.close();
+  }
+
+  public void testNullIteratorFilteredDocIdSet() throws Exception {
+    Directory dir = newDirectory();
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir);
+    Document doc = new Document();
+    doc.add(newStringField("c", "val", Field.Store.NO));
+    writer.addDocument(doc);
+    IndexReader reader = writer.getReader();
+    writer.close();
+    
+    // First verify the document is searchable.
+    IndexSearcher searcher = newSearcher(reader);
+    Assert.assertEquals(1, searcher.search(new MatchAllDocsQuery(), 10).totalHits);
+    
+      // Now search w/ a Filter which returns a null DocIdSet
+    Filter f = new Filter() {
+      @Override
+      public DocIdSet getDocIdSet(AtomicReaderContext context, Bits acceptDocs) throws IOException {
+        final DocIdSet innerNullIteratorSet = new DocIdSet() {
+          @Override
+          public DocIdSetIterator iterator() {
+            return null;
+          } 
+        };
+        return new FilteredDocIdSet(innerNullIteratorSet) {
+          @Override
+          protected boolean match(int docid) {
+            return true;
+          }	
+        };
       }
     };
     

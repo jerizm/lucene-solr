@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.perfield;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,21 +19,24 @@ package org.apache.lucene.codecs.perfield;
 import java.io.IOException;
 
 import org.apache.lucene.analysis.MockAnalyzer;
+import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.lucene40.Lucene40Codec;
 import org.apache.lucene.codecs.lucene40.Lucene40PostingsFormat;
 import org.apache.lucene.codecs.mocksep.MockSepPostingsFormat;
+import org.apache.lucene.codecs.pulsing.Pulsing40PostingsFormat;
 import org.apache.lucene.codecs.simpletext.SimpleTextPostingsFormat;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
-import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.CorruptIndexException;
+import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.LogDocMergePolicy;
+import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.search.IndexSearcher;
@@ -67,7 +70,7 @@ public class TestPerFieldPostingsFormat extends LuceneTestCase {
   private void addDocs(IndexWriter writer, int numDocs) throws IOException {
     for (int i = 0; i < numDocs; i++) {
       Document doc = new Document();
-      doc.add(newField("content", "aaa", TextField.TYPE_UNSTORED));
+      doc.add(newTextField("content", "aaa", Field.Store.NO));
       writer.addDocument(doc);
     }
   }
@@ -75,7 +78,7 @@ public class TestPerFieldPostingsFormat extends LuceneTestCase {
   private void addDocs2(IndexWriter writer, int numDocs) throws IOException {
     for (int i = 0; i < numDocs; i++) {
       Document doc = new Document();
-      doc.add(newField("content", "bbb", TextField.TYPE_UNSTORED));
+      doc.add(newTextField("content", "bbb", Field.Store.NO));
       writer.addDocument(doc);
     }
   }
@@ -83,8 +86,8 @@ public class TestPerFieldPostingsFormat extends LuceneTestCase {
   private void addDocs3(IndexWriter writer, int numDocs) throws IOException {
     for (int i = 0; i < numDocs; i++) {
       Document doc = new Document();
-      doc.add(newField("content", "ccc", TextField.TYPE_UNSTORED));
-      doc.add(newField("id", "" + i, StringField.TYPE_STORED));
+      doc.add(newTextField("content", "ccc", Field.Store.NO));
+      doc.add(newStringField("id", "" + i, Field.Store.YES));
       writer.addDocument(doc);
     }
   }
@@ -96,7 +99,7 @@ public class TestPerFieldPostingsFormat extends LuceneTestCase {
   public void testMergeUnusedPerFieldCodec() throws IOException {
     Directory dir = newDirectory();
     IndexWriterConfig iwconf = newIndexWriterConfig(TEST_VERSION_CURRENT,
-        new MockAnalyzer(random)).setOpenMode(OpenMode.CREATE).setCodec(new MockCodec());
+        new MockAnalyzer(random())).setOpenMode(OpenMode.CREATE).setCodec(new MockCodec());
     IndexWriter writer = newWriter(dir, iwconf);
     addDocs(writer, 10);
     writer.commit();
@@ -123,7 +126,7 @@ public class TestPerFieldPostingsFormat extends LuceneTestCase {
       System.out.println("TEST: make new index");
     }
     IndexWriterConfig iwconf = newIndexWriterConfig(TEST_VERSION_CURRENT,
-             new MockAnalyzer(random)).setOpenMode(OpenMode.CREATE).setCodec(new MockCodec());
+             new MockAnalyzer(random())).setOpenMode(OpenMode.CREATE).setCodec(new MockCodec());
     iwconf.setMaxBufferedDocs(IndexWriterConfig.DISABLE_AUTO_FLUSH);
     //((LogMergePolicy) iwconf.getMergePolicy()).setMergeFactor(10);
     IndexWriter writer = newWriter(dir, iwconf);
@@ -142,7 +145,7 @@ public class TestPerFieldPostingsFormat extends LuceneTestCase {
     assertQuery(new Term("content", "aaa"), dir, 10);
     Lucene40Codec codec = (Lucene40Codec)iwconf.getCodec();
 
-    iwconf = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random))
+    iwconf = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()))
         .setOpenMode(OpenMode.APPEND).setCodec(codec);
     //((LogMergePolicy) iwconf.getMergePolicy()).setUseCompoundFile(false);
     //((LogMergePolicy) iwconf.getMergePolicy()).setMergeFactor(10);
@@ -190,7 +193,7 @@ public class TestPerFieldPostingsFormat extends LuceneTestCase {
     if (VERBOSE) {
       System.out.println("\nTEST: assertQuery " + t);
     }
-    IndexReader reader = IndexReader.open(dir, 1);
+    IndexReader reader = DirectoryReader.open(dir, 1);
     IndexSearcher searcher = newSearcher(reader);
     TopDocs search = searcher.search(new TermQuery(t), num + 10);
     assertEquals(num, search.totalHits);
@@ -234,28 +237,28 @@ public class TestPerFieldPostingsFormat extends LuceneTestCase {
    */
   @Test
   public void testStressPerFieldCodec() throws IOException {
-    Directory dir = newDirectory(random);
+    Directory dir = newDirectory(random());
     final int docsPerRound = 97;
     int numRounds = atLeast(1);
     for (int i = 0; i < numRounds; i++) {
-      int num = _TestUtil.nextInt(random, 30, 60);
-      IndexWriterConfig config = newIndexWriterConfig(random,
-          TEST_VERSION_CURRENT, new MockAnalyzer(random));
+      int num = _TestUtil.nextInt(random(), 30, 60);
+      IndexWriterConfig config = newIndexWriterConfig(random(),
+          TEST_VERSION_CURRENT, new MockAnalyzer(random()));
       config.setOpenMode(OpenMode.CREATE_OR_APPEND);
       IndexWriter writer = newWriter(dir, config);
       for (int j = 0; j < docsPerRound; j++) {
         final Document doc = new Document();
         for (int k = 0; k < num; k++) {
-          FieldType customType = new FieldType(TextField.TYPE_UNSTORED);
-          customType.setTokenized(random.nextBoolean());
-          customType.setOmitNorms(random.nextBoolean());
+          FieldType customType = new FieldType(TextField.TYPE_NOT_STORED);
+          customType.setTokenized(random().nextBoolean());
+          customType.setOmitNorms(random().nextBoolean());
           Field field = newField("" + k, _TestUtil
-              .randomRealisticUnicodeString(random, 128), customType);
+              .randomRealisticUnicodeString(random(), 128), customType);
           doc.add(field);
         }
         writer.addDocument(doc);
       }
-      if (random.nextBoolean()) {
+      if (random().nextBoolean()) {
         writer.forceMerge(1);
       }
       writer.commit();
@@ -263,5 +266,61 @@ public class TestPerFieldPostingsFormat extends LuceneTestCase {
       writer.close();
     }
     dir.close();
+  }
+  
+  public void testSameCodecDifferentInstance() throws Exception {
+    Codec codec = new Lucene40Codec() {
+      @Override
+      public PostingsFormat getPostingsFormatForField(String field) {
+        if ("id".equals(field)) {
+          return new Pulsing40PostingsFormat(1);
+        } else if ("date".equals(field)) {
+          return new Pulsing40PostingsFormat(1);
+        } else {
+          return super.getPostingsFormatForField(field);
+        }
+      }
+    };
+    doTestMixedPostings(codec);
+  }
+  
+  public void testSameCodecDifferentParams() throws Exception {
+    Codec codec = new Lucene40Codec() {
+      @Override
+      public PostingsFormat getPostingsFormatForField(String field) {
+        if ("id".equals(field)) {
+          return new Pulsing40PostingsFormat(1);
+        } else if ("date".equals(field)) {
+          return new Pulsing40PostingsFormat(2);
+        } else {
+          return super.getPostingsFormatForField(field);
+        }
+      }
+    };
+    doTestMixedPostings(codec);
+  }
+  
+  private void doTestMixedPostings(Codec codec) throws Exception {
+    Directory dir = newDirectory();
+    IndexWriterConfig iwc = newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()));
+    iwc.setCodec(codec);
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir, iwc);
+    Document doc = new Document();
+    FieldType ft = new FieldType(TextField.TYPE_NOT_STORED);
+    // turn on vectors for the checkindex cross-check
+    ft.setStoreTermVectors(true);
+    ft.setStoreTermVectorOffsets(true);
+    ft.setStoreTermVectorPositions(true);
+    Field idField = new Field("id", "", ft);
+    Field dateField = new Field("date", "", ft);
+    doc.add(idField);
+    doc.add(dateField);
+    for (int i = 0; i < 100; i++) {
+      idField.setStringValue(Integer.toString(random().nextInt(50)));
+      dateField.setStringValue(Integer.toString(random().nextInt(100)));
+      iw.addDocument(doc);
+    }
+    iw.close();
+    dir.close(); // checkindex
   }
 }

@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -137,7 +137,7 @@ public class TestSloppyPhraseQuery extends LuceneTestCase {
     query.setSlop(slop);
 
     Directory ramDir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, ramDir, new MockAnalyzer(random, MockTokenizer.WHITESPACE, false));
+    RandomIndexWriter writer = new RandomIndexWriter(random(), ramDir, new MockAnalyzer(random(), MockTokenizer.WHITESPACE, false));
     writer.addDocument(doc);
 
     IndexReader reader = writer.getReader();
@@ -159,7 +159,7 @@ public class TestSloppyPhraseQuery extends LuceneTestCase {
 
   private static Document makeDocument(String docText) {
     Document doc = new Document();
-    FieldType customType = new FieldType(TextField.TYPE_UNSTORED);
+    FieldType customType = new FieldType(TextField.TYPE_NOT_STORED);
     customType.setOmitNorms(true);
     Field f = new Field("f", docText, customType);
     doc.add(f);
@@ -227,25 +227,25 @@ public class TestSloppyPhraseQuery extends LuceneTestCase {
         return false;
       }
     });
-    QueryUtils.check(random, pq, searcher);
+    QueryUtils.check(random(), pq, searcher);
   }
 
   // LUCENE-3215
   public void testSlopWithHoles() throws Exception {  
     Directory dir = newDirectory();
-    RandomIndexWriter iw = new RandomIndexWriter(random, dir);
-    FieldType customType = new FieldType(TextField.TYPE_UNSTORED);
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir);
+    FieldType customType = new FieldType(TextField.TYPE_NOT_STORED);
     customType.setOmitNorms(true);
     Field f = new Field("lyrics", "", customType);
     Document doc = new Document();
     doc.add(f);
-    f.setValue("drug drug");
+    f.setStringValue("drug drug");
     iw.addDocument(doc);
-    f.setValue("drug druggy drug");
+    f.setStringValue("drug druggy drug");
     iw.addDocument(doc);
-    f.setValue("drug druggy druggy drug");
+    f.setStringValue("drug druggy druggy drug");
     iw.addDocument(doc);
-    f.setValue("drug druggy drug druggy drug");
+    f.setStringValue("drug druggy drug druggy drug");
     iw.addDocument(doc);
     IndexReader ir = iw.getReader();
     iw.close();
@@ -270,9 +270,9 @@ public class TestSloppyPhraseQuery extends LuceneTestCase {
     String document = "drug druggy drug drug drug";
     
     Directory dir = newDirectory();
-    RandomIndexWriter iw = new RandomIndexWriter(random, dir);
+    RandomIndexWriter iw = new RandomIndexWriter(random(), dir);
     Document doc = new Document();
-    doc.add(newField("lyrics", document, new FieldType(TextField.TYPE_UNSTORED)));
+    doc.add(newField("lyrics", document, new FieldType(TextField.TYPE_NOT_STORED)));
     iw.addDocument(doc);
     IndexReader ir = iw.getReader();
     iw.close();
@@ -323,9 +323,9 @@ public class TestSloppyPhraseQuery extends LuceneTestCase {
         
      Directory dir = newDirectory();
 
-     RandomIndexWriter iw = new RandomIndexWriter(random, dir);
+     RandomIndexWriter iw = new RandomIndexWriter(random(), dir);
      Document doc = new Document();
-     doc.add(newField("lyrics", document, new FieldType(TextField.TYPE_UNSTORED)));
+     doc.add(newField("lyrics", document, new FieldType(TextField.TYPE_NOT_STORED)));
      iw.addDocument(doc);
      IndexReader ir = iw.getReader();
      iw.close();

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -40,9 +40,10 @@ import java.io.IOException;
  * 
  * @see TrieFloatField
  */
-public class FloatField extends FieldType {
+public class FloatField extends PrimitiveFieldType {
   @Override
   protected void init(IndexSchema schema, Map<String,String> args) {
+    super.init(schema, args);
     restrictProps(SORT_MISSING_FIRST | SORT_MISSING_LAST);
   }
 

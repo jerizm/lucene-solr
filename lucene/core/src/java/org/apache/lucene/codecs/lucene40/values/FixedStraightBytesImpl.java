@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.lucene40.values;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,10 +22,12 @@ import java.io.IOException;
 import org.apache.lucene.codecs.lucene40.values.Bytes.BytesReaderBase;
 import org.apache.lucene.codecs.lucene40.values.Bytes.BytesSourceBase;
 import org.apache.lucene.codecs.lucene40.values.Bytes.BytesWriterBase;
+import org.apache.lucene.document.StraightBytesDocValuesField;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.index.DocValues.Source;
 import org.apache.lucene.index.DocValues.Type;
 import org.apache.lucene.index.DocValues;
+import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
@@ -52,21 +54,29 @@ class FixedStraightBytesImpl {
   static final int VERSION_CURRENT = VERSION_START;
   
   static abstract class FixedBytesWriterBase extends BytesWriterBase {
+    protected final StraightBytesDocValuesField bytesSpareField = new StraightBytesDocValuesField("", new BytesRef(), true);
     protected int lastDocID = -1;
     // start at -1 if the first added value is > 0
     protected int size = -1;
     private final int byteBlockSize = BYTE_BLOCK_SIZE;
     private final ByteBlockPool pool;
 
-    protected FixedBytesWriterBase(Directory dir, String id, String codecName,
+    protected FixedBytesWriterBase(Directory dir, String id, String codecNameDat,
         int version, Counter bytesUsed, IOContext context) throws IOException {
-      super(dir, id, codecName, version, bytesUsed, context);
+     this(dir, id, codecNameDat, version, bytesUsed, context, Type.BYTES_FIXED_STRAIGHT);
+    }
+    
+    protected FixedBytesWriterBase(Directory dir, String id, String codecNameDat,
+        int version, Counter bytesUsed, IOContext context, Type type) throws IOException {
+      super(dir, id, null, codecNameDat, version, bytesUsed, context, type);
       pool = new ByteBlockPool(new DirectTrackingAllocator(bytesUsed));
       pool.nextBuffer();
     }
     
     @Override
-    protected void add(int docID, BytesRef bytes) throws IOException {
+    public void add(int docID, IndexableField value) throws IOException {
+      final BytesRef bytes = value.binaryValue();
+      assert bytes != null;
       assert lastDocID < docID;
 
       if (size == -1) {
@@ -119,6 +129,11 @@ class FixedStraightBytesImpl {
         out.writeBytes(zeros, zeros.length);
       }
     }
+    
+    @Override
+    public int getValueSize() {
+      return size;
+    }
   }
 
   static class Writer extends FixedBytesWriterBase {
@@ -129,8 +144,8 @@ class FixedStraightBytesImpl {
       super(dir, id, CODEC_NAME, VERSION_CURRENT, bytesUsed, context);
     }
 
-    public Writer(Directory dir, String id, String codecName, int version, Counter bytesUsed, IOContext context) throws IOException {
-      super(dir, id, codecName, version, bytesUsed, context);
+    public Writer(Directory dir, String id, String codecNameDat, int version, Counter bytesUsed, IOContext context) throws IOException {
+      super(dir, id, codecNameDat, version, bytesUsed, context);
     }
 
 
@@ -258,8 +273,8 @@ class FixedStraightBytesImpl {
       this(dir, id, CODEC_NAME, VERSION_CURRENT, maxDoc, context, Type.BYTES_FIXED_STRAIGHT);
     }
 
-    protected FixedStraightReader(Directory dir, String id, String codec, int version, int maxDoc, IOContext context, Type type) throws IOException {
-      super(dir, id, codec, version, false, context, type);
+    protected FixedStraightReader(Directory dir, String id, String codecNameDat, int version, int maxDoc, IOContext context, Type type) throws IOException {
+      super(dir, id, null, codecNameDat, version, false, context, type);
       size = datIn.readInt();
       this.maxDoc = maxDoc;
     }
@@ -277,7 +292,7 @@ class FixedStraightBytesImpl {
    
     @Override
     public Source getDirectSource() throws IOException {
-      return new DirectFixedStraightSource(cloneData(), size, type());
+      return new DirectFixedStraightSource(cloneData(), size, getType());
     }
     
     @Override
@@ -332,7 +347,7 @@ class FixedStraightBytesImpl {
 
     @Override
     public BytesRef getBytes(int docID, BytesRef bytesRef) {
-      return data.fillSlice(bytesRef, docID * size, size);
+      return data.fillSlice(bytesRef, size * ((long) docID), size);
     }
   }
   
@@ -346,7 +361,7 @@ class FixedStraightBytesImpl {
 
     @Override
     protected int position(int docID) throws IOException {
-      data.seek(baseOffset + size * docID);
+      data.seek(baseOffset + size * ((long) docID));
       return size;
     }
 

@@ -32,9 +32,22 @@
   <name>Apache Solr Core</name>
   <description>Apache Solr Core</description>
   <properties>
-    <module-directory>solr</module-directory>
-    <build-directory>../build/solr-maven</build-directory>
+    <module-directory>solr/core</module-directory>
+    <top-level>../../..</top-level>
+    <module-path>${top-level}/${module-directory}</module-path>
+    <surefire-top-level>${top-level}/../..</surefire-top-level>
   </properties>
+  <scm>
+    <connection>
+      scm:svn:http://svn.apache.org/repos/asf/lucene/dev/trunk/${module-directory}
+    </connection>
+    <developerConnection>
+      scm:svn:https://svn.apache.org/repos/asf/lucene/dev/trunk/${module-directory}
+    </developerConnection>
+    <url>
+      http://svn.apache.org/viewvc/lucene/dev/trunk/${module-directory}
+    </url>
+  </scm>
   <dependencies>
     <dependency>
       <!-- lucene-test-framework dependency must be declared before lucene-core -->
@@ -51,16 +64,6 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>${project.groupId}</groupId>
-      <artifactId>solr-commons-csv</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>${project.groupId}</groupId>
-      <artifactId>solr-noggit</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
       <groupId>org.apache.lucene</groupId>
       <artifactId>lucene-core</artifactId>
       <version>${project.version}</version>
@@ -73,6 +76,11 @@
     <dependency>
       <groupId>org.apache.lucene</groupId>
       <artifactId>lucene-analyzers-kuromoji</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.lucene</groupId>
+      <artifactId>lucene-analyzers-morfologik</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -135,18 +143,16 @@
       <artifactId>commons-fileupload</artifactId>
     </dependency>
     <dependency>
-      <groupId>commons-httpclient</groupId>
-      <artifactId>commons-httpclient</artifactId>
-      <exclusions>
-        <exclusion>
-          <groupId>commons-logging</groupId>
-          <artifactId>commons-logging</artifactId>
-        </exclusion>
-      </exclusions>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpmime</artifactId>
     </dependency>
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>jcl-over-slf4j</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-jdk14</artifactId>
     </dependency>
     <dependency>
       <groupId>commons-io</groupId>
@@ -161,19 +167,19 @@
       <artifactId>guava</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.mortbay.jetty</groupId>
-      <artifactId>jetty</artifactId>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-server</artifactId>
       <optional>true</optional> <!-- Only used for tests and one command-line utility: JettySolrRunner -->
     </dependency>
     <dependency>
-      <groupId>org.mortbay.jetty</groupId>
+      <groupId>org.eclipse.jetty</groupId>
       <artifactId>jetty-util</artifactId>
       <optional>true</optional> <!-- Only used for tests and one command-line utility: JettySolrRunner -->
     </dependency>
     <dependency>
-      <groupId>org.mortbay.jetty</groupId>
-      <artifactId>jsp-2.1-jetty</artifactId>
-      <scope>test</scope>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-webapp</artifactId>
+      <optional>true</optional> <!-- Only used for tests and one command-line utility: JettySolrRunner -->
     </dependency>
     <dependency>
       <groupId>org.codehaus.woodstox</groupId>
@@ -189,23 +195,40 @@
     <dependency>
       <groupId>javax.servlet</groupId>
       <artifactId>servlet-api</artifactId>
-      <!-- compile scope; solr-core is a jar not a war -->
+      <!-- SOLR-3263: Provided scope is required to avoid jar signing conflicts -->
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.easymock</groupId>
       <artifactId>easymock</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>log4j-over-slf4j</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpclient</artifactId>
+      <exclusions>
+        <exclusion>
+          <groupId>commons-logging</groupId>
+          <artifactId>commons-logging</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpmime</artifactId>
+    </dependency>
   </dependencies>
   <build>
-    <directory>${build-directory}</directory>
-    <outputDirectory>${build-directory}/classes/java</outputDirectory>
-    <testOutputDirectory>${build-directory}/classes/test</testOutputDirectory>
-    <sourceDirectory>src/java</sourceDirectory>
-    <testSourceDirectory>src/test</testSourceDirectory>
+    <sourceDirectory>${module-path}/src/java</sourceDirectory>
+    <testSourceDirectory>${module-path}/src/test</testSourceDirectory>
     <testResources>
       <testResource>
-        <directory>src/test-files</directory>
+        <directory>${module-path}/src/test-files</directory>
       </testResource>
       <testResource>
         <directory>${project.build.testSourceDirectory}</directory>
@@ -214,7 +237,7 @@
         </excludes>
       </testResource>
       <testResource>
-        <directory>../solrj/src/test-files</directory>
+        <directory>${top-level}/solr/solrj/src/test-files</directory>
       </testResource>
     </testResources>
     <plugins>
@@ -223,7 +246,7 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
           <systemPropertyVariables>
-            <java.util.logging.config.file>../../../testlogging.properties</java.util.logging.config.file>
+            <java.util.logging.config.file>${surefire-top-level}/solr/testlogging.properties</java.util.logging.config.file>
           </systemPropertyVariables>
         </configuration>
       </plugin>
@@ -270,8 +293,8 @@
             </goals>
             <configuration>
               <sources>
-                <source>../test-framework/src/java</source>
-                <source>../solrj/src/test</source>  <!-- solrj tests are run from solr-core -->
+                <source>${top-level}/solr/test-framework/src/java</source>
+                <source>${top-level}/solr/solrj/src/test</source>  <!-- solrj tests are run from solr-core -->
               </sources>
             </configuration>
           </execution>

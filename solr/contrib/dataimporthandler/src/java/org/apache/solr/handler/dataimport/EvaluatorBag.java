@@ -1,5 +1,5 @@
 package org.apache.solr.handler.dataimport;
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,11 +17,12 @@ package org.apache.solr.handler.dataimport;
  */
 
 import org.apache.solr.core.SolrCore;
-import static org.apache.solr.handler.dataimport.DataConfig.CLASS;
-import static org.apache.solr.handler.dataimport.DataConfig.NAME;
 import static org.apache.solr.handler.dataimport.DataImportHandlerException.SEVERE;
 import static org.apache.solr.handler.dataimport.DataImportHandlerException.wrapAndThrow;
 import static org.apache.solr.handler.dataimport.DocBuilder.loadClass;
+import static org.apache.solr.handler.dataimport.config.ConfigNameConstants.CLASS;
+import static org.apache.solr.handler.dataimport.config.ConfigNameConstants.NAME;
+
 import org.apache.solr.util.DateMathParser;
 import org.apache.solr.client.solrj.util.ClientUtils;
 import org.slf4j.Logger;
@@ -190,7 +191,7 @@ public class EvaluatorBag {
     };
   }
 
-  static Map<String, Object> getFunctionsNamespace(final List<Map<String, String>> fn, DocBuilder docBuilder) {
+  static Map<String, Object> getFunctionsNamespace(final List<Map<String, String>> fn, DocBuilder docBuilder, final VariableResolverImpl vr) {
     final Map<String, Evaluator> evaluators = new HashMap<String, Evaluator>();
     evaluators.put(DATE_FORMAT_EVALUATOR, getDateFormatEvaluator());
     evaluators.put(SQL_ESCAPE_EVALUATOR, getSqlEscapingEvaluator());
@@ -217,7 +218,9 @@ public class EvaluatorBag {
         Evaluator evaluator = evaluators.get(fname);
         if (evaluator == null)
           return null;
-        return evaluator.evaluate(m.group(2), Context.CURRENT_CONTEXT.get());
+        ContextImpl ctx = new ContextImpl(null, vr, null, null, null, null, null);
+        String g2 = m.group(2);
+        return evaluator.evaluate(g2, ctx);
       }
 
     };

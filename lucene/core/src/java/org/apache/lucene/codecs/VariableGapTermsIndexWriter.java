@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -37,7 +37,7 @@ import org.apache.lucene.util.fst.Util;
 
 /**
  * Selects index terms according to provided pluggable
- * IndexTermPolicy, and stores them in a prefix trie that's
+ * {@link IndexTermSelector}, and stores them in a prefix trie that's
  * loaded entirely in RAM stored as an FST.  This terms
  * index only supports unsigned byte term sort order
  * (unicode codepoint order when the bytes are UTF8).
@@ -54,14 +54,27 @@ public class VariableGapTermsIndexWriter extends TermsIndexWriterBase {
   final static int VERSION_CURRENT = VERSION_START;
 
   private final List<FSTFieldWriter> fields = new ArrayList<FSTFieldWriter>();
-  private final FieldInfos fieldInfos; // unread
+  
+  @SuppressWarnings("unused") private final FieldInfos fieldInfos; // unread
   private final IndexTermSelector policy;
 
-  /** @lucene.experimental */
+  /** 
+   * Hook for selecting which terms should be placed in the terms index.
+   * <p>
+   * {@link #newField} is called at the start of each new field, and
+   * {@link #isIndexTerm} for each term in that field.
+   * 
+   * @lucene.experimental 
+   */
   public static abstract class IndexTermSelector {
-    // Called sequentially on every term being written,
-    // returning true if this term should be indexed
+    /** 
+     * Called sequentially on every term being written,
+     * returning true if this term should be indexed
+     */
     public abstract boolean isIndexTerm(BytesRef term, TermStats stats);
+    /**
+     * Called when a new field is started.
+     */
     public abstract void newField(FieldInfo fieldInfo);
   }
 
@@ -160,7 +173,7 @@ public class VariableGapTermsIndexWriter extends TermsIndexWriterBase {
   // in the extremes.
 
   public VariableGapTermsIndexWriter(SegmentWriteState state, IndexTermSelector policy) throws IOException {
-    final String indexFileName = IndexFileNames.segmentFileName(state.segmentName, state.segmentSuffix, TERMS_INDEX_EXTENSION);
+    final String indexFileName = IndexFileNames.segmentFileName(state.segmentInfo.name, state.segmentSuffix, TERMS_INDEX_EXTENSION);
     out = state.directory.createOutput(indexFileName, state.context);
     boolean success = false;
     try {
@@ -214,7 +227,6 @@ public class VariableGapTermsIndexWriter extends TermsIndexWriterBase {
     private final long startTermsFilePointer;
 
     final FieldInfo fieldInfo;
-    int numIndexTerms;
     FST<Long> fst;
     final long indexStart;
 

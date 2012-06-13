@@ -1,6 +1,6 @@
 package org.apache.lucene.analysis.tokenattributes;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -40,6 +40,18 @@ public class OffsetAttributeImpl extends AttributeImpl implements OffsetAttribut
   /** Set the starting and ending offset.
     @see #startOffset() and #endOffset()*/
   public void setOffset(int startOffset, int endOffset) {
+
+    // TODO: we could assert that this is set-once, ie,
+    // current values are -1?  Very few token filters should
+    // change offsets once set by the tokenizer... and
+    // tokenizer should call clearAtts before re-using
+    // OffsetAtt
+
+    if (startOffset < 0 || endOffset < startOffset) {
+      throw new IllegalArgumentException("startOffset must be non-negative, and endOffset must be >= startOffset, "
+          + "startOffset=" + startOffset + ",endOffset=" + endOffset);
+    }
+
     this.startOffset = startOffset;
     this.endOffset = endOffset;
   }
@@ -55,6 +67,8 @@ public class OffsetAttributeImpl extends AttributeImpl implements OffsetAttribut
 
   @Override
   public void clear() {
+    // TODO: we could use -1 as default here?  Then we can
+    // assert in setOffset...
     startOffset = 0;
     endOffset = 0;
   }

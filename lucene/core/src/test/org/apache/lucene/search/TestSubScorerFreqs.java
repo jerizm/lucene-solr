@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -40,16 +40,16 @@ public class TestSubScorerFreqs extends LuceneTestCase {
   public static void makeIndex() throws Exception {
     dir = new RAMDirectory();
     RandomIndexWriter w = new RandomIndexWriter(
-                                                random, dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setMergePolicy(newLogMergePolicy()));
+        random(), dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMergePolicy(newLogMergePolicy()));
     // make sure we have more than one segment occationally
     int num = atLeast(31);
     for (int i = 0; i < num; i++) {
       Document doc = new Document();
-      doc.add(newField("f", "a b c d b c d c d d", TextField.TYPE_UNSTORED));
+      doc.add(newTextField("f", "a b c d b c d c d d", Field.Store.NO));
       w.addDocument(doc);
 
       doc = new Document();
-      doc.add(newField("f", "a b c d", TextField.TYPE_UNSTORED));
+      doc.add(newTextField("f", "a b c d", Field.Store.NO));
       w.addDocument(doc);
     }
 
@@ -161,7 +161,7 @@ public class TestSubScorerFreqs extends LuceneTestCase {
     query.add(inner, Occur.MUST);
     query.add(aQuery, Occur.MUST);
     query.add(dQuery, Occur.MUST);
-    Set<String>[] occurList = new Set[] {
+    @SuppressWarnings({"rawtypes","unchecked"}) Set<String>[] occurList = new Set[] {
         Collections.singleton(Occur.MUST.toString()), 
         new HashSet<String>(Arrays.asList(Occur.MUST.toString(), Occur.SHOULD.toString()))
     };

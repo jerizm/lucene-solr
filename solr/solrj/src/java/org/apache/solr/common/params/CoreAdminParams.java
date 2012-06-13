@@ -1,5 +1,5 @@
 /**
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -69,11 +69,14 @@ public interface CoreAdminParams
   /** The shard id in solr cloud */
   public final static String SHARD = "shard";
   
+  public static final String ROLES = "roles";
+  
   /** Prefix for core property name=value pair **/
   public final static String PROPERTY_PREFIX = "property.";
 
   /** If you unload a core, delete the index too */
   public final static String DELETE_INDEX = "deleteIndex";
+
 
   public enum CoreAdminAction {
     STATUS,  
@@ -84,8 +87,6 @@ public interface CoreAdminParams
     PERSIST,
     SWAP,
     RENAME,
-    @Deprecated
-    ALIAS,
     MERGEINDEXES,
     PREPRECOVERY, 
     REQUESTRECOVERY, 

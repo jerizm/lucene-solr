@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,13 +22,13 @@ import java.util.concurrent.ExecutorService;
 
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.store.MockDirectoryWrapper;
-import org.apache.lucene.util.LuceneTestCase.UseNoMemoryExpensiveCodec;
+import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
 
 // TODO
 //   - mix in forceMerge, addIndexes
 //   - randomoly mix in non-congruent docs
 
-@UseNoMemoryExpensiveCodec
+@SuppressCodecs({ "SimpleText", "Memory" })
 public class TestNRTThreads extends ThreadedIndexingAndSearchingTestCase {
   
   @Override
@@ -36,10 +36,10 @@ public class TestNRTThreads extends ThreadedIndexingAndSearchingTestCase {
 
     boolean anyOpenDelFiles = false;
 
-    DirectoryReader r = IndexReader.open(writer, true);
+    DirectoryReader r = DirectoryReader.open(writer, true);
 
     while (System.currentTimeMillis() < stopTime && !failed.get()) {
-      if (random.nextBoolean()) {
+      if (random().nextBoolean()) {
         if (VERBOSE) {
           System.out.println("TEST: now reopen r=" + r);
         }
@@ -63,7 +63,7 @@ public class TestNRTThreads extends ThreadedIndexingAndSearchingTestCase {
         if (VERBOSE) {
           System.out.println("TEST: now open");
         }
-        r = IndexReader.open(writer, true);
+        r = DirectoryReader.open(writer, true);
       }
       if (VERBOSE) {
         System.out.println("TEST: got new reader=" + r);
@@ -106,11 +106,11 @@ public class TestNRTThreads extends ThreadedIndexingAndSearchingTestCase {
   @Override
   protected IndexSearcher getFinalSearcher() throws Exception {
     final IndexReader r2;
-    if (random.nextBoolean()) {
+    if (random().nextBoolean()) {
       r2 = writer.getReader();
     } else {
       writer.commit();
-      r2 = IndexReader.open(dir);
+      r2 = DirectoryReader.open(dir);
     }
     return newSearcher(r2);
   }

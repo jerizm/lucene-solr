@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,13 +20,12 @@ import java.util.Random;
 
 /**
  * 
- * A {@link DocumentsWriterPerThreadPool} that selects thread states at random.
+ * A <code>DocumentsWriterPerThreadPool<code> that selects thread states at random.
  * 
  * @lucene.internal
  * @lucene.experimental
  */
-public class RandomDocumentsWriterPerThreadPool extends
-    DocumentsWriterPerThreadPool {
+class RandomDocumentsWriterPerThreadPool extends DocumentsWriterPerThreadPool {
   private final ThreadState[] states;
   private final Random random;
   private final int maxRetry;
@@ -40,7 +39,7 @@ public class RandomDocumentsWriterPerThreadPool extends
   }
 
   @Override
-  public ThreadState getAndLock(Thread requestingThread,
+  ThreadState getAndLock(Thread requestingThread,
       DocumentsWriter documentsWriter) {
     ThreadState threadState = null;
     if (getActiveThreadState() == 0) {

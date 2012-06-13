@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -68,6 +68,7 @@ public final class SlowCompositeReaderWrapper extends AtomicReader {
     in = reader;
     fields = MultiFields.getFields(in);
     liveDocs = MultiFields.getLiveDocs(in);
+    in.registerParentReader(this);
   }
 
   @Override
@@ -78,7 +79,6 @@ public final class SlowCompositeReaderWrapper extends AtomicReader {
   @Override
   public Fields fields() throws IOException {
     ensureOpen();
-    in.ensureOpen(); // as we cached the fields, we better check the original reader
     return fields;
   }
 
@@ -127,7 +127,6 @@ public final class SlowCompositeReaderWrapper extends AtomicReader {
   @Override
   public Bits getLiveDocs() {
     ensureOpen();
-    in.ensureOpen(); // as we cached the liveDocs, we better check the original reader
     return liveDocs;
   }
 

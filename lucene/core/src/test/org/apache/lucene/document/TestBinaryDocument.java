@@ -7,7 +7,7 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -51,7 +51,7 @@ public class TestBinaryDocument extends LuceneTestCase {
     
     /** add the doc to a ram index */
     Directory dir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir);
     writer.addDocument(doc);
     
     /** open a reader and fetch the document */ 
@@ -85,7 +85,7 @@ public class TestBinaryDocument extends LuceneTestCase {
     
     /** add the doc to a ram index */
     Directory dir = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, dir);
+    RandomIndexWriter writer = new RandomIndexWriter(random(), dir);
     writer.addDocument(doc);
     
     /** open a reader and fetch the document */ 

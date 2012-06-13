@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Random;
 
 import org.apache.lucene.analysis.MockAnalyzer;
+import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.store.RAMDirectory;
@@ -36,9 +37,9 @@ import org.apache.lucene.util._TestUtil;
 public class TestPerSegmentDeletes extends LuceneTestCase {
   public void testDeletes1() throws Exception {
     //IndexWriter.debug2 = System.out;
-    Directory dir = new MockDirectoryWrapper(new Random(random.nextLong()), new RAMDirectory());
+    Directory dir = new MockDirectoryWrapper(new Random(random().nextLong()), new RAMDirectory());
     IndexWriterConfig iwc = new IndexWriterConfig(TEST_VERSION_CURRENT,
-        new MockAnalyzer(random));
+        new MockAnalyzer(random()));
     iwc.setMergeScheduler(new SerialMergeScheduler());
     iwc.setMaxBufferedDocs(5000);
     iwc.setRAMBufferSizeMB(100);
@@ -85,6 +86,7 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
     // which should apply the delete id:2
     writer.deleteDocuments(new Term("id", "2"));
     writer.flush(false, false);
+    fsmp = (RangeMergePolicy) writer.getConfig().getMergePolicy();
     fsmp.doMerge = true;
     fsmp.start = 0;
     fsmp.length = 2;
@@ -205,9 +207,9 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
     //System.out.println("segdels4:" + writer.docWriter.deletesToString());
   }
 
-  boolean segThere(SegmentInfo info, SegmentInfos infos) {
-    for (SegmentInfo si : infos) {
-      if (si.name.equals(info.name)) return true;
+  boolean segThere(SegmentInfoPerCommit info, SegmentInfos infos) {
+    for (SegmentInfoPerCommit si : infos) {
+      if (si.info.name.equals(info.info.name)) return true;
     }
     return false;
   }
@@ -219,13 +221,13 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
     }
   }
 
-  public static int[] toDocsArray(Term term, Bits bits, IndexReader reader)
+  public int[] toDocsArray(Term term, Bits bits, IndexReader reader)
       throws IOException {
     Fields fields = MultiFields.getFields(reader);
     Terms cterms = fields.terms(term.field);
     TermsEnum ctermsEnum = cterms.iterator(null);
     if (ctermsEnum.seekExact(new BytesRef(term.text()), false)) {
-      DocsEnum docsEnum = _TestUtil.docs(random, ctermsEnum, bits, null, false);
+      DocsEnum docsEnum = _TestUtil.docs(random(), ctermsEnum, bits, null, false);
       return toArray(docsEnum);
     }
     return null;
@@ -233,7 +235,7 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
 
   public static int[] toArray(DocsEnum docsEnum) throws IOException {
     List<Integer> docs = new ArrayList<Integer>();
-    while (docsEnum.nextDoc() != DocsEnum.NO_MORE_DOCS) {
+    while (docsEnum.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
       int docID = docsEnum.docID();
       docs.add(docID);
     }
@@ -269,7 +271,7 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
 
     @Override
     public MergeSpecification findForcedMerges(SegmentInfos segmentInfos,
-        int maxSegmentCount, Map<SegmentInfo,Boolean> segmentsToMerge)
+        int maxSegmentCount, Map<SegmentInfoPerCommit,Boolean> segmentsToMerge)
         throws CorruptIndexException, IOException {
       return null;
     }
@@ -281,7 +283,7 @@ public class TestPerSegmentDeletes extends LuceneTestCase {
     }
 
     @Override
-    public boolean useCompoundFile(SegmentInfos segments, SegmentInfo newSegment) {
+    public boolean useCompoundFile(SegmentInfos segments, SegmentInfoPerCommit newSegment) {
       return useCompoundFile;
     }
   }

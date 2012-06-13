@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,8 +22,11 @@ import java.util.Comparator;
 import java.util.LinkedList;
 
 import org.apache.lucene.analysis.NumericTokenStream; // for javadocs
-import org.apache.lucene.document.NumericField; // for javadocs
-import org.apache.lucene.document.NumericField.DataType;
+import org.apache.lucene.document.DoubleField; // for javadocs
+import org.apache.lucene.document.FloatField; // for javadocs
+import org.apache.lucene.document.IntField; // for javadocs
+import org.apache.lucene.document.LongField; // for javadocs
+import org.apache.lucene.document.FieldType.NumericType;
 import org.apache.lucene.index.FilteredTermsEnum;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
@@ -31,11 +34,13 @@ import org.apache.lucene.util.AttributeSource;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.NumericUtils;
 import org.apache.lucene.util.ToStringUtils;
+import org.apache.lucene.index.Term; // for javadocs
 
 /**
  * <p>A {@link Query} that matches numeric values within a
  * specified range.  To use this, you must first index the
- * numeric values using {@link NumericField} (expert: {@link
+ * numeric values using {@link IntField}, {@link
+ * FloatField}, {@link LongField} or {@link DoubleField} (expert: {@link
  * NumericTokenStream}).  If your terms are instead textual,
  * you should use {@link TermRangeQuery}.  {@link
  * NumericRangeFilter} is the filter equivalent of this
@@ -137,7 +142,8 @@ import org.apache.lucene.util.ToStringUtils;
  *  <li>Steps <b>&ge;64</b> for <em>long/double</em> and <b>&ge;32</b> for <em>int/float</em> produces one token
  *  per value in the index and querying is as slow as a conventional {@link TermRangeQuery}. But it can be used
  *  to produce fields, that are solely used for sorting (in this case simply use {@link Integer#MAX_VALUE} as
- *  <code>precisionStep</code>). Using {@link NumericField NumericFields} for sorting
+ *  <code>precisionStep</code>). Using {@link IntField},
+ * {@link LongField}, {@link FloatField} or {@link DoubleField} for sorting
  *  is ideal, because building the field cache is much faster than with text-only numbers.
  *  These fields have one term per value and therefore also work with term enumeration for building distinct lists
  *  (e.g. facets / preselected values to search for).
@@ -155,7 +161,7 @@ import org.apache.lucene.util.ToStringUtils;
  **/
 public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
 
-  private NumericRangeQuery(final String field, final int precisionStep, final DataType dataType,
+  private NumericRangeQuery(final String field, final int precisionStep, final NumericType dataType,
     T min, T max, final boolean minInclusive, final boolean maxInclusive
   ) {
     super(field);
@@ -189,7 +195,7 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
         break;
       default:
         // should never happen
-        throw new IllegalArgumentException("Invalid numeric DataType");
+        throw new IllegalArgumentException("Invalid numeric NumericType");
     }
     
     // shortcut if upper bound == lower bound
@@ -208,7 +214,7 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
   public static NumericRangeQuery<Long> newLongRange(final String field, final int precisionStep,
     Long min, Long max, final boolean minInclusive, final boolean maxInclusive
   ) {
-    return new NumericRangeQuery<Long>(field, precisionStep, DataType.LONG, min, max, minInclusive, maxInclusive);
+    return new NumericRangeQuery<Long>(field, precisionStep, NumericType.LONG, min, max, minInclusive, maxInclusive);
   }
   
   /**
@@ -221,7 +227,7 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
   public static NumericRangeQuery<Long> newLongRange(final String field,
     Long min, Long max, final boolean minInclusive, final boolean maxInclusive
   ) {
-    return new NumericRangeQuery<Long>(field, NumericUtils.PRECISION_STEP_DEFAULT, DataType.LONG, min, max, minInclusive, maxInclusive);
+    return new NumericRangeQuery<Long>(field, NumericUtils.PRECISION_STEP_DEFAULT, NumericType.LONG, min, max, minInclusive, maxInclusive);
   }
   
   /**
@@ -234,7 +240,7 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
   public static NumericRangeQuery<Integer> newIntRange(final String field, final int precisionStep,
     Integer min, Integer max, final boolean minInclusive, final boolean maxInclusive
   ) {
-    return new NumericRangeQuery<Integer>(field, precisionStep, DataType.INT, min, max, minInclusive, maxInclusive);
+    return new NumericRangeQuery<Integer>(field, precisionStep, NumericType.INT, min, max, minInclusive, maxInclusive);
   }
   
   /**
@@ -247,7 +253,7 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
   public static NumericRangeQuery<Integer> newIntRange(final String field,
     Integer min, Integer max, final boolean minInclusive, final boolean maxInclusive
   ) {
-    return new NumericRangeQuery<Integer>(field, NumericUtils.PRECISION_STEP_DEFAULT, DataType.INT, min, max, minInclusive, maxInclusive);
+    return new NumericRangeQuery<Integer>(field, NumericUtils.PRECISION_STEP_DEFAULT, NumericType.INT, min, max, minInclusive, maxInclusive);
   }
   
   /**
@@ -262,7 +268,7 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
   public static NumericRangeQuery<Double> newDoubleRange(final String field, final int precisionStep,
     Double min, Double max, final boolean minInclusive, final boolean maxInclusive
   ) {
-    return new NumericRangeQuery<Double>(field, precisionStep, DataType.DOUBLE, min, max, minInclusive, maxInclusive);
+    return new NumericRangeQuery<Double>(field, precisionStep, NumericType.DOUBLE, min, max, minInclusive, maxInclusive);
   }
   
   /**
@@ -277,7 +283,7 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
   public static NumericRangeQuery<Double> newDoubleRange(final String field,
     Double min, Double max, final boolean minInclusive, final boolean maxInclusive
   ) {
-    return new NumericRangeQuery<Double>(field, NumericUtils.PRECISION_STEP_DEFAULT, DataType.DOUBLE, min, max, minInclusive, maxInclusive);
+    return new NumericRangeQuery<Double>(field, NumericUtils.PRECISION_STEP_DEFAULT, NumericType.DOUBLE, min, max, minInclusive, maxInclusive);
   }
   
   /**
@@ -292,7 +298,7 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
   public static NumericRangeQuery<Float> newFloatRange(final String field, final int precisionStep,
     Float min, Float max, final boolean minInclusive, final boolean maxInclusive
   ) {
-    return new NumericRangeQuery<Float>(field, precisionStep, DataType.FLOAT, min, max, minInclusive, maxInclusive);
+    return new NumericRangeQuery<Float>(field, precisionStep, NumericType.FLOAT, min, max, minInclusive, maxInclusive);
   }
   
   /**
@@ -307,7 +313,7 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
   public static NumericRangeQuery<Float> newFloatRange(final String field,
     Float min, Float max, final boolean minInclusive, final boolean maxInclusive
   ) {
-    return new NumericRangeQuery<Float>(field, NumericUtils.PRECISION_STEP_DEFAULT, DataType.FLOAT, min, max, minInclusive, maxInclusive);
+    return new NumericRangeQuery<Float>(field, NumericUtils.PRECISION_STEP_DEFAULT, NumericType.FLOAT, min, max, minInclusive, maxInclusive);
   }
 
   @Override @SuppressWarnings("unchecked")
@@ -347,6 +353,7 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
   }
 
   @Override
+  @SuppressWarnings({"unchecked","rawtypes"})
   public final boolean equals(final Object o) {
     if (o==this) return true;
     if (!super.equals(o))
@@ -377,7 +384,7 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
 
   // members (package private, to be also fast accessible by NumericRangeTermEnum)
   final int precisionStep;
-  final DataType dataType;
+  final NumericType dataType;
   final T min, max;
   final boolean minInclusive,maxInclusive;
 
@@ -415,10 +422,10 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
         case DOUBLE: {
           // lower
           long minBound;
-          if (dataType == DataType.LONG) {
+          if (dataType == NumericType.LONG) {
             minBound = (min == null) ? Long.MIN_VALUE : min.longValue();
           } else {
-            assert dataType == DataType.DOUBLE;
+            assert dataType == NumericType.DOUBLE;
             minBound = (min == null) ? LONG_NEGATIVE_INFINITY
               : NumericUtils.doubleToSortableLong(min.doubleValue());
           }
@@ -429,10 +436,10 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
           
           // upper
           long maxBound;
-          if (dataType == DataType.LONG) {
+          if (dataType == NumericType.LONG) {
             maxBound = (max == null) ? Long.MAX_VALUE : max.longValue();
           } else {
-            assert dataType == DataType.DOUBLE;
+            assert dataType == NumericType.DOUBLE;
             maxBound = (max == null) ? LONG_POSITIVE_INFINITY
               : NumericUtils.doubleToSortableLong(max.doubleValue());
           }
@@ -455,10 +462,10 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
         case FLOAT: {
           // lower
           int minBound;
-          if (dataType == DataType.INT) {
+          if (dataType == NumericType.INT) {
             minBound = (min == null) ? Integer.MIN_VALUE : min.intValue();
           } else {
-            assert dataType == DataType.FLOAT;
+            assert dataType == NumericType.FLOAT;
             minBound = (min == null) ? INT_NEGATIVE_INFINITY
               : NumericUtils.floatToSortableInt(min.floatValue());
           }
@@ -469,10 +476,10 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
           
           // upper
           int maxBound;
-          if (dataType == DataType.INT) {
+          if (dataType == NumericType.INT) {
             maxBound = (max == null) ? Integer.MAX_VALUE : max.intValue();
           } else {
-            assert dataType == DataType.FLOAT;
+            assert dataType == NumericType.FLOAT;
             maxBound = (max == null) ? INT_POSITIVE_INFINITY
               : NumericUtils.floatToSortableInt(max.floatValue());
           }
@@ -493,7 +500,7 @@ public final class NumericRangeQuery<T extends Number> extends MultiTermQuery {
           
         default:
           // should never happen
-          throw new IllegalArgumentException("Invalid numeric DataType");
+          throw new IllegalArgumentException("Invalid NumericType");
       }
 
       termComp = getComparator();

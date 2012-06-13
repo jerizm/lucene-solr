@@ -1,6 +1,6 @@
 package org.apache.lucene.util.automaton;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -69,7 +69,7 @@ public class TestCompiledAutomaton extends LuceneTestCase {
     }
 
     for(int iter=0;iter<100*RANDOM_MULTIPLIER;iter++) {
-      final String s = random.nextInt(10) == 1 ? terms[random.nextInt(terms.length)] : randomString();
+      final String s = random().nextInt(10) == 1 ? terms[random().nextInt(terms.length)] : randomString();
       if (VERBOSE) {
         System.out.println("\nTEST: floor(" + s + ")");
       }
@@ -104,7 +104,7 @@ public class TestCompiledAutomaton extends LuceneTestCase {
 
   private String randomString() {
     // return _TestUtil.randomSimpleString(random);
-    return _TestUtil.randomRealisticUnicodeString(random);
+    return _TestUtil.randomRealisticUnicodeString(random());
   }
 
   public void testBasic() throws Exception {

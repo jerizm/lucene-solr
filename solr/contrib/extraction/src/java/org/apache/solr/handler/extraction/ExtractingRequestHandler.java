@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -26,7 +26,7 @@ import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.update.processor.UpdateRequestProcessor;
 import org.apache.solr.util.plugin.SolrCoreAware;
 import org.apache.solr.handler.ContentStreamHandlerBase;
-import org.apache.solr.handler.ContentStreamLoader;
+import org.apache.solr.handler.loader.ContentStreamLoader;
 import org.apache.tika.config.TikaConfig;
 import org.apache.tika.mime.MimeTypeException;
 import org.slf4j.Logger;
@@ -123,18 +123,8 @@ public class ExtractingRequestHandler extends ContentStreamHandlerBase implement
   }
 
   @Override
-  public String getVersion() {
-    return "$Revision:$";
-  }
-
-  @Override
-  public String getSourceId() {
-    return "$Id:$";
-  }
-
-  @Override
   public String getSource() {
-    return "$URL:$";
+    return "$URL$";
   }
 }
 

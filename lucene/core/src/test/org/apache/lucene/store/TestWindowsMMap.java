@@ -1,6 +1,6 @@
 package org.apache.lucene.store;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,12 +19,13 @@ package org.apache.lucene.store;
 
 import java.io.File;
 
+import org.apache.lucene.document.Field;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util._TestUtil;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.TextField;
+import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -41,17 +42,17 @@ public class TestWindowsMMap extends LuceneTestCase {
   }
   
   private String randomToken() {
-    int tl = 1 + random.nextInt(7);
+    int tl = 1 + random().nextInt(7);
     StringBuilder sb = new StringBuilder();
     for(int cx = 0; cx < tl; cx ++) {
-      int c = random.nextInt(25);
+      int c = random().nextInt(25);
       sb.append(alphabet.substring(c, c+1));
     }
     return sb.toString();
   }
   
   private String randomField() {
-    int fl = 1 + random.nextInt(3);
+    int fl = 1 + random().nextInt(3);
     StringBuilder fb = new StringBuilder();
     for(int fx = 0; fx < fl; fx ++) {
       fb.append(randomToken());
@@ -60,33 +61,30 @@ public class TestWindowsMMap extends LuceneTestCase {
     return fb.toString();
   }
   
-  private final static String storePathname = 
-   _TestUtil.getTempDir("testLuceneMmap").getAbsolutePath();
-
   public void testMmapIndex() throws Exception {
     // sometimes the directory is not cleaned by rmDir, because on Windows it
     // may take some time until the files are finally dereferenced. So clean the
     // directory up front, or otherwise new IndexWriter will fail.
-    File dirPath = new File(storePathname);
+    File dirPath = _TestUtil.getTempDir("testLuceneMmap");
     rmDir(dirPath);
     MMapDirectory dir = new MMapDirectory(dirPath, null);
     
     // plan to add a set of useful stopwords, consider changing some of the
     // interior filters.
-    MockAnalyzer analyzer = new MockAnalyzer(random);
+    MockAnalyzer analyzer = new MockAnalyzer(random());
     // TODO: something about lock timeouts and leftover locks.
     IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig(
         TEST_VERSION_CURRENT, analyzer)
         .setOpenMode(OpenMode.CREATE));
     writer.commit();
-    IndexReader reader = IndexReader.open(dir);
+    IndexReader reader = DirectoryReader.open(dir);
     IndexSearcher searcher = new IndexSearcher(reader);
     
     int num = atLeast(1000);
     for(int dx = 0; dx < num; dx ++) {
       String f = randomField();
       Document doc = new Document();
-      doc.add(newField("data", f, TextField.TYPE_STORED));	
+      doc.add(newTextField("data", f, Field.Store.YES));	
       writer.addDocument(doc);
     }
     

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,12 +17,10 @@
 
 package org.apache.solr.analysis;
 
-import org.apache.solr.common.ResourceLoader;
-import org.apache.solr.util.plugin.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.*;
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.core.StopAnalyzer;
 import org.apache.lucene.analysis.core.StopFilter;
-import org.apache.lucene.analysis.util.CharArraySet;
 
 import java.util.Map;
 import java.io.IOException;
@@ -39,7 +37,7 @@ import java.io.IOException;
  * &lt;/fieldType&gt;</pre>
  *
  */
-public class StopFilterFactory extends BaseTokenFilterFactory implements ResourceLoaderAware {
+public class StopFilterFactory extends TokenFilterFactory implements ResourceLoaderAware {
 
   @Override
   public void init(Map<String,String> args) {
@@ -61,7 +59,7 @@ public class StopFilterFactory extends BaseTokenFilterFactory implements Resourc
           stopWords = getWordSet(loader, stopWordFiles, ignoreCase);
         }
       } catch (IOException e) {
-        throw new RuntimeException(e);
+        throw new InitializationException("IOException thrown while loading stopwords", e);
       }
     } else {
       stopWords = new CharArraySet(luceneMatchVersion, StopAnalyzer.ENGLISH_STOP_WORDS_SET, ignoreCase);

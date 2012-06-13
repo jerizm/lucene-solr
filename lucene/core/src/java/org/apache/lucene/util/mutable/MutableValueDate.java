@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -18,6 +18,10 @@ package org.apache.lucene.util.mutable;
 
 import java.util.Date;
 
+/**
+ * {@link MutableValue} implementation of type 
+ * {@link Date}.
+ */
 public class MutableValueDate extends MutableValueLong {
   @Override
   public Object toObject() {

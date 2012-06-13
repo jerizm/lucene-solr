@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,6 +20,7 @@ package org.apache.lucene.search;
 import org.apache.lucene.util.Attribute;
 import org.apache.lucene.util.AttributeSource; // javadocs only
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.index.Terms; // javadocs only
 
 /** Add this {@link Attribute} to a fresh {@link AttributeSource} before calling
  * {@link MultiTermQuery#getTermsEnum(Terms,AttributeSource)}.

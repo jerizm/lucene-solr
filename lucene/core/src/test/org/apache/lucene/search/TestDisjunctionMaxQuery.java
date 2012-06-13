@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,6 +17,7 @@ package org.apache.lucene.search;
  * limitations under the License.
  */
 
+import org.apache.lucene.document.Field;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
@@ -91,8 +92,8 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
     super.setUp();
     
     index = newDirectory();
-    RandomIndexWriter writer = new RandomIndexWriter(random, index,
-        newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random))
+    RandomIndexWriter writer = new RandomIndexWriter(random(), index,
+        newIndexWriterConfig( TEST_VERSION_CURRENT, new MockAnalyzer(random()))
                                                      .setSimilarity(sim).setMergePolicy(newLogMergePolicy()));
     
     // hed is the most important field, dek is secondary
@@ -103,9 +104,9 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
       d1.add(newField("id", "d1", nonAnalyzedType));// Field.Keyword("id",
                                                                                // "d1"));
       d1
-          .add(newField("hed", "elephant", TextField.TYPE_STORED));// Field.Text("hed", "elephant"));
+          .add(newTextField("hed", "elephant", Field.Store.YES));// Field.Text("hed", "elephant"));
       d1
-          .add(newField("dek", "elephant", TextField.TYPE_STORED));// Field.Text("dek", "elephant"));
+          .add(newTextField("dek", "elephant", Field.Store.YES));// Field.Text("dek", "elephant"));
       writer.addDocument(d1);
     }
     
@@ -115,11 +116,11 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
       d2.add(newField("id", "d2", nonAnalyzedType));// Field.Keyword("id",
                                                                                // "d2"));
       d2
-          .add(newField("hed", "elephant", TextField.TYPE_STORED));// Field.Text("hed", "elephant"));
-      d2.add(newField("dek", "albino", TextField.TYPE_STORED));// Field.Text("dek",
+          .add(newTextField("hed", "elephant", Field.Store.YES));// Field.Text("hed", "elephant"));
+      d2.add(newTextField("dek", "albino", Field.Store.YES));// Field.Text("dek",
                                                                                 // "albino"));
       d2
-          .add(newField("dek", "elephant", TextField.TYPE_STORED));// Field.Text("dek", "elephant"));
+          .add(newTextField("dek", "elephant", Field.Store.YES));// Field.Text("dek", "elephant"));
       writer.addDocument(d2);
     }
     
@@ -128,10 +129,10 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
       Document d3 = new Document();
       d3.add(newField("id", "d3", nonAnalyzedType));// Field.Keyword("id",
                                                                                // "d3"));
-      d3.add(newField("hed", "albino", TextField.TYPE_STORED));// Field.Text("hed",
+      d3.add(newTextField("hed", "albino", Field.Store.YES));// Field.Text("hed",
                                                                                 // "albino"));
       d3
-          .add(newField("hed", "elephant", TextField.TYPE_STORED));// Field.Text("hed", "elephant"));
+          .add(newTextField("hed", "elephant", Field.Store.YES));// Field.Text("hed", "elephant"));
       writer.addDocument(d3);
     }
     
@@ -140,11 +141,11 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
       Document d4 = new Document();
       d4.add(newField("id", "d4", nonAnalyzedType));// Field.Keyword("id",
                                                                                // "d4"));
-      d4.add(newField("hed", "albino", TextField.TYPE_STORED));// Field.Text("hed",
+      d4.add(newTextField("hed", "albino", Field.Store.YES));// Field.Text("hed",
                                                                                 // "albino"));
       d4
           .add(newField("hed", "elephant", nonAnalyzedType));// Field.Text("hed", "elephant"));
-      d4.add(newField("dek", "albino", TextField.TYPE_STORED));// Field.Text("dek",
+      d4.add(newTextField("dek", "albino", Field.Store.YES));// Field.Text("dek",
                                                                                 // "albino"));
       writer.addDocument(d4);
     }
@@ -167,7 +168,7 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
     dq.add(tq("id", "d1"));
     dq.add(tq("dek", "DOES_NOT_EXIST"));
     
-    QueryUtils.check(random, dq, s);
+    QueryUtils.check(random(), dq, s);
     assertTrue(s.getTopReaderContext() instanceof AtomicReaderContext);
     final Weight dw = s.createNormalizedWeight(dq);
     AtomicReaderContext context = (AtomicReaderContext)s.getTopReaderContext();
@@ -184,7 +185,7 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
     dq.add(tq("dek", "albino"));
     dq.add(tq("dek", "DOES_NOT_EXIST"));
     assertTrue(s.getTopReaderContext() instanceof AtomicReaderContext);
-    QueryUtils.check(random, dq, s);
+    QueryUtils.check(random(), dq, s);
     final Weight dw = s.createNormalizedWeight(dq);
     AtomicReaderContext context = (AtomicReaderContext)s.getTopReaderContext();
     final Scorer ds = dw.scorer(context, true, false, context.reader().getLiveDocs());
@@ -198,7 +199,7 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
     DisjunctionMaxQuery q = new DisjunctionMaxQuery(0.0f);
     q.add(tq("hed", "albino"));
     q.add(tq("hed", "elephant"));
-    QueryUtils.check(random, q, s);
+    QueryUtils.check(random(), q, s);
     
     ScoreDoc[] h = s.search(q, null, 1000).scoreDocs;
     
@@ -222,7 +223,7 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
     DisjunctionMaxQuery q = new DisjunctionMaxQuery(0.0f);
     q.add(tq("dek", "albino"));
     q.add(tq("dek", "elephant"));
-    QueryUtils.check(random, q, s);
+    QueryUtils.check(random(), q, s);
     
     ScoreDoc[] h = s.search(q, null, 1000).scoreDocs;
     
@@ -247,7 +248,7 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
     q.add(tq("hed", "elephant"));
     q.add(tq("dek", "albino"));
     q.add(tq("dek", "elephant"));
-    QueryUtils.check(random, q, s);
+    QueryUtils.check(random(), q, s);
     
     ScoreDoc[] h = s.search(q, null, 1000).scoreDocs;
     
@@ -270,7 +271,7 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
     DisjunctionMaxQuery q = new DisjunctionMaxQuery(0.01f);
     q.add(tq("dek", "albino"));
     q.add(tq("dek", "elephant"));
-    QueryUtils.check(random, q, s);
+    QueryUtils.check(random(), q, s);
     
     ScoreDoc[] h = s.search(q, null, 1000).scoreDocs;
     
@@ -298,7 +299,7 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
       q1.add(tq("hed", "albino"));
       q1.add(tq("dek", "albino"));
       q.add(q1, BooleanClause.Occur.MUST);// true,false);
-      QueryUtils.check(random, q1, s);
+      QueryUtils.check(random(), q1, s);
       
     }
     {
@@ -306,10 +307,10 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
       q2.add(tq("hed", "elephant"));
       q2.add(tq("dek", "elephant"));
       q.add(q2, BooleanClause.Occur.MUST);// true,false);
-      QueryUtils.check(random, q2, s);
+      QueryUtils.check(random(), q2, s);
     }
     
-    QueryUtils.check(random, q, s);
+    QueryUtils.check(random(), q, s);
     
     ScoreDoc[] h = s.search(q, null, 1000).scoreDocs;
     
@@ -341,7 +342,7 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
       q2.add(tq("dek", "elephant"));
       q.add(q2, BooleanClause.Occur.SHOULD);// false,false);
     }
-    QueryUtils.check(random, q, s);
+    QueryUtils.check(random(), q, s);
     
     ScoreDoc[] h = s.search(q, null, 1000).scoreDocs;
     
@@ -377,7 +378,7 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
       q2.add(tq("dek", "elephant"));
       q.add(q2, BooleanClause.Occur.SHOULD);// false,false);
     }
-    QueryUtils.check(random, q, s);
+    QueryUtils.check(random(), q, s);
     
     ScoreDoc[] h = s.search(q, null, 1000).scoreDocs;
     
@@ -431,7 +432,7 @@ public class TestDisjunctionMaxQuery extends LuceneTestCase {
       q2.add(tq("dek", "elephant"));
       q.add(q2, BooleanClause.Occur.SHOULD);// false,false);
     }
-    QueryUtils.check(random, q, s);
+    QueryUtils.check(random(), q, s);
     
     ScoreDoc[] h = s.search(q, null, 1000).scoreDocs;
     

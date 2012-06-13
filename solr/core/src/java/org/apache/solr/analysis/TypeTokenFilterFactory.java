@@ -19,10 +19,11 @@ package org.apache.solr.analysis;
 
 import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.core.TypeTokenFilter;
-import org.apache.solr.common.ResourceLoader;
-import org.apache.solr.common.SolrException;
+import org.apache.lucene.analysis.util.InitializationException;
+import org.apache.lucene.analysis.util.ResourceLoader;
 import org.apache.solr.common.util.StrUtils;
-import org.apache.solr.util.plugin.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -40,7 +41,7 @@ import java.util.Set;
  *   &lt;/analyzer&gt;
  * &lt;/fieldType&gt;</pre>
  */
-public class TypeTokenFilterFactory extends BaseTokenFilterFactory implements ResourceLoaderAware {
+public class TypeTokenFilterFactory extends TokenFilterFactory implements ResourceLoaderAware {
 
   @Override
   public void inform(ResourceLoader loader) {
@@ -58,10 +59,10 @@ public class TypeTokenFilterFactory extends BaseTokenFilterFactory implements Re
           }
         }
       } catch (IOException e) {
-        throw new RuntimeException(e);
+        throw new InitializationException("IOException thrown while loading types", e);
       }
     } else {
-      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR, "Missing required parameter: types.");
+      throw new InitializationException("Missing required parameter: types.");
     }
   }
 

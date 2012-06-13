@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.simpletext;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,7 +22,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
@@ -200,13 +199,7 @@ public class SimpleTextTermVectorsReader extends TermVectorsReader {
       offsets = null;
     }
   }
-  
-  public static void files(SegmentInfo info, Set<String> files) throws IOException {
-    if (info.getHasVectors()) {
-      files.add(IndexFileNames.segmentFileName(info.name, "", VECTORS_EXTENSION));
-    }
-  }
-  
+
   private void readLine() throws IOException {
     SimpleTextUtil.readLine(in, scratch);
   }
@@ -257,7 +250,7 @@ public class SimpleTextTermVectorsReader extends TermVectorsReader {
     }
 
     @Override
-    public int getUniqueFieldCount() throws IOException {
+    public int size() throws IOException {
       return fields.size();
     }
   }
@@ -281,7 +274,7 @@ public class SimpleTextTermVectorsReader extends TermVectorsReader {
     }
 
     @Override
-    public long getUniqueTermCount() throws IOException {
+    public long size() throws IOException {
       return terms.size();
     }
 
@@ -387,7 +380,7 @@ public class SimpleTextTermVectorsReader extends TermVectorsReader {
     }
 
     @Override
-    public Comparator<BytesRef> getComparator() throws IOException {
+    public Comparator<BytesRef> getComparator() {
       return BytesRef.getUTF8SortedAsUnicodeComparator();
     }
   }
@@ -400,7 +393,7 @@ public class SimpleTextTermVectorsReader extends TermVectorsReader {
     private Bits liveDocs;
 
     @Override
-    public int freq() {
+    public int freq() throws IOException {
       assert freq != -1;
       return freq;
     }
@@ -447,7 +440,7 @@ public class SimpleTextTermVectorsReader extends TermVectorsReader {
     private int[] endOffsets;
 
     @Override
-    public int freq() {
+    public int freq() throws IOException {
       if (positions != null) {
         return positions.length;
       } else {

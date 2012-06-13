@@ -1,6 +1,6 @@
 package org.apache.lucene.util.automaton;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -31,6 +31,13 @@ import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.UnicodeUtil;
 import org.apache.lucene.util._TestUtil;
 
+/**
+ * Utilities for testing automata.
+ * <p>
+ * Capable of generating random regular expressions,
+ * and automata, and also provides a number of very
+ * basic unoptimized implementations (*slow) for testing.
+ */
 public class AutomatonTestUtil {
   /** Returns random string, including full unicode range. */
   public static String randomRegexp(Random r) {

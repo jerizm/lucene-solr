@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -28,7 +28,7 @@ import org.apache.solr.common.params.UpdateParams;
 import org.apache.solr.common.util.ContentStream;
 import org.apache.solr.common.util.ContentStreamBase;
 import org.apache.solr.common.util.NamedList;
-import org.apache.solr.handler.ContentStreamLoader;
+import org.apache.solr.handler.loader.ContentStreamLoader;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.schema.IndexSchema;
@@ -36,7 +36,9 @@ import org.apache.solr.update.AddUpdateCommand;
 import org.apache.solr.update.processor.UpdateRequestProcessor;
 import org.apache.tika.config.TikaConfig;
 import org.apache.tika.exception.TikaException;
+import org.apache.tika.metadata.HttpHeaders;
 import org.apache.tika.metadata.Metadata;
+import org.apache.tika.metadata.TikaMetadataKeys;
 import org.apache.tika.mime.MediaType;
 import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.DefaultParser;
@@ -132,8 +134,8 @@ public class ExtractingDocumentLoader extends ContentStreamLoader {
    * @throws java.io.IOException
    */
   @Override
-  public void load(SolrQueryRequest req, SolrQueryResponse rsp, ContentStream stream) throws IOException {
-    errHeader = "ExtractingDocumentLoader: " + stream.getSourceInfo();
+  public void load(SolrQueryRequest req, SolrQueryResponse rsp,
+      ContentStream stream, UpdateRequestProcessor processor) throws Exception {
     Parser parser = null;
     String streamType = req.getParams().get(ExtractingParams.STREAM_TYPE, null);
     if (streamType != null) {
@@ -150,11 +152,11 @@ public class ExtractingDocumentLoader extends ContentStreamLoader {
       // then Tika can make use of it in guessing the appropriate MIME type:
       String resourceName = req.getParams().get(ExtractingParams.RESOURCE_NAME, null);
       if (resourceName != null) {
-        metadata.add(Metadata.RESOURCE_NAME_KEY, resourceName);
+        metadata.add(TikaMetadataKeys.RESOURCE_NAME_KEY, resourceName);
       }
       // Provide stream's content type as hint for auto detection
       if(stream.getContentType() != null) {
-        metadata.add(Metadata.CONTENT_TYPE, stream.getContentType());
+        metadata.add(HttpHeaders.CONTENT_TYPE, stream.getContentType());
       }
 
       InputStream inputStream = null;
@@ -167,7 +169,7 @@ public class ExtractingDocumentLoader extends ContentStreamLoader {
         // HtmlParser and TXTParser regard Metadata.CONTENT_ENCODING in metadata
         String charset = ContentStreamBase.getCharsetFromContentType(stream.getContentType());
         if(charset != null){
-          metadata.add(Metadata.CONTENT_ENCODING, charset);
+          metadata.add(HttpHeaders.CONTENT_ENCODING, charset);
         }
 
         String xpathExpr = params.get(ExtractingParams.XPATH_EXPRESSION);
@@ -238,6 +240,4 @@ public class ExtractingDocumentLoader extends ContentStreamLoader {
       throw new SolrException(SolrException.ErrorCode.BAD_REQUEST, "Stream type of " + streamType + " didn't match any known parsers.  Please supply the " + ExtractingParams.STREAM_TYPE + " parameter.");
     }
   }
-
-
 }

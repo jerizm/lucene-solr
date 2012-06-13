@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -27,8 +27,7 @@ import org.apache.solr.common.util.ContentStreamBase;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.ContentStream;
 import org.apache.solr.common.util.StrUtils;
-import org.apache.solr.common.util.SystemIdResolver;
-import org.apache.solr.core.SolrConfig;
+import org.apache.solr.util.SystemIdResolver;
 import org.apache.solr.core.SolrCore;
 import org.apache.solr.core.SolrResourceLoader;
 import org.apache.solr.handler.RequestHandlerBase;
@@ -39,7 +38,6 @@ import org.apache.solr.response.SolrQueryResponse;
 import org.apache.solr.request.SolrRequestHandler;
 import org.apache.solr.update.processor.UpdateRequestProcessor;
 import org.apache.solr.update.processor.UpdateRequestProcessorChain;
-import org.apache.solr.util.SolrPluginUtils;
 import org.apache.solr.util.plugin.SolrCoreAware;
 
 import java.util.*;
@@ -109,7 +107,7 @@ public class DataImportHandler extends RequestHandlerBase implements
         String configLoc = (String) defaults.get("config");
         if (configLoc != null && configLoc.length() != 0) {
           processConfiguration(defaults);
-          final InputSource is = new InputSource(core.getResourceLoader().openConfig(configLoc));
+          final InputSource is = new InputSource(core.getResourceLoader().openResource(configLoc));
           is.setSystemId(SystemIdResolver.createSystemIdFromResourceName(configLoc));
           importer = new DataImporter(is, core,
                   dataSources, coreScopeSession, myName);
@@ -127,16 +125,21 @@ public class DataImportHandler extends RequestHandlerBase implements
   public void handleRequestBody(SolrQueryRequest req, SolrQueryResponse rsp)
           throws Exception {
     rsp.setHttpCaching(false);
-    SolrParams params = req.getParams();
-    DataImporter.RequestParams requestParams = new DataImporter.RequestParams(getParamsMap(params));
-    String command = requestParams.command;
+    
+    //TODO: figure out why just the first one is OK...
+    ContentStream contentStream = null;
     Iterable<ContentStream> streams = req.getContentStreams();
     if(streams != null){
       for (ContentStream stream : streams) {
-          requestParams.contentStream = stream;
+          contentStream = stream;
           break;
       }
     }
+    SolrParams params = req.getParams();
+    RequestInfo requestParams = new RequestInfo(getParamsMap(params), contentStream);
+    String command = requestParams.getCommand();
+   
+    
     if (DataImporter.SHOW_CONF_CMD.equals(command)) {
       // Modify incoming request params to add wt=raw
       ModifiableSolrParams rawParams = new ModifiableSolrParams(req.getParams());
@@ -156,13 +159,13 @@ public class DataImportHandler extends RequestHandlerBase implements
     if (command != null)
       rsp.add("command", command);
 
-    if (requestParams.debug && (importer == null || !importer.isBusy())) {
+    if (requestParams.isDebug() && (importer == null || !importer.isBusy())) {
       // Reload the data-config.xml
       importer = null;
-      if (requestParams.dataConfig != null) {
+      if (requestParams.getDataConfig() != null) {
         try {
           processConfiguration((NamedList) initArgs.get("defaults"));
-          importer = new DataImporter(new InputSource(new StringReader(requestParams.dataConfig)), req.getCore()
+          importer = new DataImporter(new InputSource(new StringReader(requestParams.getDataConfig())), req.getCore()
                   , dataSources, coreScopeSession, myName);
         } catch (RuntimeException e) {
           rsp.add("exception", DebugLogger.getStacktraceString(e));
@@ -196,23 +199,21 @@ public class DataImportHandler extends RequestHandlerBase implements
         SolrResourceLoader loader = req.getCore().getResourceLoader();
         SolrWriter sw = getSolrWriter(processor, loader, requestParams, req);
         
-        if (requestParams.debug) {
+        if (requestParams.isDebug()) {
           if (debugEnabled) {
             // Synchronous request for the debug mode
             importer.runCmd(requestParams, sw);
             rsp.add("mode", "debug");
-            rsp.add("documents", requestParams.debugDocuments);
-            if (requestParams.debugVerboseOutput != null) {
-            	rsp.add("verbose-output", requestParams.debugVerboseOutput);
+            rsp.add("documents", requestParams.getDebugInfo().debugDocuments);
+            if (requestParams.getDebugInfo().debugVerboseOutput != null) {
+            	rsp.add("verbose-output", requestParams.getDebugInfo().debugVerboseOutput);
             }
-            requestParams.debugDocuments = new ArrayList<SolrInputDocument>(0);
-            requestParams.debugVerboseOutput = null;
           } else {
             message = DataImporter.MSG.DEBUG_NOT_ENABLED;
           }
         } else {
           // Asynchronous request for normal mode
-          if(requestParams.contentStream == null && !requestParams.syncMode){
+          if(requestParams.getContentStream() == null && !requestParams.isSyncMode()){
             importer.runAsync(requestParams, sw);
           } else {
             importer.runCmd(requestParams, sw);
@@ -278,7 +279,7 @@ public class DataImportHandler extends RequestHandlerBase implements
   }
 
   private SolrWriter getSolrWriter(final UpdateRequestProcessor processor,
-                                   final SolrResourceLoader loader, final DataImporter.RequestParams requestParams, SolrQueryRequest req) {
+                                   final SolrResourceLoader loader, final RequestInfo requestParams, SolrQueryRequest req) {
 
     return new SolrWriter(processor, req) {
 
@@ -335,16 +336,6 @@ public class DataImportHandler extends RequestHandlerBase implements
   @Override
   public String getDescription() {
     return DataImporter.MSG.JMX_DESC;
-  }
-
-  @Override
-  public String getSourceId() {
-    return "$Id$";
-  }
-
-  @Override
-  public String getVersion() {
-    return "1.0";
   }
 
   @Override

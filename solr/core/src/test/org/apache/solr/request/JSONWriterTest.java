@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,9 +19,15 @@ package org.apache.solr.request;
 
 import java.io.IOException;
 import java.io.StringWriter;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.apache.solr.SolrTestCaseJ4;
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrDocumentList;
+import org.apache.solr.common.params.CommonParams;
 import org.apache.solr.common.util.NamedList;
+import org.apache.solr.search.ReturnFields;
 import org.apache.solr.response.JSONResponseWriter;
 import org.apache.solr.response.PHPSerializedResponseWriter;
 import org.apache.solr.response.PythonResponseWriter;
@@ -38,7 +44,13 @@ public class JSONWriterTest extends SolrTestCaseJ4 {
   @BeforeClass
   public static void beforeClass() throws Exception {
     initCore("solrconfig.xml","schema.xml");
-  }    
+  }
+
+  private void jsonEq(String expected, String received) {
+    expected = expected.trim();
+    received = received.trim();
+    assertEquals(expected, received);
+  }
   
   @Test
   public void testTypes() throws IOException {
@@ -51,17 +63,17 @@ public class JSONWriterTest extends SolrTestCaseJ4 {
     rsp.add("data2", Double.NEGATIVE_INFINITY);
     rsp.add("data3", Float.POSITIVE_INFINITY);
     w.write(buf, req, rsp);
-    assertEquals(buf.toString(), "{'data1':float('NaN'),'data2':-float('Inf'),'data3':float('Inf')}");
+    jsonEq(buf.toString(), "{'data1':float('NaN'),'data2':-float('Inf'),'data3':float('Inf')}");
 
     w = new RubyResponseWriter();
     buf = new StringWriter();
     w.write(buf, req, rsp);
-    assertEquals(buf.toString(), "{'data1'=>(0.0/0.0),'data2'=>-(1.0/0.0),'data3'=>(1.0/0.0)}");
+    jsonEq(buf.toString(), "{'data1'=>(0.0/0.0),'data2'=>-(1.0/0.0),'data3'=>(1.0/0.0)}");
 
     w = new JSONResponseWriter();
     buf = new StringWriter();
     w.write(buf, req, rsp);
-    assertEquals(buf.toString(), "{\"data1\":\"NaN\",\"data2\":\"-Infinity\",\"data3\":\"Infinity\"}");
+    jsonEq(buf.toString(), "{\"data1\":\"NaN\",\"data2\":\"-Infinity\",\"data3\":\"Infinity\"}");
     req.close();
   }
 
@@ -82,7 +94,47 @@ public class JSONWriterTest extends SolrTestCaseJ4 {
     rsp.add("bytes", "abc".getBytes("UTF-8"));
 
     w.write(buf, req, rsp);
-    assertEquals("{\"nl\":[[\"data1\",\"he\\u2028llo\\u2029!\"],[null,42]],\"byte\":-3,\"short\":-4,\"bytes\":\"YWJj\"}", buf.toString());
+    jsonEq("{\"nl\":[[\"data1\",\"he\\u2028llo\\u2029!\"],[null,42]],\"byte\":-3,\"short\":-4,\"bytes\":\"YWJj\"}", buf.toString());
+    req.close();
+  }
+
+  @Test
+  public void testJSONSolrDocument() throws IOException {
+    SolrQueryRequest req = req(CommonParams.WT,"json",
+                               CommonParams.FL,"id,score");
+    SolrQueryResponse rsp = new SolrQueryResponse();
+    JSONResponseWriter w = new JSONResponseWriter();
+
+    ReturnFields returnFields = new ReturnFields(req);
+    rsp.setReturnFields(returnFields);
+
+    StringWriter buf = new StringWriter();
+
+    SolrDocument solrDoc = new SolrDocument();
+    solrDoc.addField("id", "1");
+    solrDoc.addField("subject", "hello2");
+    solrDoc.addField("title", "hello3");
+    solrDoc.addField("score", "0.7");
+
+    SolrDocumentList list = new SolrDocumentList();
+    list.setNumFound(1);
+    list.setStart(0);
+    list.setMaxScore(0.7f);
+    list.add(solrDoc);
+
+    rsp.add("response", list);
+
+    w.write(buf, req, rsp);
+    String result = buf.toString();
+    assertFalse("response contains unexpected fields: " + result, 
+                result.contains("hello") || 
+                result.contains("\"subject\"") || 
+                result.contains("\"title\""));
+    assertTrue("response doesn't contain expected fields: " + result, 
+               result.contains("\"id\"") &&
+               result.contains("\"score\""));
+
+
     req.close();
   }
   

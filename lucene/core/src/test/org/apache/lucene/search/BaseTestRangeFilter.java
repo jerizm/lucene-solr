@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,7 +23,6 @@ import java.util.Random;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.StringField;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.index.RandomIndexWriter;
@@ -95,10 +94,10 @@ public class BaseTestRangeFilter extends LuceneTestCase {
   @BeforeClass
   public static void beforeClassBaseTestRangeFilter() throws Exception {
     maxId = atLeast(500);
-    signedIndexDir = new TestIndex(random, Integer.MAX_VALUE, Integer.MIN_VALUE, true);
-    unsignedIndexDir = new TestIndex(random, Integer.MAX_VALUE, 0, false);
-    signedIndexReader = build(random, signedIndexDir);
-    unsignedIndexReader = build(random, unsignedIndexDir);
+    signedIndexDir = new TestIndex(random(), Integer.MAX_VALUE, Integer.MIN_VALUE, true);
+    unsignedIndexDir = new TestIndex(random(), Integer.MAX_VALUE, 0, false);
+    signedIndexReader = build(random(), signedIndexDir);
+    unsignedIndexReader = build(random(), unsignedIndexDir);
   }
   
   @AfterClass
@@ -117,9 +116,9 @@ public class BaseTestRangeFilter extends LuceneTestCase {
     /* build an index */
     
     Document doc = new Document();
-    Field idField = newField(random, "id", "", StringField.TYPE_STORED);
-    Field randField = newField(random, "rand", "", StringField.TYPE_STORED);
-    Field bodyField = newField(random, "body", "", StringField.TYPE_UNSTORED);
+    Field idField = newStringField(random, "id", "", Field.Store.YES);
+    Field randField = newStringField(random, "rand", "", Field.Store.YES);
+    Field bodyField = newStringField(random, "body", "", Field.Store.NO);
     doc.add(idField);
     doc.add(randField);
     doc.add(bodyField);
@@ -135,7 +134,7 @@ public class BaseTestRangeFilter extends LuceneTestCase {
       int maxCount = 0;
 
       for (int d = minId; d <= maxId; d++) {
-        idField.setValue(pad(d));
+        idField.setStringValue(pad(d));
         int r = index.allowNegativeRandomInts ? random.nextInt() : random
           .nextInt(Integer.MAX_VALUE);
         if (index.maxR < r) {
@@ -151,8 +150,8 @@ public class BaseTestRangeFilter extends LuceneTestCase {
         } else if (r == index.minR) {
           minCount++;
         }
-        randField.setValue(pad(r));
-        bodyField.setValue("body");
+        randField.setStringValue(pad(r));
+        bodyField.setStringValue("body");
         writer.addDocument(doc);
       }
 

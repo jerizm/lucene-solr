@@ -1,6 +1,6 @@
 package org.apache.lucene.search.spans;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,7 +19,6 @@ package org.apache.lucene.search.spans;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
@@ -41,16 +40,16 @@ public class TestSpanMultiTermQueryWrapper extends LuceneTestCase {
   public void setUp() throws Exception {
     super.setUp();
     directory = newDirectory();
-    RandomIndexWriter iw = new RandomIndexWriter(random, directory);
+    RandomIndexWriter iw = new RandomIndexWriter(random(), directory);
     Document doc = new Document();
-    Field field = newField("field", "", TextField.TYPE_UNSTORED);
+    Field field = newTextField("field", "", Field.Store.NO);
     doc.add(field);
     
-    field.setValue("quick brown fox");
+    field.setStringValue("quick brown fox");
     iw.addDocument(doc);
-    field.setValue("jumps over lazy broun dog");
+    field.setStringValue("jumps over lazy broun dog");
     iw.addDocument(doc);
-    field.setValue("jumps over extremely very lazy broxn dog");
+    field.setStringValue("jumps over extremely very lazy broxn dog");
     iw.addDocument(doc);
     reader = iw.getReader();
     iw.close();
@@ -90,7 +89,7 @@ public class TestSpanMultiTermQueryWrapper extends LuceneTestCase {
   
   public void testFuzzy2() throws Exception {
     // maximum of 1 term expansion
-    FuzzyQuery fq = new FuzzyQuery(new Term("field", "broan"), 1f, 0, 1);
+    FuzzyQuery fq = new FuzzyQuery(new Term("field", "broan"), 1, 0, 1, false);
     SpanQuery sfq = new SpanMultiTermQueryWrapper<FuzzyQuery>(fq);
     // will only match jumps over lazy broun dog
     SpanPositionRangeQuery sprq = new SpanPositionRangeQuery(sfq, 0, 100);

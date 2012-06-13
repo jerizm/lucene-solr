@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -41,9 +41,9 @@ import org.apache.lucene.util._TestUtil;
 
 import static org.apache.lucene.util.LuceneTestCase.TEST_VERSION_CURRENT;
 
-
-
-
+/**
+ * Utility class for sanity-checking queries.
+ */
 public class QueryUtils {
 
   /** Check the types of things query objects should be able to do. */
@@ -53,10 +53,10 @@ public class QueryUtils {
 
   /** check very basic hashCode and equals */
   public static void checkHashEquals(Query q) {
-    Query q2 = (Query)q.clone();
+    Query q2 = q.clone();
     checkEqual(q,q2);
 
-    Query q3 = (Query)q.clone();
+    Query q3 = q.clone();
     q3.setBoost(7.21792348f);
     checkUnequal(q,q3);
 
@@ -114,17 +114,13 @@ public class QueryUtils {
         checkFirstSkipTo(q1,s);
         checkSkipTo(q1,s);
         if (wrap) {
-          IndexSearcher wrapped;
-          check(random, q1, wrapped = wrapUnderlyingReader(random, s, -1), false);
-          purgeFieldCache(wrapped.getIndexReader()); // our wrapping can create insanity otherwise
-          check(random, q1, wrapped = wrapUnderlyingReader(random, s,  0), false);
-          purgeFieldCache(wrapped.getIndexReader()); // our wrapping can create insanity otherwise
-          check(random, q1, wrapped = wrapUnderlyingReader(random, s, +1), false);
-          purgeFieldCache(wrapped.getIndexReader()); // our wrapping can create insanity otherwise
+          check(random, q1, wrapUnderlyingReader(random, s, -1), false);
+          check(random, q1, wrapUnderlyingReader(random, s,  0), false);
+          check(random, q1, wrapUnderlyingReader(random, s, +1), false);
         }
         checkExplanations(q1,s);
         
-        Query q2 = (Query)q1.clone();
+        Query q2 = q1.clone();
         checkEqual(s.rewrite(q1),
                    s.rewrite(q2));
       }
@@ -136,6 +132,27 @@ public class QueryUtils {
   public static void purgeFieldCache(IndexReader r) throws IOException {
     // this is just a hack, to get an atomic reader that contains all subreaders for insanity checks
     FieldCache.DEFAULT.purge(SlowCompositeReaderWrapper.wrap(r));
+  }
+  
+  /** This is a MultiReader that can be used for randomly wrapping other readers
+   * without creating FieldCache insanity.
+   * The trick is to use an opaque/fake cache key. */
+  public static class FCInvisibleMultiReader extends MultiReader {
+    private final Object cacheKey = new Object();
+  
+    public FCInvisibleMultiReader(IndexReader... readers) throws IOException {
+      super(readers);
+    }
+    
+    @Override
+    public Object getCoreCacheKey() {
+      return cacheKey;
+    }
+    
+    @Override
+    public Object getCombinedCoreAndDeletesKey() {
+      return cacheKey;
+    }
   }
 
   /**
@@ -157,16 +174,17 @@ public class QueryUtils {
     IndexReader[] readers = new IndexReader[] {
       edge < 0 ? r : emptyReaders[0],
       emptyReaders[0],
-      new MultiReader(edge < 0 ? emptyReaders[4] : emptyReaders[0],
+      new FCInvisibleMultiReader(edge < 0 ? emptyReaders[4] : emptyReaders[0],
           emptyReaders[0],
           0 == edge ? r : emptyReaders[0]),
       0 < edge ? emptyReaders[0] : emptyReaders[7],
       emptyReaders[0],
-      new MultiReader(0 < edge ? emptyReaders[0] : emptyReaders[5],
+      new FCInvisibleMultiReader(0 < edge ? emptyReaders[0] : emptyReaders[5],
           emptyReaders[0],
           0 < edge ? r : emptyReaders[0])
     };
-    IndexSearcher out = LuceneTestCase.newSearcher(new MultiReader(readers));
+
+    IndexSearcher out = LuceneTestCase.newSearcher(new FCInvisibleMultiReader(readers));
     out.setSimilarity(s.getSimilarity());
     return out;
   }
@@ -305,6 +323,7 @@ public class QueryUtils {
             if (lastReader[0] != null) {
               final AtomicReader previousReader = lastReader[0];
               IndexSearcher indexSearcher = LuceneTestCase.newSearcher(previousReader);
+              indexSearcher.setSimilarity(s.getSimilarity());
               Weight w = indexSearcher.createNormalizedWeight(q);
               AtomicReaderContext ctx = (AtomicReaderContext)indexSearcher.getTopReaderContext();
               Scorer scorer = w.scorer(ctx, true, false, ctx.reader().getLiveDocs());
@@ -331,6 +350,7 @@ public class QueryUtils {
           // previous reader, hits NO_MORE_DOCS
           final AtomicReader previousReader = lastReader[0];
           IndexSearcher indexSearcher = LuceneTestCase.newSearcher(previousReader, false);
+          indexSearcher.setSimilarity(s.getSimilarity());
           Weight w = indexSearcher.createNormalizedWeight(q);
           AtomicReaderContext ctx = previousReader.getTopReaderContext();
           Scorer scorer = w.scorer(ctx, true, false, ctx.reader().getLiveDocs());
@@ -342,8 +362,8 @@ public class QueryUtils {
       }
   }
     
-  // check that first skip on just created scorers always goes to the right doc
-  private static void checkFirstSkipTo(final Query q, final IndexSearcher s) throws IOException {
+  /** check that first skip on just created scorers always goes to the right doc */
+  public static void checkFirstSkipTo(final Query q, final IndexSearcher s) throws IOException {
     //System.out.println("checkFirstSkipTo: "+q);
     final float maxDiff = 1e-3f;
     final int lastDoc[] = {-1};
@@ -390,6 +410,7 @@ public class QueryUtils {
         if (lastReader[0] != null) {
           final AtomicReader previousReader = lastReader[0];
           IndexSearcher indexSearcher = LuceneTestCase.newSearcher(previousReader);
+          indexSearcher.setSimilarity(s.getSimilarity());
           Weight w = indexSearcher.createNormalizedWeight(q);
           Scorer scorer = w.scorer((AtomicReaderContext)indexSearcher.getTopReaderContext(), true, false, previousReader.getLiveDocs());
           if (scorer != null) {
@@ -414,6 +435,7 @@ public class QueryUtils {
       // previous reader, hits NO_MORE_DOCS
       final AtomicReader previousReader = lastReader[0];
       IndexSearcher indexSearcher = LuceneTestCase.newSearcher(previousReader);
+      indexSearcher.setSimilarity(s.getSimilarity());
       Weight w = indexSearcher.createNormalizedWeight(q);
       Scorer scorer = w.scorer((AtomicReaderContext)indexSearcher.getTopReaderContext(), true, false, previousReader.getLiveDocs());
       if (scorer != null) {

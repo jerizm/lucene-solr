@@ -1,6 +1,6 @@
 package org.apache.lucene.search.spans;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,7 +19,7 @@ package org.apache.lucene.search.spans;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.TextField;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.RandomIndexWriter;
@@ -51,10 +51,10 @@ public class TestNearSpansOrdered extends LuceneTestCase {
   public void setUp() throws Exception {
     super.setUp();
     directory = newDirectory();
-    RandomIndexWriter writer= new RandomIndexWriter(random, directory, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setMergePolicy(newLogMergePolicy()));
+    RandomIndexWriter writer= new RandomIndexWriter(random(), directory, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMergePolicy(newLogMergePolicy()));
     for (int i = 0; i < docFields.length; i++) {
       Document doc = new Document();
-      doc.add(newField(FIELD, docFields[i], TextField.TYPE_UNSTORED));
+      doc.add(newTextField(FIELD, docFields[i], Field.Store.NO));
       writer.addDocument(doc);
     }
     reader = writer.getReader();
@@ -85,7 +85,7 @@ public class TestNearSpansOrdered extends LuceneTestCase {
   
   public void testSpanNearQuery() throws Exception {
     SpanNearQuery q = makeQuery();
-    CheckHits.checkHits(random, q, FIELD, searcher, new int[] {0,1});
+    CheckHits.checkHits(random(), q, FIELD, searcher, new int[] {0,1});
   }
 
   public String s(Spans span) {

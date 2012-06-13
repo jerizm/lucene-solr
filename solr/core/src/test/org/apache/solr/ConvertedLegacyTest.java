@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -1127,7 +1127,7 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
     // test addition of score field
 
     args = new HashMap<String,String>();
-    args.put("fl","score ");
+    args.put("fl","score,* ");
     req = new LocalSolrQueryRequest(h.getCore(), "id:44",
                                     "standard", 0, 10, args);
     assertQ(req
@@ -1190,7 +1190,7 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
             ,"//@maxScore = //doc/float[@name='score']"
             );
     args = new HashMap<String,String>();
-    args.put("fl","score");
+    args.put("fl","*,score");
     args.put("defType","lucenePlusSort");
     req = new LocalSolrQueryRequest(h.getCore(), "id:44;id desc;",
                                     "standard", 0, 0 , args);
@@ -1236,9 +1236,9 @@ public class ConvertedLegacyTest extends SolrTestCaseJ4 {
 
     // can mess up parsing (and it has in the past)
 
-    assertU("  <delete>  <id>44</id>  </delete>");
-    assertU("  <add>  <doc>  <field name=\"id\">44</field>  <field name=\"shouldbestored\">hi</field>  </doc>  </add>");
-    assertU("  <commit />");
+    assertU("<delete>  <id>44</id>  </delete>");
+    assertU("<add>  <doc>  <field name=\"id\">44</field>  <field name=\"shouldbestored\">hi</field>  </doc>  </add>");
+    assertU("<commit />");
 
     // test adding multiple docs per add command
 

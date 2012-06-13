@@ -1,6 +1,6 @@
 package org.apache.lucene.util;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,13 +17,10 @@ package org.apache.lucene.util;
  * limitations under the License.
  */
 
-import java.util.ArrayList;
 import java.util.List;
 import java.io.IOException;
 
 import org.apache.lucene.index.AtomicReaderContext;
-import org.apache.lucene.index.FieldInfo;
-import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.CompositeReader;
 import org.apache.lucene.index.AtomicReader;
 import org.apache.lucene.index.IndexReader;
@@ -38,6 +35,9 @@ public final class ReaderUtil {
 
   private ReaderUtil() {} // no instance
 
+  /**
+   * Subreader slice from a parent composite reader.
+   */
   public static class Slice {
     public static final Slice[] EMPTY_ARRAY = new Slice[0];
     public final int start;

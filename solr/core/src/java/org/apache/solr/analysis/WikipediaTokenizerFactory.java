@@ -1,6 +1,6 @@
 package org.apache.solr.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,6 +20,7 @@ package org.apache.solr.analysis;
 import java.io.Reader;
 
 import org.apache.lucene.analysis.Tokenizer;
+import org.apache.lucene.analysis.util.TokenizerFactory;
 import org.apache.lucene.analysis.wikipedia.WikipediaTokenizer;
 
 /** 
@@ -32,7 +33,7 @@ import org.apache.lucene.analysis.wikipedia.WikipediaTokenizer;
  * &lt;/fieldType&gt;</pre> 
  *
  */
-public class WikipediaTokenizerFactory extends BaseTokenizerFactory {
+public class WikipediaTokenizerFactory extends TokenizerFactory {
   // TODO: add support for WikipediaTokenizer's advanced options.
   public Tokenizer create(Reader input) {
     return new WikipediaTokenizer(input);

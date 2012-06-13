@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -26,6 +26,7 @@ import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.lucene.index.DocumentsWriterPerThreadPool.ThreadState;
+import org.apache.lucene.index.DocumentsWriterStallControl.MemoryController;
 import org.apache.lucene.util.ThreadInterruptedException;
 
 /**
@@ -40,7 +41,7 @@ import org.apache.lucene.util.ThreadInterruptedException;
  * {@link IndexWriterConfig#getRAMPerThreadHardLimitMB()} to prevent address
  * space exhaustion.
  */
-public final class DocumentsWriterFlushControl {
+final class DocumentsWriterFlushControl implements MemoryController {
 
   private final long hardMaxBytesPerDWPT;
   private long activeBytes = 0;
@@ -88,7 +89,7 @@ public final class DocumentsWriterFlushControl {
     return flushBytes + activeBytes;
   }
   
-  long stallLimitBytes() {
+  public long stallLimitBytes() {
     final double maxRamMB = config.getRAMBufferSizeMB();
     return maxRamMB != IndexWriterConfig.DISABLE_AUTO_FLUSH ? (long)(2 * (maxRamMB * 1024 * 1024)) : Long.MAX_VALUE;
   }
@@ -189,10 +190,13 @@ public final class DocumentsWriterFlushControl {
       Long bytes = flushingWriters.remove(dwpt);
       flushBytes -= bytes.longValue();
       perThreadPool.recycle(dwpt);
-      stallControl.updateStalled(this);
       assert assertMemory();
     } finally {
-      notifyAll();
+      try {
+        stallControl.updateStalled(this);
+      } finally {
+        notifyAll();
+      }
     }
   }
   
@@ -478,7 +482,7 @@ public final class DocumentsWriterFlushControl {
 
   void addFlushableState(ThreadState perThread) {
     if (documentsWriter.infoStream.isEnabled("DWFC")) {
-      documentsWriter.infoStream.message("DWFC", Thread.currentThread().getName() + ": addFlushableState " + perThread.dwpt);
+      documentsWriter.infoStream.message("DWFC", "addFlushableState " + perThread.dwpt);
     }
     final DocumentsWriterPerThread dwpt = perThread.dwpt;
     assert perThread.isHeldByCurrentThread();

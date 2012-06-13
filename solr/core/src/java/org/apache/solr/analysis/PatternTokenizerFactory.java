@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -24,7 +24,8 @@ import java.util.regex.Pattern;
 
 import org.apache.lucene.analysis.Tokenizer;
 import org.apache.lucene.analysis.pattern.PatternTokenizer;
-import org.apache.solr.common.SolrException;
+import org.apache.lucene.analysis.util.InitializationException;
+import org.apache.lucene.analysis.util.TokenizerFactory;
 
 
 /**
@@ -64,7 +65,7 @@ import org.apache.solr.common.SolrException;
  * @since solr1.2
  *
  */
-public class PatternTokenizerFactory extends BaseTokenizerFactory 
+public class PatternTokenizerFactory extends TokenizerFactory
 {
   public static final String PATTERN = "pattern";
   public static final String GROUP = "group";
@@ -78,13 +79,8 @@ public class PatternTokenizerFactory extends BaseTokenizerFactory
   @Override
   public void init(Map<String,String> args) 
   {
-    this.args = args;
-    String regex = args.get( PATTERN );
-    if( regex == null ) {
-      throw new SolrException( SolrException.ErrorCode.SERVER_ERROR, "missing required argument: "+PATTERN );
-    }
-    int flags = 0; // TODO? -- read flags from config CASE_INSENSITIVE, etc
-    pattern = Pattern.compile( regex, flags );
+    super.init(args);
+    pattern = getPattern( PATTERN );
     
     group = -1;  // use 'split'
     String g = args.get( GROUP );
@@ -93,7 +89,7 @@ public class PatternTokenizerFactory extends BaseTokenizerFactory
         group = Integer.parseInt( g );
       }
       catch( Exception ex ) {
-        throw new SolrException( SolrException.ErrorCode.SERVER_ERROR, "invalid group argument: "+g );
+        throw new InitializationException("invalid group argument: " + g);
       }
     }
   }
@@ -105,7 +101,7 @@ public class PatternTokenizerFactory extends BaseTokenizerFactory
     try {
       return new PatternTokenizer(in, pattern, group);
     } catch( IOException ex ) {
-      throw new SolrException( SolrException.ErrorCode.SERVER_ERROR, ex );
+      throw new InitializationException("IOException thrown creating PatternTokenizer instance", ex);
     }
   }
 }

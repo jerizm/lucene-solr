@@ -1,6 +1,6 @@
 package org.apache.lucene.search;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,7 +22,8 @@ import java.util.Random;
 
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
-import org.apache.lucene.document.TextField;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.IndexReader;
@@ -56,41 +57,47 @@ public class TestBoolean2 extends LuceneTestCase {
   @BeforeClass
   public static void beforeClass() throws Exception {
     directory = newDirectory();
-    RandomIndexWriter writer= new RandomIndexWriter(random, directory, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setMergePolicy(newLogMergePolicy()));
+    RandomIndexWriter writer= new RandomIndexWriter(random(), directory, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMergePolicy(newLogMergePolicy()));
     for (int i = 0; i < docFields.length; i++) {
       Document doc = new Document();
-      doc.add(newField(field, docFields[i], TextField.TYPE_UNSTORED));
+      doc.add(newTextField(field, docFields[i], Field.Store.NO));
       writer.addDocument(doc);
     }
     writer.close();
-    littleReader = IndexReader.open(directory);
+    littleReader = DirectoryReader.open(directory);
     searcher = new IndexSearcher(littleReader);
 
     // Make big index
-    dir2 = new MockDirectoryWrapper(random, new RAMDirectory(directory, IOContext.DEFAULT));
+    dir2 = new MockDirectoryWrapper(random(), new RAMDirectory(directory, IOContext.DEFAULT));
 
     // First multiply small test index:
     mulFactor = 1;
     int docCount = 0;
+    if (VERBOSE) {
+      System.out.println("\nTEST: now copy index...");
+    }
     do {
-      final Directory copy = new MockDirectoryWrapper(random, new RAMDirectory(dir2, IOContext.DEFAULT));
-      RandomIndexWriter w = new RandomIndexWriter(random, dir2);
+      if (VERBOSE) {
+        System.out.println("\nTEST: cycle...");
+      }
+      final Directory copy = new MockDirectoryWrapper(random(), new RAMDirectory(dir2, IOContext.DEFAULT));
+      RandomIndexWriter w = new RandomIndexWriter(random(), dir2);
       w.addIndexes(copy);
       docCount = w.maxDoc();
       w.close();
       mulFactor *= 2;
     } while(docCount < 3000);
 
-    RandomIndexWriter w = new RandomIndexWriter(random, dir2, 
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random))
-        .setMaxBufferedDocs(_TestUtil.nextInt(random, 50, 1000)));
+    RandomIndexWriter w = new RandomIndexWriter(random(), dir2, 
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random()))
+        .setMaxBufferedDocs(_TestUtil.nextInt(random(), 50, 1000)));
     Document doc = new Document();
-    doc.add(newField("field2", "xxx", TextField.TYPE_UNSTORED));
+    doc.add(newTextField("field2", "xxx", Field.Store.NO));
     for(int i=0;i<NUM_EXTRA_DOCS/2;i++) {
       w.addDocument(doc);
     }
     doc = new Document();
-    doc.add(newField("field2", "big bad bug", TextField.TYPE_UNSTORED));
+    doc.add(newTextField("field2", "big bad bug", Field.Store.NO));
     for(int i=0;i<NUM_EXTRA_DOCS/2;i++) {
       w.addDocument(doc);
     }
@@ -256,14 +263,14 @@ public class TestBoolean2 extends LuceneTestCase {
       // increase number of iterations for more complete testing
       int num = atLeast(10);
       for (int i=0; i<num; i++) {
-        int level = random.nextInt(3);
-        q1 = randBoolQuery(new Random(random.nextLong()), random.nextBoolean(), level, field, vals, null);
+        int level = random().nextInt(3);
+        q1 = randBoolQuery(new Random(random().nextLong()), random().nextBoolean(), level, field, vals, null);
         
         // Can't sort by relevance since floating point numbers may not quite
         // match up.
         Sort sort = Sort.INDEXORDER;
 
-        QueryUtils.check(random, q1,searcher);
+        QueryUtils.check(random(), q1,searcher);
 
         TopFieldCollector collector = TopFieldCollector.create(sort, 1000,
             false, true, true, true);

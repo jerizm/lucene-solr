@@ -2,15 +2,16 @@ package org.apache.lucene.document;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.GregorianCalendar;
-import java.util.TimeZone;
-import java.util.Locale;
+import java.util.*;
 
 import org.apache.lucene.util.LuceneTestCase;
+import org.junit.Rule;
+import org.junit.rules.RuleChain;
+import org.junit.rules.TestRule;
 
-/**
+import com.carrotsearch.randomizedtesting.rules.SystemPropertiesRestoreRule;
+
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -27,6 +28,9 @@ import org.apache.lucene.util.LuceneTestCase;
  * limitations under the License.
  */
 public class TestDateTools extends LuceneTestCase {
+  @Rule
+  public TestRule testRules = 
+    RuleChain.outerRule(new SystemPropertiesRestoreRule());
 
   public void testStringToDate() throws ParseException {
     

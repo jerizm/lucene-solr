@@ -1,6 +1,6 @@
 package org.apache.lucene.analysis.tokenattributes;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -29,6 +29,8 @@ public class TestSimpleAttributeImpl extends LuceneTestCase {
   public void testAttributes() {
     _TestUtil.assertAttributeReflection(new PositionIncrementAttributeImpl(),
       Collections.singletonMap(PositionIncrementAttribute.class.getName()+"#positionIncrement", 1));
+    _TestUtil.assertAttributeReflection(new PositionLengthAttributeImpl(),
+      Collections.singletonMap(PositionLengthAttribute.class.getName()+"#positionLength", 1));
     _TestUtil.assertAttributeReflection(new FlagsAttributeImpl(),
       Collections.singletonMap(FlagsAttribute.class.getName()+"#flags", 0));
     _TestUtil.assertAttributeReflection(new TypeAttributeImpl(),

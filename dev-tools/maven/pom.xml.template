@@ -30,22 +30,42 @@
   <artifactId>lucene-solr-grandparent</artifactId>
   <version>@version@</version>
   <packaging>pom</packaging>
-  <name>Grandparent POM for Apache Lucene Java and Apache Solr</name>
-  <description>Parent POM for Apache Lucene Java and Apache Solr</description>
+  <name>Grandparent POM for Apache Lucene Core and Apache Solr</name>
+  <description>Parent POM for Apache Lucene Core and Apache Solr</description>
   <url>http://lucene.apache.org/java</url>
   <modules>
     <module>lucene</module>
-    <module>modules</module>
     <module>solr</module>
   </modules>
   <properties>
+    <top-level>..</top-level>
     <base.specification.version>4.0.0</base.specification.version>
     <maven.build.timestamp.format>yyyy-MM-dd HH:mm:ss</maven.build.timestamp.format>
     <java.compat.version>1.6</java.compat.version>
-    <jetty.version>6.1.26</jetty.version>
-    <patched.jetty.version>6.1.26-patched-JETTY-1340</patched.jetty.version>
-    <slf4j.version>1.6.1</slf4j.version>
-    <tika.version>1.0</tika.version>
+    <jetty.version>8.1.2.v20120308</jetty.version>
+    <slf4j.version>1.6.4</slf4j.version>
+    <tika.version>1.1</tika.version>
+    <httpcomponents.version>4.1.3</httpcomponents.version>
+
+    <!-- RandomizedTesting library system properties -->
+    <tests.iters>1</tests.iters>
+    <tests.seed/>
+    <tests.nightly/>
+    <tests.weekly/>
+    <tests.awaitsfix/>
+    <tests.slow/>
+
+    <!-- Lucene/Solr-specific test system properties -->
+    <tests.codec>random</tests.codec>
+    <tests.directory>random</tests.directory>
+    <tests.locale>random</tests.locale>
+    <tests.luceneMatchVersion>5.0</tests.luceneMatchVersion>
+    <tests.multiplier>1</tests.multiplier>
+    <tests.nightly>false</tests.nightly>
+    <tests.postingsformat>random</tests.postingsformat>
+    <tests.timezone>random</tests.timezone>
+    <tests.verbose>false</tests.verbose>
+    <tests.infostream>${tests.verbose}</tests.infostream>
   </properties>
   <issueManagement>
     <system>JIRA</system>
@@ -90,13 +110,13 @@
   <inceptionYear>2000</inceptionYear>
   <scm>
     <connection>
-      scm:svn:http://svn.apache.org/repos/asf/lucene/dev/trunk/${module-directory}
+      scm:svn:http://svn.apache.org/repos/asf/lucene/dev/trunk
     </connection>
     <developerConnection>
-      scm:svn:https://svn.apache.org/repos/asf/lucene/dev/trunk/${module-directory}
+      scm:svn:https://svn.apache.org/repos/asf/lucene/dev/trunk
     </developerConnection>
     <url>
-      http://svn.apache.org/viewvc/lucene/dev/trunk/${module-directory}
+      http://svn.apache.org/viewvc/lucene/dev/trunk
     </url>
   </scm>
   <licenses>
@@ -131,19 +151,9 @@
         <version>r05</version>
       </dependency>
       <dependency>
-        <groupId>commons-beanutils</groupId>
-        <artifactId>commons-beanutils</artifactId>
-        <version>1.7.0</version>
-      </dependency>
-      <dependency>
         <groupId>commons-codec</groupId>
         <artifactId>commons-codec</artifactId>
         <version>1.6</version>
-      </dependency>
-      <dependency>
-        <groupId>commons-collections</groupId>
-        <artifactId>commons-collections</artifactId>
-        <version>3.2.1</version>
       </dependency>
       <dependency>
         <groupId>commons-digester</groupId>
@@ -161,9 +171,14 @@
         <version>2.1</version>
       </dependency>
       <dependency>
-        <groupId>commons-httpclient</groupId>
-        <artifactId>commons-httpclient</artifactId>
-        <version>3.1</version>
+        <groupId>org.apache.httpcomponents</groupId>
+        <artifactId>httpclient</artifactId>
+        <version>${httpcomponents.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.httpcomponents</groupId>
+        <artifactId>httpmime</artifactId>
+        <version>${httpcomponents.version}</version>
       </dependency>
       <dependency>
         <groupId>commons-lang</groupId>
@@ -174,6 +189,11 @@
         <groupId>commons-logging</groupId>
         <artifactId>commons-logging</artifactId>
         <version>1.1.1</version>
+      </dependency>
+      <dependency>
+        <groupId>hsqldb</groupId>
+        <artifactId>hsqldb</artifactId>
+        <version>1.8.0.10</version>
       </dependency>
       <dependency>
         <groupId>jakarta-regexp</groupId>
@@ -203,12 +223,12 @@
       <dependency>
         <groupId>org.apache.ant</groupId>
         <artifactId>ant</artifactId>
-        <version>1.7.1</version>
+        <version>1.8.2</version>
       </dependency>
       <dependency>
         <groupId>org.apache.ant</groupId>
         <artifactId>ant-junit</artifactId>
-        <version>1.7.1</version>
+        <version>1.8.2</version>
       </dependency>
       <dependency>
         <groupId>org.apache.commons</groupId>
@@ -216,24 +236,14 @@
         <version>1.2</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.solr</groupId>
-        <artifactId>solr-commons-csv</artifactId>
-        <version>${project.version}</version>
+        <groupId>net.arnx</groupId>
+        <artifactId>jsonic</artifactId>
+        <version>1.2.7</version>
       </dependency>
       <dependency>
-        <groupId>org.apache.solr</groupId>
-        <artifactId>solr-jsonic</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.solr</groupId>
-        <artifactId>solr-langdetect</artifactId>
-        <version>${project.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.solr</groupId>
-        <artifactId>solr-noggit</artifactId>
-        <version>${project.version}</version>
+        <groupId>com.cybozu.labs</groupId>
+        <artifactId>langdetect</artifactId>
+        <version>1.1-20120112</version>
       </dependency>
       <dependency>
         <groupId>org.apache.tika</groupId>
@@ -306,29 +316,24 @@
         <version>2.2</version>
       </dependency>
       <dependency>
-        <groupId>org.mortbay.jetty</groupId>
-        <artifactId>jetty</artifactId>
-        <version>${patched.jetty.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.mortbay.jetty</groupId>
-        <artifactId>jetty-util</artifactId>
-        <version>${patched.jetty.version}</version>
-      </dependency>
-      <dependency>
-        <groupId>org.mortbay.jetty</groupId>
-        <artifactId>jsp-2.1-glassfish</artifactId>
-        <version>2.1.v20091210</version>
-      </dependency>
-      <dependency>
-        <groupId>org.mortbay.jetty</groupId>
-        <artifactId>jsp-2.1-jetty</artifactId>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-server</artifactId>
         <version>${jetty.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.mortbay.jetty</groupId>
-        <artifactId>jsp-api-2.1-glassfish</artifactId>
-        <version>2.1.v20091210</version>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-servlet</artifactId>
+        <version>${jetty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-util</artifactId>
+        <version>${jetty.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-webapp</artifactId>
+        <version>${jetty.version}</version>
       </dependency>
       <dependency>
         <groupId>org.slf4j</groupId>
@@ -356,12 +361,35 @@
         <version>${slf4j.version}</version>
       </dependency>
       <dependency>
+        <groupId>org.eclipse.jetty.orbit</groupId>
+        <artifactId>javax.servlet</artifactId>
+        <version>3.0.0.v201112011016</version>
+      </dependency>
+      <dependency>
         <groupId>javax.servlet</groupId>
         <artifactId>servlet-api</artifactId>
         <version>2.4</version>
       </dependency>
+      <dependency>
+        <groupId>com.spatial4j</groupId>
+        <artifactId>spatial4j</artifactId>
+        <version>0.2</version>
+      </dependency>
+      <dependency>
+        <groupId>xerces</groupId>
+        <artifactId>xercesImpl</artifactId>
+        <version>2.9.1</version>
+      </dependency>
+      <dependency>
+        <groupId>com.carrotsearch.randomizedtesting</groupId>
+        <artifactId>randomizedtesting-runner</artifactId>
+        <version>1.5.0</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
+  <prerequisites>
+    <maven>2.2.1</maven>
+  </prerequisites>
   <dependencies>
     <dependency> 
       <!-- Maven 2.2.X has a bug that omits as duplicate all JUnit         -->
@@ -376,13 +404,12 @@
     </dependency>
   </dependencies>
   <build>
-    <directory>lucene/build/lucene-parent</directory>
     <pluginManagement>
       <plugins>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-antrun-plugin</artifactId>
-          <version>1.6</version>
+          <version>1.7</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -421,7 +448,7 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-jar-plugin</artifactId>
-          <version>2.3.2</version>
+          <version>2.4</version>
           <configuration>
             <archive>
               <!-- This section should be *exactly* the same under -->
@@ -446,36 +473,55 @@
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <version>2.8.1</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-resources-plugin</artifactId>
           <version>2.5</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-surefire-plugin</artifactId>
-          <version>2.10</version>
+          <version>2.12</version>
           <configuration>
+            <runOrder>random</runOrder>
             <reportFormat>plain</reportFormat>
             <workingDirectory>${project.build.directory}/test</workingDirectory>
             <argLine>-Xmx512M</argLine>
             <systemPropertyVariables>
               <tempDir>.</tempDir>
+
+              <!-- See <http://wiki.apache.org/lucene-java/RunningTests>
+                   for a description of the tests.* system properties. -->
+
+              <!-- RandomizedTesting library system properties -->
+              <tests.iters>${tests.iters}</tests.iters>
+              <tests.seed>${tests.seed}</tests.seed>
+              <tests.nightly>${tests.nightly}</tests.nightly>
+              <tests.weekly>${tests.weekly}</tests.weekly>
+              <tests.awaitsfix>${tests.awaitsfix}</tests.awaitsfix>
+              <tests.slow>${tests.slow}</tests.slow>
+
+              <!-- Lucene/Solr-specific test system properties -->
               <jetty.testMode>1</jetty.testMode>
               <tests.codec>${tests.codec}</tests.codec>
               <tests.directory>${tests.directory}</tests.directory>
-              <tests.iter>${tests.iter}</tests.iter>
+              <tests.infostream>${tests.infostream}</tests.infostream>
               <tests.locale>${tests.locale}</tests.locale>
               <tests.luceneMatchVersion>${tests.luceneMatchVersion}</tests.luceneMatchVersion>
               <tests.multiplier>${tests.multiplier}</tests.multiplier>
-              <tests.nightly>${tests.nightly}</tests.nightly>
-              <tests.seed>${tests.seed}</tests.seed>
+              <tests.postingsformat>${tests.postingsformat}</tests.postingsformat>
               <tests.timezone>${tests.timezone}</tests.timezone>
+              <tests.verbose>${tests.verbose}</tests.verbose>
             </systemPropertyVariables>
           </configuration>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-war-plugin</artifactId>
-          <version>2.1.1</version>
+          <version>2.2</version>
           <configuration>
             <archive>
               <!-- This section should be *exactly* the same under -->
@@ -501,7 +547,7 @@
         <plugin>
           <groupId>org.codehaus.mojo</groupId>
           <artifactId>appassembler-maven-plugin</artifactId>
-          <version>1.1.1</version>
+          <version>1.2.1</version>
         </plugin>
         <plugin>
           <groupId>org.codehaus.mojo</groupId>
@@ -515,13 +561,13 @@
         </plugin>
         <plugin>
           <groupId>org.mortbay.jetty</groupId>
-          <artifactId>maven-jetty-plugin</artifactId>
+          <artifactId>jetty-maven-plugin</artifactId>
           <version>${jetty.version}</version>
         </plugin>
         <plugin>
           <groupId>org.codehaus.gmaven</groupId>
           <artifactId>gmaven-plugin</artifactId>
-          <version>1.3</version>
+          <version>1.4</version>
         </plugin>
       </plugins>
     </pluginManagement>
@@ -563,6 +609,7 @@
           <getRevisionOnlyOnce>true</getRevisionOnlyOnce>
           <revisionOnScmFailure>NO-REVISION-AVAILABLE</revisionOnScmFailure>
           <buildNumberPropertyName>svn.revision</buildNumberPropertyName>
+          <scmDirectory>${top-level}</scmDirectory>
         </configuration>
       </plugin>
       <plugin>
@@ -603,7 +650,7 @@
       <plugin>
         <groupId>org.apache.felix</groupId>
         <artifactId>maven-bundle-plugin</artifactId>
-        <version>2.3.4</version>
+        <version>2.3.7</version>
         <configuration>
           <instructions>
             <Export-Package>*;-split-package:=merge-first</Export-Package>
@@ -619,11 +666,12 @@
           </execution>
         </executions>
       </plugin>
-      
     </plugins>
   </build>
   <profiles>
     <profile>
+      <!-- Although currently a no-op, this profile remains here to reserve
+           the ability to perform Maven build initialization tasks. -->
       <id>bootstrap</id>
       <build>
         <plugins>
@@ -631,105 +679,6 @@
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-install-plugin</artifactId>
             <executions>
-              <execution>
-                <id>install-xercesImpl</id>
-                <phase>install</phase>
-                <goals>
-                  <goal>install-file</goal>
-                </goals>
-                <configuration>
-                  <groupId>${project.groupId}</groupId>
-                  <artifactId>lucene-xercesImpl</artifactId>
-                  <version>${project.version}</version>
-                  <packaging>jar</packaging>
-                  <file>modules/benchmark/lib/xercesImpl-2.9.1-patched-XERCESJ-1257.jar</file>
-                </configuration>  
-              </execution>
-              <execution>
-                <id>install-solr-commons-csv</id>
-                <phase>install</phase>
-                <goals>
-                  <goal>install-file</goal>
-                </goals>
-                <configuration>
-                  <groupId>org.apache.solr</groupId>
-                  <artifactId>solr-commons-csv</artifactId>
-                  <version>${project.version}</version>
-                  <packaging>jar</packaging>
-                  <file>solr/lib/commons-csv-1.0-SNAPSHOT-r966014.jar</file>
-                </configuration>  
-              </execution>
-              <execution>
-                <id>install-solr-noggit</id>
-                <phase>install</phase>
-                <goals>
-                  <goal>install-file</goal>
-                </goals>
-                <configuration>
-                  <groupId>org.apache.solr</groupId>
-                  <artifactId>solr-noggit</artifactId>
-                  <version>${project.version}</version>
-                  <packaging>jar</packaging>
-                  <file>solr/lib/apache-solr-noggit-r1211150.jar</file>
-                </configuration>  
-              </execution>
-              <execution>
-                <id>install-jetty</id>
-                <phase>install</phase>
-                <goals>
-                  <goal>install-file</goal>
-                </goals>
-                <configuration>
-                  <groupId>org.mortbay.jetty</groupId>
-                  <artifactId>jetty</artifactId>
-                  <version>${patched.jetty.version}</version>
-                  <packaging>jar</packaging>
-                  <file>solr/example/lib/jetty-${patched.jetty.version}.jar</file>
-                </configuration>
-              </execution>
-              <execution>
-                <id>install-jetty-util</id>
-                <phase>install</phase>
-                <goals>
-                  <goal>install-file</goal>
-                </goals>
-                <configuration>
-                  <groupId>org.mortbay.jetty</groupId>
-                  <artifactId>jetty-util</artifactId>
-                  <version>${patched.jetty.version}</version>
-                  <packaging>jar</packaging>
-                  <file>solr/example/lib/jetty-util-${patched.jetty.version}.jar</file>
-                </configuration>
-              </execution>
-              <execution>
-                <id>install-jsonic</id>
-                <phase>install</phase>
-                <goals>
-                  <goal>install-file</goal>
-                </goals>
-                <configuration>
-                  <!-- jsonic v1.2.7 is in the central maven repo - remove this once upgraded. -->
-                  <groupId>org.apache.solr</groupId>
-                  <artifactId>solr-jsonic</artifactId>
-                  <version>${project.version}</version>
-                  <packaging>jar</packaging>
-                  <file>solr/contrib/langid/lib/jsonic-1.2.0.jar</file>
-                </configuration>
-              </execution>
-              <execution>
-                <id>install-langdetect</id>
-                <phase>install</phase>
-                <goals>
-                  <goal>install-file</goal>
-                </goals>
-                <configuration>
-                  <groupId>org.apache.solr</groupId>
-                  <artifactId>solr-langdetect</artifactId>
-                  <version>${project.version}</version>
-                  <packaging>jar</packaging>
-                  <file>solr/contrib/langid/lib/langdetect-r111.jar</file>
-                </configuration>
-              </execution>
             </executions>
           </plugin>
         </plugins>

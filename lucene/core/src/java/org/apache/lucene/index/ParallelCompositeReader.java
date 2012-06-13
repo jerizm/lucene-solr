@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -46,7 +46,7 @@ import java.util.Set;
  * by number of documents per segment. If you use different {@link MergePolicy}s
  * it might happen that the segment structure of your index is no longer predictable.
  */
-public final class ParallelCompositeReader extends BaseMultiReader<IndexReader> {
+public final class ParallelCompositeReader extends BaseCompositeReader<IndexReader> {
   private final boolean closeSubReaders;
   private final Set<CompositeReader> completeReaderSet =
     Collections.newSetFromMap(new IdentityHashMap<CompositeReader,Boolean>());
@@ -90,11 +90,13 @@ public final class ParallelCompositeReader extends BaseMultiReader<IndexReader> 
       // check compatibility:
       final int maxDoc = readers[0].maxDoc();
       final int[] childMaxDoc = new int[firstSubReaders.length];
+      final boolean[] childAtomic = new boolean[firstSubReaders.length];
       for (int i = 0; i < firstSubReaders.length; i++) {
         childMaxDoc[i] = firstSubReaders[i].maxDoc();
+        childAtomic[i] = firstSubReaders[i] instanceof AtomicReader;
       }
-      validate(readers, maxDoc, childMaxDoc);
-      validate(storedFieldsReaders, maxDoc, childMaxDoc);
+      validate(readers, maxDoc, childMaxDoc, childAtomic);
+      validate(storedFieldsReaders, maxDoc, childMaxDoc, childAtomic);
 
       // hierarchically build the same subreader structure as the first CompositeReader with Parallel*Readers:
       final IndexReader[] subReaders = new IndexReader[firstSubReaders.length];
@@ -131,7 +133,7 @@ public final class ParallelCompositeReader extends BaseMultiReader<IndexReader> 
     }
   }
   
-  private static void validate(CompositeReader[] readers, int maxDoc, int[] childMaxDoc) {
+  private static void validate(CompositeReader[] readers, int maxDoc, int[] childMaxDoc, boolean[] childAtomic) {
     for (int i = 0; i < readers.length; i++) {
       final CompositeReader reader = readers[i];
       final IndexReader[] subs = reader.getSequentialSubReaders();
@@ -143,7 +145,10 @@ public final class ParallelCompositeReader extends BaseMultiReader<IndexReader> 
       }
       for (int subIDX = 0; subIDX < subs.length; subIDX++) {
         if (subs[subIDX].maxDoc() != childMaxDoc[subIDX]) {
-          throw new IllegalArgumentException("All readers must have same subReader maxDoc");
+          throw new IllegalArgumentException("All readers must have same corresponding subReader maxDoc");
+        }
+        if (!(childAtomic[subIDX] ? (subs[subIDX] instanceof AtomicReader) : (subs[subIDX] instanceof CompositeReader))) {
+          throw new IllegalArgumentException("All readers must have same corresponding subReader types (atomic or composite)");
         }
       }
     }    

@@ -1,6 +1,6 @@
 package org.apache.lucene.util;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -33,7 +33,7 @@ public class TestPriorityQueue extends LuceneTestCase {
     }
 
     public void testPQ() throws Exception {
-        testPQ(atLeast(10000), random);
+        testPQ(atLeast(10000), random());
     }
 
     public static void testPQ(int count, Random gen) {

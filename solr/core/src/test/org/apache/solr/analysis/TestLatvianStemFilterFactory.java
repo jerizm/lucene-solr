@@ -1,6 +1,6 @@
 package org.apache.solr.analysis;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,13 +20,14 @@ package org.apache.solr.analysis;
 import java.io.Reader;
 import java.io.StringReader;
 
+import org.apache.lucene.analysis.BaseTokenStreamTestCase;
 import org.apache.lucene.analysis.MockTokenizer;
 import org.apache.lucene.analysis.TokenStream;
 
 /**
  * Simple tests to ensure the Latvian stem factory is working.
  */
-public class TestLatvianStemFilterFactory extends BaseTokenTestCase {
+public class TestLatvianStemFilterFactory extends BaseTokenStreamTestCase {
   public void testStemming() throws Exception {
     Reader reader = new StringReader("tirgiem tirgus");
     LatvianStemFilterFactory factory = new LatvianStemFilterFactory();

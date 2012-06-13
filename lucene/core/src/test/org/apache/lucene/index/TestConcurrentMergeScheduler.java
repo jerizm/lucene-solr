@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,8 +22,6 @@ import java.io.IOException;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.util.LuceneTestCase;
@@ -58,7 +56,7 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
             isClose = true;
           }
         }
-        if (isDoFlush && !isClose && random.nextBoolean()) {
+        if (isDoFlush && !isClose && random().nextBoolean()) {
           hitExc = true;
           throw new IOException(Thread.currentThread().getName() + ": now failing during flush");
         }
@@ -73,9 +71,9 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
     FailOnlyOnFlush failure = new FailOnlyOnFlush();
     directory.failOn(failure);
 
-    IndexWriter writer = new IndexWriter(directory, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setMaxBufferedDocs(2));
+    IndexWriter writer = new IndexWriter(directory, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMaxBufferedDocs(2));
     Document doc = new Document();
-    Field idField = newField("id", "", StringField.TYPE_STORED);
+    Field idField = newStringField("id", "", Field.Store.YES);
     doc.add(idField);
     int extraCount = 0;
 
@@ -85,7 +83,7 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
       }
 
       for(int j=0;j<20;j++) {
-        idField.setValue(Integer.toString(i*20+j));
+        idField.setStringValue(Integer.toString(i*20+j));
         writer.addDocument(doc);
       }
 
@@ -113,7 +111,7 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
     }
 
     writer.close();
-    IndexReader reader = IndexReader.open(directory);
+    IndexReader reader = DirectoryReader.open(directory);
     assertEquals(200+extraCount, reader.numDocs());
     reader.close();
     directory.close();
@@ -130,18 +128,18 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
     // start:
     mp.setMinMergeDocs(1000);
     IndexWriter writer = new IndexWriter(directory, newIndexWriterConfig(
-        TEST_VERSION_CURRENT, new MockAnalyzer(random))
+        TEST_VERSION_CURRENT, new MockAnalyzer(random()))
         .setMergePolicy(mp));
 
     Document doc = new Document();
-    Field idField = newField("id", "", StringField.TYPE_STORED);
+    Field idField = newStringField("id", "", Field.Store.YES);
     doc.add(idField);
     for(int i=0;i<10;i++) {
       if (VERBOSE) {
         System.out.println("\nTEST: cycle");
       }
       for(int j=0;j<100;j++) {
-        idField.setValue(Integer.toString(i*100+j));
+        idField.setStringValue(Integer.toString(i*100+j));
         writer.addDocument(doc);
       }
 
@@ -158,7 +156,7 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
     }
 
     writer.close();
-    IndexReader reader = IndexReader.open(directory);
+    IndexReader reader = DirectoryReader.open(directory);
     // Verify that we did not lose any deletes...
     assertEquals(450, reader.numDocs());
     reader.close();
@@ -168,7 +166,7 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
   public void testNoExtraFiles() throws IOException {
     MockDirectoryWrapper directory = newDirectory();
     IndexWriter writer = new IndexWriter(directory, newIndexWriterConfig(
-        TEST_VERSION_CURRENT, new MockAnalyzer(random))
+        TEST_VERSION_CURRENT, new MockAnalyzer(random()))
         .setMaxBufferedDocs(2));
 
     for(int iter=0;iter<7;iter++) {
@@ -178,7 +176,7 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
 
       for(int j=0;j<21;j++) {
         Document doc = new Document();
-        doc.add(newField("content", "a b c", TextField.TYPE_UNSTORED));
+        doc.add(newTextField("content", "a b c", Field.Store.NO));
         writer.addDocument(doc);
       }
         
@@ -187,7 +185,7 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
 
       // Reopen
       writer = new IndexWriter(directory, newIndexWriterConfig(
-          TEST_VERSION_CURRENT, new MockAnalyzer(random))
+          TEST_VERSION_CURRENT, new MockAnalyzer(random()))
           .setOpenMode(OpenMode.APPEND).setMaxBufferedDocs(2));
     }
 
@@ -199,12 +197,12 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
   public void testNoWaitClose() throws IOException {
     MockDirectoryWrapper directory = newDirectory();
     Document doc = new Document();
-    Field idField = newField("id", "", StringField.TYPE_STORED);
+    Field idField = newStringField("id", "", Field.Store.YES);
     doc.add(idField);
 
     IndexWriter writer = new IndexWriter(
         directory,
-        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).
+        newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).
             setMaxBufferedDocs(2).
             setMergePolicy(newLogMergePolicy(100))
     );
@@ -212,7 +210,7 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
     for(int iter=0;iter<10;iter++) {
 
       for(int j=0;j<201;j++) {
-        idField.setValue(Integer.toString(iter*201+j));
+        idField.setStringValue(Integer.toString(iter*201+j));
         writer.addDocument(doc);
       }
 
@@ -230,14 +228,14 @@ public class TestConcurrentMergeScheduler extends LuceneTestCase {
 
       writer.close(false);
 
-      IndexReader reader = IndexReader.open(directory);
+      IndexReader reader = DirectoryReader.open(directory);
       assertEquals((1+iter)*182, reader.numDocs());
       reader.close();
 
       // Reopen
       writer = new IndexWriter(
           directory,
-          newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).
+          newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).
               setOpenMode(OpenMode.APPEND).
               setMergePolicy(newLogMergePolicy(100))
       );

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -19,12 +19,12 @@ package org.apache.solr.schema;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.core.KeywordAnalyzer;
-import org.apache.lucene.search.similarities.Similarity;
+import org.apache.lucene.analysis.util.*;
 import org.apache.lucene.util.Version;
-import org.apache.solr.analysis.*;
-import org.apache.solr.common.ResourceLoader;
+import org.apache.solr.analysis.KeywordTokenizerFactory;
+import org.apache.solr.analysis.TokenizerChain;
 import org.apache.solr.common.SolrException;
-import org.apache.solr.common.util.DOMUtil;
+import org.apache.solr.util.DOMUtil;
 import org.apache.solr.core.Config;
 import org.apache.solr.core.SolrResourceLoader;
 import org.apache.solr.util.plugin.AbstractPluginLoader;
@@ -61,7 +61,7 @@ public final class FieldTypePluginLoader
   public FieldTypePluginLoader(final IndexSchema schema,
                                final Map<String, FieldType> fieldTypes,
                                final Collection<SchemaAware> schemaAware) {
-    super("[schema.xml] fieldType", true, true);
+    super("[schema.xml] fieldType", FieldType.class, true, true);
     this.schema = schema;
     this.fieldTypes = fieldTypes;
     this.schemaAware = schemaAware;
@@ -78,7 +78,7 @@ public final class FieldTypePluginLoader
                               String className, 
                               Node node ) throws Exception {
 
-    FieldType ft = (FieldType)loader.newInstance(className);
+    FieldType ft = loader.newInstance(className, FieldType.class);
     ft.setTypeName(name);
     
     String expression = "./analyzer[@type='query']";
@@ -135,10 +135,10 @@ public final class FieldTypePluginLoader
     return fieldTypes.put( name, plugin );
   }
 
-  // The point here is that, if no multitermanalyzer was specified in the schema file, do one of several things:
+  // The point here is that, if no multiterm analyzer was specified in the schema file, do one of several things:
   // 1> If legacyMultiTerm == false, assemble a new analyzer composed of all of the charfilters,
   //    lowercase filters and asciifoldingfilter.
-  // 2> If letacyMultiTerm == true just construct the analyzer from a KeywordTokenizer. That should mimic current behavior.
+  // 2> If legacyMultiTerm == true just construct the analyzer from a KeywordTokenizer. That should mimic current behavior.
   //    Do the same if they've specified that the old behavior is required (legacyMultiTerm="true")
 
   private Analyzer constructMultiTermAnalyzer(Analyzer queryAnalyzer) {
@@ -181,7 +181,7 @@ public final class FieldTypePluginLoader
 
     public void add(Object current) {
       if (!(current instanceof MultiTermAwareComponent)) return;
-      Object newComponent = ((MultiTermAwareComponent)current).getMultiTermComponent();
+      AbstractAnalysisFactory newComponent = ((MultiTermAwareComponent)current).getMultiTermComponent();
       if (newComponent instanceof TokenFilterFactory) {
         if (filters == null) {
           filters = new ArrayList<TokenFilterFactory>(2);
@@ -228,8 +228,7 @@ public final class FieldTypePluginLoader
     if (analyzerName != null) {
       try {
         // No need to be core-aware as Analyzers are not in the core-aware list
-        final Class<? extends Analyzer> clazz = loader.findClass
-          (analyzerName).asSubclass(Analyzer.class);
+        final Class<? extends Analyzer> clazz = loader.findClass(analyzerName, Analyzer.class);
         
         try {
           // first try to use a ctor with version parameter 
@@ -265,16 +264,16 @@ public final class FieldTypePluginLoader
       = new ArrayList<CharFilterFactory>();
     AbstractPluginLoader<CharFilterFactory> charFilterLoader =
       new AbstractPluginLoader<CharFilterFactory>
-      ( "[schema.xml] analyzer/charFilter", false, false ) {
+      ("[schema.xml] analyzer/charFilter", CharFilterFactory.class, false, false) {
 
       @Override
       protected void init(CharFilterFactory plugin, Node node) throws Exception {
         if( plugin != null ) {
           final Map<String,String> params = DOMUtil.toMapExcept(node.getAttributes(),"class");
-          // copy the luceneMatchVersion from config, if not set
-          if (!params.containsKey(LUCENE_MATCH_VERSION_PARAM))
-            params.put(LUCENE_MATCH_VERSION_PARAM, 
-                       schema.getDefaultLuceneMatchVersion().toString());
+
+          String configuredVersion = params.remove(LUCENE_MATCH_VERSION_PARAM);
+          plugin.setLuceneMatchVersion(parseConfiguredVersion(configuredVersion, plugin.getClass().getSimpleName()));
+
           plugin.init( params );
           charFilters.add( plugin );
         }
@@ -298,7 +297,7 @@ public final class FieldTypePluginLoader
       = new ArrayList<TokenizerFactory>(1);
     AbstractPluginLoader<TokenizerFactory> tokenizerLoader =
       new AbstractPluginLoader<TokenizerFactory>
-      ( "[schema.xml] analyzer/tokenizer", false, false ) {
+      ("[schema.xml] analyzer/tokenizer", TokenizerFactory.class, false, false) {
       @Override
       protected void init(TokenizerFactory plugin, Node node) throws Exception {
         if( !tokenizers.isEmpty() ) {
@@ -307,10 +306,9 @@ public final class FieldTypePluginLoader
         }
         final Map<String,String> params = DOMUtil.toMapExcept(node.getAttributes(),"class");
 
-        // copy the luceneMatchVersion from config, if not set
-        if (!params.containsKey(LUCENE_MATCH_VERSION_PARAM))
-          params.put(LUCENE_MATCH_VERSION_PARAM, 
-                     schema.getDefaultLuceneMatchVersion().toString());
+        String configuredVersion = params.remove(LUCENE_MATCH_VERSION_PARAM);
+        plugin.setLuceneMatchVersion(parseConfiguredVersion(configuredVersion, plugin.getClass().getSimpleName()));
+
         plugin.init( params );
         tokenizers.add( plugin );
       }
@@ -335,16 +333,16 @@ public final class FieldTypePluginLoader
       = new ArrayList<TokenFilterFactory>();
 
     AbstractPluginLoader<TokenFilterFactory> filterLoader = 
-      new AbstractPluginLoader<TokenFilterFactory>( "[schema.xml] analyzer/filter", false, false )
+      new AbstractPluginLoader<TokenFilterFactory>("[schema.xml] analyzer/filter", TokenFilterFactory.class, false, false)
     {
       @Override
       protected void init(TokenFilterFactory plugin, Node node) throws Exception {
         if( plugin != null ) {
           final Map<String,String> params = DOMUtil.toMapExcept(node.getAttributes(),"class");
-          // copy the luceneMatchVersion from config, if not set
-          if (!params.containsKey(LUCENE_MATCH_VERSION_PARAM))
-            params.put(LUCENE_MATCH_VERSION_PARAM, 
-                       schema.getDefaultLuceneMatchVersion().toString());
+
+          String configuredVersion = params.remove(LUCENE_MATCH_VERSION_PARAM);
+          plugin.setLuceneMatchVersion(parseConfiguredVersion(configuredVersion, plugin.getClass().getSimpleName()));
+
           plugin.init( params );
           filters.add( plugin );
         }
@@ -359,6 +357,18 @@ public final class FieldTypePluginLoader
     
     return new TokenizerChain(charFilters.toArray(new CharFilterFactory[charFilters.size()]),
                               tokenizers.get(0), filters.toArray(new TokenFilterFactory[filters.size()]));
+  }
+
+  private Version parseConfiguredVersion(String configuredVersion, String pluginClassName) {
+    Version version = (configuredVersion != null) ?
+            Config.parseLuceneVersionString(configuredVersion) : schema.getDefaultLuceneMatchVersion();
+
+    if (!version.onOrAfter(Version.LUCENE_40)) {
+      log.warn(pluginClassName + " is using deprecated " + version +
+        " emulation. You should at some point declare and reindex to at least 4.0, because " +
+        "3.x emulation is deprecated and will be removed in 5.0");
+    }
+    return version;
   }
     
 }

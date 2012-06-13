@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -23,22 +23,23 @@ import java.net.URL;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.apache.lucene.document.StoredField;
 import org.apache.lucene.document.Document;
+import org.apache.lucene.document.DoubleField;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
+import org.apache.lucene.document.FloatField;
+import org.apache.lucene.document.IntField;
 import org.apache.lucene.document.LazyDocument;
-import org.apache.lucene.document.NumericField;
+import org.apache.lucene.document.LongField;
+import org.apache.lucene.document.StoredField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.*;
-import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.search.*;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.OpenBitSet;
-import org.apache.lucene.util.ReaderUtil;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
@@ -76,6 +77,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable,SolrIn
   private final SolrCore core;
   private final IndexSchema schema;
   private String indexDir;
+  private boolean debug = log.isDebugEnabled();
 
   private final String name;
   private long openTime = System.currentTimeMillis();
@@ -113,7 +115,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable,SolrIn
 
   public SolrIndexSearcher(SolrCore core, String path, IndexSchema schema, SolrIndexConfig config, String name, boolean enableCache, DirectoryFactory directoryFactory) throws IOException {
     // we don't need to reserve the directory because we get it from the factory
-    this(core, schema,name, core.getIndexReaderFactory().newReader(directoryFactory.get(path, config.lockType)), true, enableCache, false, directoryFactory);
+    this(core, schema,name, core.getIndexReaderFactory().newReader(directoryFactory.get(path, config.lockType), core), true, enableCache, false, directoryFactory);
   }
 
   public SolrIndexSearcher(SolrCore core, IndexSchema schema, String name, DirectoryReader r, boolean closeReader, boolean enableCache, boolean reserveDirectory, DirectoryFactory directoryFactory) throws IOException {
@@ -184,8 +186,11 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable,SolrIn
       cacheMap = noGenericCaches;
       cacheList= noCaches;
     }
-    optimizer = solrConfig.filtOptEnabled ? new LuceneQueryOptimizer(solrConfig.filtOptCacheSize,solrConfig.filtOptThreshold) : null;
-
+    
+    // TODO: This option has been dead/noop since 3.1, should we re-enable it?
+//    optimizer = solrConfig.filtOptEnabled ? new LuceneQueryOptimizer(solrConfig.filtOptCacheSize,solrConfig.filtOptThreshold) : null;
+    optimizer = null;
+    
     fieldNames = new HashSet<String>();
     for(FieldInfo fieldInfo : atomicReader.getFieldInfos()) {
       fieldNames.add(fieldInfo.name);
@@ -241,17 +246,20 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable,SolrIn
    * In particular, the underlying reader and any cache's in use are closed.
    */
   public void close() throws IOException {
-    if (cachingEnabled) {
-      StringBuilder sb = new StringBuilder();
-      sb.append("Closing ").append(name);
-      for (SolrCache cache : cacheList) {
-        sb.append("\n\t");
-        sb.append(cache);
+    if (debug) {
+      if (cachingEnabled) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Closing ").append(name);
+        for (SolrCache cache : cacheList) {
+          sb.append("\n\t");
+          sb.append(cache);
+        }
+        log.debug(sb.toString());
+      } else {
+        if (debug) log.debug("Closing " + name);
       }
-      log.info(sb.toString());
-    } else {
-      log.debug("Closing " + name);
     }
+
     core.getInfoRegistry().remove(name);
 
     // super.close();
@@ -375,6 +383,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable,SolrIn
     return qr;
   }
 
+//  FIXME: This option has been dead/noop since 3.1, should we re-enable or remove it?
 //  public Hits search(Query query, Filter filter, Sort sort) throws IOException {
 //    // todo - when Solr starts accepting filters, need to
 //    // change this conditional check (filter!=null) and create a new filter
@@ -441,40 +450,43 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable,SolrIn
     @Override
     public void stringField(FieldInfo fieldInfo, String value) throws IOException {
       final FieldType ft = new FieldType(TextField.TYPE_STORED);
-      ft.setStoreTermVectors(fieldInfo.storeTermVector);
-      ft.setStoreTermVectors(fieldInfo.storeTermVector);
-      ft.setIndexed(fieldInfo.isIndexed);
-      ft.setOmitNorms(fieldInfo.omitNorms);
-      ft.setIndexOptions(fieldInfo.indexOptions);
+      ft.setStoreTermVectors(fieldInfo.hasVectors());
+      ft.setIndexed(fieldInfo.isIndexed());
+      ft.setOmitNorms(fieldInfo.omitsNorms());
+      ft.setIndexOptions(fieldInfo.getIndexOptions());
       doc.add(new Field(fieldInfo.name, value, ft));
     }
 
     @Override
     public void intField(FieldInfo fieldInfo, int value) {
-      FieldType ft = new FieldType(NumericField.getFieldType(NumericField.DataType.INT, true));
-      ft.setIndexed(fieldInfo.isIndexed);
-      doc.add(new NumericField(fieldInfo.name, value, ft));
+      FieldType ft = new FieldType(IntField.TYPE_NOT_STORED);
+      ft.setStored(true);
+      ft.setIndexed(fieldInfo.isIndexed());
+      doc.add(new IntField(fieldInfo.name, value, ft));
     }
 
     @Override
     public void longField(FieldInfo fieldInfo, long value) {
-      FieldType ft = new FieldType(NumericField.getFieldType(NumericField.DataType.LONG, true));
-      ft.setIndexed(fieldInfo.isIndexed);
-      doc.add(new NumericField(fieldInfo.name, value, ft));
+      FieldType ft = new FieldType(LongField.TYPE_NOT_STORED);
+      ft.setStored(true);
+      ft.setIndexed(fieldInfo.isIndexed());
+      doc.add(new LongField(fieldInfo.name, value, ft));
     }
 
     @Override
     public void floatField(FieldInfo fieldInfo, float value) {
-      FieldType ft = new FieldType(NumericField.getFieldType(NumericField.DataType.FLOAT, true));
-      ft.setIndexed(fieldInfo.isIndexed);
-      doc.add(new NumericField(fieldInfo.name, value, ft));
+      FieldType ft = new FieldType(FloatField.TYPE_NOT_STORED);
+      ft.setStored(true);
+      ft.setIndexed(fieldInfo.isIndexed());
+      doc.add(new FloatField(fieldInfo.name, value, ft));
     }
 
     @Override
     public void doubleField(FieldInfo fieldInfo, double value) {
-      FieldType ft = new FieldType(NumericField.getFieldType(NumericField.DataType.DOUBLE, true));
-      ft.setIndexed(fieldInfo.isIndexed);
-      doc.add(new NumericField(fieldInfo.name, value, ft));
+      FieldType ft = new FieldType(DoubleField.TYPE_NOT_STORED);
+      ft.setStored(true);
+      ft.setIndexed(fieldInfo.isIndexed());
+      doc.add(new DoubleField(fieldInfo.name, value, ft));
     }
   }
 
@@ -1769,7 +1781,12 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable,SolrIn
   }
 
   protected DocList sortDocSet(DocSet set, Sort sort, int nDocs) throws IOException {
-    // bit of a hack to tell if a set is sorted - do it better in the futute.
+    if (nDocs == 0) {
+      // SOLR-2923
+      return new DocSlice(0, 0, new int[0], null, 0, 0f);
+    }
+
+    // bit of a hack to tell if a set is sorted - do it better in the future.
     boolean inOrder = set instanceof BitDocSet || set instanceof SortedIntDocSet;
 
     TopDocsCollector topCollector = TopFieldCollector.create(weightSort(sort), nDocs, false, false, false, inOrder);
@@ -1890,13 +1907,12 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable,SolrIn
    */
   public void warm(SolrIndexSearcher old) throws IOException {
     // Make sure this is first!  filters can help queryResults execute!
-    boolean logme = log.isInfoEnabled();
     long warmingStartTime = System.currentTimeMillis();
     // warm the caches in order...
     ModifiableSolrParams params = new ModifiableSolrParams();
     params.add("warming","true");
     for (int i=0; i<cacheList.length; i++) {
-      if (logme) log.info("autowarming " + this + " from " + old + "\n\t" + old.cacheList[i]);
+      if (debug) log.debug("autowarming " + this + " from " + old + "\n\t" + old.cacheList[i]);
 
 
       SolrQueryRequest req = new LocalSolrQueryRequest(core,params) {
@@ -1916,7 +1932,7 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable,SolrIn
         }
       }
 
-      if (logme) log.info("autowarming result for " + this + "\n\t" + this.cacheList[i]);
+      if (debug) log.debug("autowarming result for " + this + "\n\t" + this.cacheList[i]);
     }
     warmupTime = System.currentTimeMillis() - warmingStartTime;
   }
@@ -1971,10 +1987,6 @@ public class SolrIndexSearcher extends IndexSearcher implements Closeable,SolrIn
 
   public Category getCategory() {
     return Category.CORE;
-  }
-
-  public String getSourceId() {
-    return "$Id$";
   }
 
   public String getSource() {

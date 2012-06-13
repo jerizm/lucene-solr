@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -81,7 +81,7 @@ public abstract class Terms {
    *  measure isn't stored by the codec. Note that, just like 
    *  other term measures, this measure does not take deleted 
    *  documents into account. */
-  public abstract long getUniqueTermCount() throws IOException;
+  public abstract long size() throws IOException;
   
   /** Returns the sum of {@link TermsEnum#totalTermFreq} for
    *  all terms in this field, or -1 if this measure isn't

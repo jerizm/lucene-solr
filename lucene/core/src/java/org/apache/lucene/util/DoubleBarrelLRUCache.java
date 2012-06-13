@@ -1,6 +1,6 @@
 package org.apache.lucene.util;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -44,9 +44,10 @@ import java.util.Map;
 
 final public class DoubleBarrelLRUCache<K extends DoubleBarrelLRUCache.CloneableKey,V> {
 
+  /** Object providing clone(); the key class must subclass this. */
   public static abstract class CloneableKey {
     @Override
-    abstract public Object clone();
+    abstract public CloneableKey clone();
   }
 
   private final Map<K,V> cache1;

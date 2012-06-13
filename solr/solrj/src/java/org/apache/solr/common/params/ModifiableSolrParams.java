@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -42,7 +42,7 @@ public class ModifiableSolrParams extends SolrParams
     vals = new LinkedHashMap<String, String[]>();
   }
 
-  /** Constructs a new ModifiableSolrParams directly using the provided Map<String,String[]> */
+  /** Constructs a new ModifiableSolrParams directly using the provided Map&lt;String,String[]&gt; */
   public ModifiableSolrParams( Map<String,String[]> v )
   {
     vals = v;

@@ -1,6 +1,6 @@
 package org.apache.lucene;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -46,7 +46,7 @@ public class TestSearch extends LuceneTestCase {
     public void testSearch() throws Exception {
       StringWriter sw = new StringWriter();
       PrintWriter pw = new PrintWriter(sw, true);
-      doTestSearch(random, pw, false);
+      doTestSearch(random(), pw, false);
       pw.close();
       sw.close();
       String multiFileOutput = sw.getBuffer().toString();
@@ -54,7 +54,7 @@ public class TestSearch extends LuceneTestCase {
 
       sw = new StringWriter();
       pw = new PrintWriter(sw, true);
-      doTestSearch(random, pw, true);
+      doTestSearch(random(), pw, true);
       pw.close();
       sw.close();
       String singleFileOutput = sw.getBuffer().toString();
@@ -86,13 +86,13 @@ public class TestSearch extends LuceneTestCase {
       };
       for (int j = 0; j < docs.length; j++) {
         Document d = new Document();
-        d.add(newField("contents", docs[j], TextField.TYPE_STORED));
-        d.add(newField("id", ""+j, StringField.TYPE_UNSTORED));
+        d.add(newTextField("contents", docs[j], Field.Store.YES));
+        d.add(newStringField("id", ""+j, Field.Store.NO));
         writer.addDocument(d);
       }
       writer.close();
 
-      IndexReader reader = IndexReader.open(directory);
+      IndexReader reader = DirectoryReader.open(directory);
       IndexSearcher searcher = new IndexSearcher(reader);
 
       ScoreDoc[] hits = null;

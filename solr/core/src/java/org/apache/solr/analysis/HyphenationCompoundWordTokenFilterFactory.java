@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,11 +22,7 @@ import org.apache.lucene.analysis.TokenStream;
 import org.apache.lucene.analysis.compound.CompoundWordTokenFilterBase;
 import org.apache.lucene.analysis.compound.HyphenationCompoundWordTokenFilter;
 import org.apache.lucene.analysis.compound.hyphenation.HyphenationTree;
-import org.apache.lucene.analysis.util.CharArraySet;
-import org.apache.solr.analysis.BaseTokenFilterFactory;
-import org.apache.solr.common.ResourceLoader;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.util.plugin.ResourceLoaderAware;
+import org.apache.lucene.analysis.util.*;
 
 import java.util.Map;
 import java.io.InputStream;
@@ -59,7 +55,7 @@ import org.xml.sax.InputSource;
  *
  * @see HyphenationCompoundWordTokenFilter
  */
-public class HyphenationCompoundWordTokenFilterFactory extends BaseTokenFilterFactory implements ResourceLoaderAware {
+public class HyphenationCompoundWordTokenFilterFactory extends TokenFilterFactory implements ResourceLoaderAware {
   private CharArraySet dictionary;
   private HyphenationTree hyphenator;
   private String dictFile;
@@ -79,8 +75,7 @@ public class HyphenationCompoundWordTokenFilterFactory extends BaseTokenFilterFa
       encoding = args.get("encoding");
     hypFile = args.get("hyphenator");
     if (null == hypFile) {
-      throw new SolrException(SolrException.ErrorCode.SERVER_ERROR,
-          "Missing required parameter: hyphenator");
+      throw new InitializationException("Missing required parameter: hyphenator");
     }
 
     minWordSize = getInt("minWordSize", CompoundWordTokenFilterBase.DEFAULT_MIN_WORD_SIZE);
@@ -102,7 +97,7 @@ public class HyphenationCompoundWordTokenFilterFactory extends BaseTokenFilterFa
       is.setSystemId(hypFile);
       hyphenator = HyphenationCompoundWordTokenFilter.getHyphenationTree(is);
     } catch (Exception e) { // TODO: getHyphenationTree really shouldn't throw "Exception"
-      throw new RuntimeException(e);
+      throw new InitializationException("Exception thrown while loading dictionary and hyphenation file", e);
     } finally {
       IOUtils.closeQuietly(stream);
     }

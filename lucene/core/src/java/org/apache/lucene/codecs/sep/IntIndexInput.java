@@ -1,6 +1,6 @@
 package org.apache.lucene.codecs.sep;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -47,7 +47,7 @@ public abstract class IntIndexInput implements Closeable {
     public abstract void set(Index other);
     
     @Override
-    public abstract Object clone();
+    public abstract Index clone();
   }
 
   public abstract static class Reader {

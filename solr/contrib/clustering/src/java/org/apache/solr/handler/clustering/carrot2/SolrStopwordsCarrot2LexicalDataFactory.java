@@ -1,6 +1,6 @@
 package org.apache.solr.handler.clustering.carrot2;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -22,9 +22,9 @@ import java.util.Set;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.util.CharArraySet;
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 import org.apache.solr.analysis.CommonGramsFilterFactory;
 import org.apache.solr.analysis.StopFilterFactory;
-import org.apache.solr.analysis.TokenFilterFactory;
 import org.apache.solr.analysis.TokenizerChain;
 import org.apache.solr.schema.IndexSchema;
 import org.carrot2.core.LanguageCode;

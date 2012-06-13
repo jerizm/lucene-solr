@@ -1,6 +1,6 @@
 package org.apache.lucene.index;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -486,19 +486,6 @@ public class ConcurrentMergeScheduler extends MergeScheduler {
           updateMergeThreads();
           ConcurrentMergeScheduler.this.notifyAll();
         }
-      }
-    }
-
-    @Override
-    public String toString() {
-      MergePolicy.OneMerge merge = getRunningMerge();
-      if (merge == null) {
-        merge = startMerge;
-      }
-      try {
-        return "merge thread: " + tWriter.segString(merge.segments);
-      } catch (IOException ioe) {
-        throw new RuntimeException(ioe);
       }
     }
   }

@@ -1,6 +1,6 @@
 package org.apache.lucene.search.spans;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,30 +17,30 @@ package org.apache.lucene.search.spans;
  * limitations under the License.
  */
 
-import org.apache.lucene.search.DocIdSetIterator;
-import org.apache.lucene.search.Query;
+import java.io.IOException;
+
+import org.apache.lucene.analysis.MockAnalyzer;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.index.AtomicReaderContext;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.IndexReaderContext;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.RandomIndexWriter;
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.CheckHits;
+import org.apache.lucene.search.DocIdSetIterator;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TermQuery;
-import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.similarities.DefaultSimilarity;
 import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.analysis.MockAnalyzer;
-import org.apache.lucene.index.AtomicReaderContext;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.RandomIndexWriter;
-import org.apache.lucene.index.IndexReaderContext;
-import org.apache.lucene.index.Term;
-import org.apache.lucene.document.Document;
-import org.apache.lucene.document.StringField;
-import org.apache.lucene.document.TextField;
 import org.apache.lucene.util.LuceneTestCase;
 import org.apache.lucene.util.ReaderUtil;
-
-import java.io.IOException;
 
 public class TestSpans extends LuceneTestCase {
   private IndexSearcher searcher;
@@ -53,10 +53,10 @@ public class TestSpans extends LuceneTestCase {
   public void setUp() throws Exception {
     super.setUp();
     directory = newDirectory();
-    RandomIndexWriter writer= new RandomIndexWriter(random, directory, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random)).setMergePolicy(newLogMergePolicy()));
+    RandomIndexWriter writer= new RandomIndexWriter(random(), directory, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMergePolicy(newLogMergePolicy()));
     for (int i = 0; i < docFields.length; i++) {
       Document doc = new Document();
-      doc.add(newField(field, docFields[i], TextField.TYPE_STORED));
+      doc.add(newTextField(field, docFields[i], Field.Store.YES));
       writer.addDocument(doc);
     }
     reader = writer.getReader();
@@ -91,7 +91,7 @@ public class TestSpans extends LuceneTestCase {
   }
   
   private void checkHits(Query query, int[] results) throws IOException {
-    CheckHits.checkHits(random, query, field, searcher, results);
+    CheckHits.checkHits(random(), query, field, searcher, results);
   }
   
   private void orderedSlopTest3SQ(
@@ -445,8 +445,8 @@ public class TestSpans extends LuceneTestCase {
   // LUCENE-1404
   private void addDoc(IndexWriter writer, String id, String text) throws IOException {
     final Document doc = new Document();
-    doc.add( newField("id", id, StringField.TYPE_STORED) );
-    doc.add( newField("text", text, TextField.TYPE_STORED) );
+    doc.add( newStringField("id", id, Field.Store.YES) );
+    doc.add( newTextField("text", text, Field.Store.YES) );
     writer.addDocument(doc);
   }
 
@@ -474,7 +474,7 @@ public class TestSpans extends LuceneTestCase {
   public void testNPESpanQuery() throws Throwable {
     final Directory dir = newDirectory();
     final IndexWriter writer = new IndexWriter(dir, new IndexWriterConfig(
-        TEST_VERSION_CURRENT, new MockAnalyzer(random)));
+        TEST_VERSION_CURRENT, new MockAnalyzer(random())));
 
     // Add documents
     addDoc(writer, "1", "the big dogs went running to the market");
@@ -484,7 +484,7 @@ public class TestSpans extends LuceneTestCase {
     writer.close();
 
     // Get searcher
-    final IndexReader reader = IndexReader.open(dir);
+    final IndexReader reader = DirectoryReader.open(dir);
     final IndexSearcher searcher = newSearcher(reader);
 
     // Control (make sure docs indexed)

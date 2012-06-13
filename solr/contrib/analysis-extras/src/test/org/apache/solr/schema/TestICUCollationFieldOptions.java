@@ -1,6 +1,6 @@
 package org.apache.solr.schema;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,7 +17,6 @@ package org.apache.solr.schema;
  * limitations under the License.
  */
 
-import org.apache.lucene.codecs.Codec;
 import org.apache.solr.SolrTestCaseJ4;
 import org.junit.BeforeClass;
 
@@ -27,7 +26,6 @@ import org.junit.BeforeClass;
 public class TestICUCollationFieldOptions extends SolrTestCaseJ4 {
   @BeforeClass
   public static void beforeClass() throws Exception {
-    assumeFalse("preflex format only supports UTF-8 encoded bytes", "Lucene3x".equals(Codec.getDefault().getName()));
     initCore("solrconfig-icucollate.xml","schema-icucollateoptions.xml", "analysis-extras/solr");
     // add some docs
     assertU(adoc("id", "1", "text", "foo-bar"));

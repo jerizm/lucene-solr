@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,10 +17,12 @@
 
 package org.apache.solr.search;
 
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.apache.lucene.analysis.util.TokenFilterFactory;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.queryparser.classic.QueryParser;
@@ -31,7 +33,8 @@ import org.apache.lucene.util.automaton.BasicAutomata;
 import org.apache.lucene.util.automaton.BasicOperations;
 import org.apache.lucene.util.automaton.SpecialOperations;
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.solr.analysis.*;
+import org.apache.solr.analysis.ReversedWildcardFilterFactory;
+import org.apache.solr.analysis.TokenizerChain;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.IndexSchema;
@@ -58,6 +61,33 @@ public class SolrQueryParser extends QueryParser {
   protected final IndexSchema schema;
   protected final QParser parser;
   protected final String defaultField;
+
+  /** 
+   * Identifies the list of all known "magic fields" that trigger 
+   * special parsing behavior
+   */
+  public static enum MagicFieldName {
+    VAL("_val_", "func"), QUERY("_query_", null);
+    
+    public final String field;
+    public final String subParser;
+    MagicFieldName(final String field, final String subParser) {
+      this.field = field;
+      this.subParser = subParser;
+    }
+    public String toString() {
+      return field;
+    }
+    private final static Map<String,MagicFieldName> lookup 
+      = new HashMap<String,MagicFieldName>();
+    static {
+      for(MagicFieldName s : EnumSet.allOf(MagicFieldName.class))
+        lookup.put(s.toString(), s);
+    }
+    public static MagicFieldName get(final String field) {
+      return lookup.get(field);
+    }
+  }
 
   // implementation detail - caching ReversedWildcardFilterFactory based on type
   private Map<FieldType, ReversedWildcardFilterFactory> leadingWildcards;
@@ -124,13 +154,12 @@ public class SolrQueryParser extends QueryParser {
     checkNullField(field);
     // intercept magic field name of "_" to use as a hook for our
     // own functions.
-    if (field.charAt(0) == '_') {
-      if ("_val_".equals(field)) {
-        QParser nested = parser.subQuery(queryText, "func");
+    if (field.charAt(0) == '_' && parser != null) {
+      MagicFieldName magic = MagicFieldName.get(field);
+      if (null != magic) {
+        QParser nested = parser.subQuery(queryText, magic.subParser);
         return nested.getQuery();
-      } else if ("_query_".equals(field) && parser != null) {
-        return parser.subQuery(queryText, null).getQuery();
-      }
+      } 
     }
     SchemaField sf = schema.getFieldOrNull(field);
     if (sf != null) {

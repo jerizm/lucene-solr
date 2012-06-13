@@ -1,6 +1,6 @@
 package org.apache.lucene.util.packed;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -28,9 +28,8 @@ import java.util.Arrays;
  * @lucene.internal
  */
 
-class Direct8 extends PackedInts.ReaderImpl
-        implements PackedInts.Mutable {
-  private byte[] values;
+class Direct8 extends PackedInts.MutableImpl {
+  private final byte[] values;
   private static final int BITS_PER_VALUE = 8;
 
   public Direct8(int valueCount) {
@@ -70,6 +69,7 @@ class Direct8 extends PackedInts.ReaderImpl
   }
 
   public long get(final int index) {
+    assert index >= 0 && index < size();
     return 0xFFL & values[index];
   }
 
@@ -77,8 +77,14 @@ class Direct8 extends PackedInts.ReaderImpl
     values[index] = (byte)(value & 0xFF);
   }
 
+  @Override
+  public void fill(int fromIndex, int toIndex, long val) {
+    assert (val & 0xffL) == val;
+    Arrays.fill(values, fromIndex, toIndex, (byte) val);
+  }
+
   public long ramBytesUsed() {
-    return RamUsageEstimator.NUM_BYTES_ARRAY_HEADER + values.length;
+    return RamUsageEstimator.sizeOf(values);
   }
 
   public void clear() {

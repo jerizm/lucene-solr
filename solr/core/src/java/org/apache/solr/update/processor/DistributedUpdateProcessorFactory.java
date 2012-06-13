@@ -1,6 +1,6 @@
 package org.apache.solr.update.processor;
 
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -21,9 +21,9 @@ import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SolrQueryRequest;
 import org.apache.solr.response.SolrQueryResponse;
 
-public class DistributedUpdateProcessorFactory extends
-    UpdateRequestProcessorFactory {
-
+public class DistributedUpdateProcessorFactory 
+  extends UpdateRequestProcessorFactory 
+  implements DistributingUpdateProcessorFactory {
   
   @Override
   public void init(NamedList args) {
