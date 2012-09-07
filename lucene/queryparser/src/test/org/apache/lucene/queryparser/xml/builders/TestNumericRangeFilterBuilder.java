@@ -66,7 +66,7 @@ public class TestNumericRangeFilterBuilder extends LuceneTestCase {
     try {
       AtomicReader reader = new SlowCompositeReaderWrapper(DirectoryReader.open(ramDir));
       try {
-        assertNull(filter.getDocIdSet(reader.getTopReaderContext(), reader.getLiveDocs()));
+        assertNull(filter.getDocIdSet(reader.getContext(), reader.getLiveDocs()));
       }
       finally {
         reader.close();
@@ -203,7 +203,7 @@ public class TestNumericRangeFilterBuilder extends LuceneTestCase {
 
   private static Document getDocumentFromString(String str)
       throws SAXException, IOException, ParserConfigurationException {
-    InputStream is = new ByteArrayInputStream(str.getBytes());
+    InputStream is = new ByteArrayInputStream(str.getBytes("UTF-8"));
     DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
     factory.setNamespaceAware(true);
     DocumentBuilder builder = factory.newDocumentBuilder();

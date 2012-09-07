@@ -42,6 +42,7 @@ import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.StoredDocument;
 import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.Term;
@@ -97,7 +98,7 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
 
 
     for (int i = 0; i < hits.scoreDocs.length; i++) {
-      Document doc = searcher.doc(hits.scoreDocs[i].doc);
+      StoredDocument doc = searcher.doc(hits.scoreDocs[i].doc);
       String storedField = doc.get(FIELD_NAME);
 
       TokenStream stream = TokenSources.getAnyTokenStream(searcher
@@ -1371,7 +1372,7 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
     // now an ugly built of XML parsing to test the snippet is encoded OK
     DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
     DocumentBuilder db = dbf.newDocumentBuilder();
-    org.w3c.dom.Document doc = db.parse(new ByteArrayInputStream(xhtml.getBytes()));
+    org.w3c.dom.Document doc = db.parse(new ByteArrayInputStream(xhtml.getBytes("UTF-8")));
     Element root = doc.getDocumentElement();
     NodeList nodes = root.getElementsByTagName("body");
     Element body = (Element) nodes.item(0);
@@ -1458,7 +1459,7 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
       }
 
       @Override
-      public boolean incrementToken() throws IOException {
+      public boolean incrementToken() {
         if(iter.hasNext()) {
           Token token = iter.next();
           clearAttributes();
@@ -1509,7 +1510,7 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
       }
 
       @Override
-      public boolean incrementToken() throws IOException {
+      public boolean incrementToken() {
         if(iter.hasNext()) {
           Token token = iter.next();
           clearAttributes();
@@ -1656,7 +1657,7 @@ public class HighlighterTest extends BaseTokenStreamTestCase implements Formatte
 
     TopDocs hits = searcher.search(query, null, 10);
     for( int i = 0; i < hits.totalHits; i++ ){
-      Document doc = searcher.doc( hits.scoreDocs[i].doc );
+      StoredDocument doc = searcher.doc( hits.scoreDocs[i].doc );
       String result = h.getBestFragment( a, "t_text1", doc.get( "t_text1" ));
       if (VERBOSE) System.out.println("result:" +  result);
       assertEquals("more <B>random</B> words for second field", result);

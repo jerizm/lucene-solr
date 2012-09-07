@@ -17,11 +17,11 @@ package org.apache.lucene.search.vectorhighlight;
  * limitations under the License.
  */
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.apache.lucene.search.vectorhighlight.FieldPhraseList.WeightedPhraseInfo;
 import org.apache.lucene.search.vectorhighlight.FieldPhraseList.WeightedPhraseInfo.Toffs;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * FieldFragList has a list of "frag info" that is used by FragmentsBuilder class
@@ -57,6 +57,9 @@ public abstract class FieldFragList {
     return fragInfos;
   }
 
+  /**
+   * List of term offsets + weight for a frag info
+   */
   public static class WeightedFragInfo {
 
     private List<SubInfo> subInfos;
@@ -97,6 +100,9 @@ public abstract class FieldFragList {
       return sb.toString();
     }
     
+    /**
+     * Represents the list of term offsets for some text
+     */
     public static class SubInfo {
       private final String text;  // unnecessary member, just exists for debugging purpose
       private final List<Toffs> termsOffsets;   // usually termsOffsets.size() == 1,
@@ -116,7 +122,11 @@ public abstract class FieldFragList {
       public int getSeqnum(){
         return seqnum;
       }
-      
+
+      public String getText(){
+        return text;
+      }
+
       @Override
       public String toString(){
         StringBuilder sb = new StringBuilder();

@@ -20,12 +20,12 @@ package org.apache.solr.schema;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.queries.function.valuesource.VectorValueSource;
-import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.StorableField;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.SortField;
-import com.spatial4j.core.context.ParseUtils;
+import com.spatial4j.core.io.ParseUtils;
 import com.spatial4j.core.distance.DistanceUtils;
 import com.spatial4j.core.exception.InvalidShapeException;
 import org.apache.solr.common.SolrException;
@@ -69,7 +69,7 @@ public class PointType extends CoordinateFieldType implements SpatialQueryable {
   }
 
   @Override
-  public IndexableField[] createFields(SchemaField field, Object value, float boost) {
+  public StorableField[] createFields(SchemaField field, Object value, float boost) {
     String externalVal = value.toString();
     String[] point = new String[0];
     try {
@@ -79,11 +79,12 @@ public class PointType extends CoordinateFieldType implements SpatialQueryable {
     }
 
     // TODO: this doesn't currently support polyFields as sub-field types
-    IndexableField[] f = new IndexableField[ (field.indexed() ? dimension : 0) + (field.stored() ? 1 : 0) ];
+    StorableField[] f = new StorableField[ (field.indexed() ? dimension : 0) + (field.stored() ? 1 : 0) ];
 
     if (field.indexed()) {
       for (int i=0; i<dimension; i++) {
-        f[i] = subField(field, i).createField(point[i], boost);
+        SchemaField sf = subField(field, i);
+        f[i] = sf.createField(point[i], sf.indexed() && !sf.omitNorms() ? boost : 1f);
       }
     }
 
@@ -91,7 +92,7 @@ public class PointType extends CoordinateFieldType implements SpatialQueryable {
       String storedVal = externalVal;  // normalize or not?
       FieldType customType = new FieldType();
       customType.setStored(true);
-      f[f.length - 1] = createField(field.getName(), storedVal, customType, boost);
+      f[f.length - 1] = createField(field.getName(), storedVal, customType, 1f);
     }
     
     return f;
@@ -114,12 +115,12 @@ public class PointType extends CoordinateFieldType implements SpatialQueryable {
    *
    */
   @Override
-  public IndexableField createField(SchemaField field, Object value, float boost) {
+  public StorableField createField(SchemaField field, Object value, float boost) {
     throw new UnsupportedOperationException("PointType uses multiple fields.  field=" + field.getName());
   }
 
   @Override
-  public void write(TextResponseWriter writer, String name, IndexableField f) throws IOException {
+  public void write(TextResponseWriter writer, String name, StorableField f) throws IOException {
     writer.writeStr(name, f.stringValue(), false);
   }
 

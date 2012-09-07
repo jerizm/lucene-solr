@@ -21,7 +21,7 @@ import com.spatial4j.core.context.SpatialContext;
 import com.spatial4j.core.shape.Point;
 import com.spatial4j.core.shape.Rectangle;
 import com.spatial4j.core.shape.Shape;
-import com.spatial4j.core.util.GeohashUtils;
+import com.spatial4j.core.io.GeohashUtils;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,6 +30,8 @@ import java.util.List;
 
 /**
  * A SpatialPrefixGrid based on Geohashes.  Uses {@link GeohashUtils} to do all the geohash work.
+ *
+ * @lucene.experimental
  */
 public class GeohashPrefixTree extends SpatialPrefixTree {
 
@@ -38,7 +40,7 @@ public class GeohashPrefixTree extends SpatialPrefixTree {
     @Override
     protected int getLevelForDistance(double degrees) {
       GeohashPrefixTree grid = new GeohashPrefixTree(ctx, GeohashPrefixTree.getMaxLevelsPossible());
-      return grid.getLevelForDistance(degrees) + 1;//returns 1 greater
+      return grid.getLevelForDistance(degrees);
     }
 
     @Override

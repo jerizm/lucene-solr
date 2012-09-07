@@ -39,7 +39,6 @@ import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.FieldCache;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.LockObtainFailedException;
 import org.apache.lucene.store.NoSuchDirectoryException;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
@@ -62,10 +61,10 @@ public class TestDirectoryReader extends LuceneTestCase {
     assertTrue(reader != null);
     assertTrue(reader instanceof StandardDirectoryReader);
     
-    Document newDoc1 = reader.document(0);
+    StoredDocument newDoc1 = reader.document(0);
     assertTrue(newDoc1 != null);
     assertTrue(DocHelper.numFields(newDoc1) == DocHelper.numFields(doc1) - DocHelper.unstored.size());
-    Document newDoc2 = reader.document(1);
+    StoredDocument newDoc2 = reader.document(1);
     assertTrue(newDoc2 != null);
     assertTrue(DocHelper.numFields(newDoc2) == DocHelper.numFields(doc2) - DocHelper.unstored.size());
     Terms vector = reader.getTermVectors(0).terms(DocHelper.TEXT_FIELD_2_KEY);
@@ -98,13 +97,13 @@ public class TestDirectoryReader extends LuceneTestCase {
                                  te2.term(),
                                  MultiFields.getLiveDocs(mr2),
                                  null,
-                                 false);
+                                 0);
 
     TermsEnum te3 = MultiFields.getTerms(mr3, "body").iterator(null);
     te3.seekCeil(new BytesRef("wow"));
     td = _TestUtil.docs(random(), te3, MultiFields.getLiveDocs(mr3),
                         td,
-                        false);
+                        0);
     
     int ret = 0;
 
@@ -356,7 +355,7 @@ void assertTermDocsCount(String msg,
                                   new BytesRef(term.text()),
                                   MultiFields.getLiveDocs(reader),
                                   null,
-                                  false);
+                                  0);
   int count = 0;
   if (tdocs != null) {
     while(tdocs.nextDoc()!= DocIdSetIterator.NO_MORE_DOCS) {
@@ -387,11 +386,11 @@ void assertTermDocsCount(String msg,
       writer.addDocument(doc);
       writer.close();
       DirectoryReader reader = DirectoryReader.open(dir);
-      Document doc2 = reader.document(reader.maxDoc() - 1);
-      IndexableField[] fields = doc2.getFields("bin1");
+      StoredDocument doc2 = reader.document(reader.maxDoc() - 1);
+      StorableField[] fields = doc2.getFields("bin1");
       assertNotNull(fields);
       assertEquals(1, fields.length);
-      IndexableField b1 = fields[0];
+      StorableField b1 = fields[0];
       assertTrue(b1.binaryValue() != null);
       BytesRef bytesRef = b1.binaryValue();
       assertEquals(bin.length, bytesRef.length);
@@ -550,7 +549,7 @@ public void testFilesOpenClose() throws IOException {
     assertEquals("IndexReaders have different values for numDocs.", index1.numDocs(), index2.numDocs());
     assertEquals("IndexReaders have different values for maxDoc.", index1.maxDoc(), index2.maxDoc());
     assertEquals("Only one IndexReader has deletions.", index1.hasDeletions(), index2.hasDeletions());
-    assertEquals("Single segment test differs.", index1.getSequentialSubReaders().length == 1, index2.getSequentialSubReaders().length == 1);
+    assertEquals("Single segment test differs.", index1.leaves().size() == 1, index2.leaves().size() == 1);
     
     // check field names
     FieldInfos fieldInfos1 = MultiFields.getMergedFieldInfos(index1);
@@ -596,13 +595,13 @@ public void testFilesOpenClose() throws IOException {
     // check stored fields
     for (int i = 0; i < index1.maxDoc(); i++) {
       if (liveDocs1 == null || liveDocs1.get(i)) {
-        Document doc1 = index1.document(i);
-        Document doc2 = index2.document(i);
-        List<IndexableField> field1 = doc1.getFields();
-        List<IndexableField> field2 = doc2.getFields();
+        StoredDocument doc1 = index1.document(i);
+        StoredDocument doc2 = index2.document(i);
+        List<StorableField> field1 = doc1.getFields();
+        List<StorableField> field2 = doc2.getFields();
         assertEquals("Different numbers of fields for doc " + i + ".", field1.size(), field2.size());
-        Iterator<IndexableField> itField1 = field1.iterator();
-        Iterator<IndexableField> itField2 = field2.iterator();
+        Iterator<StorableField> itField1 = field1.iterator();
+        Iterator<StorableField> itField2 = field2.iterator();
         while (itField1.hasNext()) {
           Field curField1 = (Field) itField1.next();
           Field curField2 = (Field) itField2.next();
@@ -613,27 +612,27 @@ public void testFilesOpenClose() throws IOException {
     }
     
     // check dictionary and posting lists
-    FieldsEnum fenum1 = MultiFields.getFields(index1).iterator();
-    FieldsEnum fenum2 = MultiFields.getFields(index1).iterator();
-    String field1 = null;
+    Fields fields1 = MultiFields.getFields(index1);
+    Fields fields2 = MultiFields.getFields(index2);
+    Iterator<String> fenum2 = fields2.iterator();
     Bits liveDocs = MultiFields.getLiveDocs(index1);
-    while((field1=fenum1.next()) != null) {
+    for (String field1 : fields1) {
       assertEquals("Different fields", field1, fenum2.next());
-      Terms terms1 = fenum1.terms();
+      Terms terms1 = fields1.terms(field1);
       if (terms1 == null) {
-        assertNull(fenum2.terms());
+        assertNull(fields2.terms(field1));
         continue;
       }
       TermsEnum enum1 = terms1.iterator(null);
 
-      Terms terms2 = fenum2.terms();
+      Terms terms2 = fields2.terms(field1);
       assertNotNull(terms2);
       TermsEnum enum2 = terms2.iterator(null);
 
       while(enum1.next() != null) {
         assertEquals("Different terms", enum1.term(), enum2.next());
-        DocsAndPositionsEnum tp1 = enum1.docsAndPositions(liveDocs, null, false);
-        DocsAndPositionsEnum tp2 = enum2.docsAndPositions(liveDocs, null, false);
+        DocsAndPositionsEnum tp1 = enum1.docsAndPositions(liveDocs, null);
+        DocsAndPositionsEnum tp2 = enum2.docsAndPositions(liveDocs, null);
 
         while(tp1.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
           assertTrue(tp2.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
@@ -645,6 +644,7 @@ public void testFilesOpenClose() throws IOException {
         }
       }
     }
+    assertFalse(fenum2.hasNext());
   }
 
   public void testGetIndexCommit() throws IOException {
@@ -785,7 +785,7 @@ public void testFilesOpenClose() throws IOException {
     DirectoryReader r2 = DirectoryReader.openIfChanged(r);
     assertNotNull(r2);
     r.close();
-    AtomicReader sub0 = r2.getSequentialSubReaders()[0];
+    AtomicReader sub0 = r2.leaves().get(0).reader();
     final int[] ints2 = FieldCache.DEFAULT.getInts(sub0, "number", false);
     r2.close();
     assertTrue(ints == ints2);
@@ -807,16 +807,17 @@ public void testFilesOpenClose() throws IOException {
   
     DirectoryReader r = DirectoryReader.open(dir);
     AtomicReader r1 = getOnlySegmentReader(r);
-    assertEquals(36, r1.getUniqueTermCount());
+    assertEquals(26, r1.terms("field").size());
+    assertEquals(10, r1.terms("number").size());
     writer.addDocument(doc);
     writer.commit();
     DirectoryReader r2 = DirectoryReader.openIfChanged(r);
     assertNotNull(r2);
     r.close();
   
-    IndexReader[] subs = r2.getSequentialSubReaders();
-    for(int i=0;i<subs.length;i++) {
-      assertEquals(36, ((AtomicReader) subs[i]).getUniqueTermCount());
+    for(AtomicReaderContext s : r2.leaves()) {
+      assertEquals(26, s.reader().terms("field").size());
+      assertEquals(10, s.reader().terms("number").size());
     }
     r2.close();
     writer.close();
@@ -842,7 +843,7 @@ public void testFilesOpenClose() throws IOException {
       // expected
     }
   
-    assertEquals(-1, ((SegmentReader) r.getSequentialSubReaders()[0]).getTermInfosIndexDivisor());
+    assertEquals(-1, ((SegmentReader) r.leaves().get(0).reader()).getTermInfosIndexDivisor());
     writer = new IndexWriter(
         dir,
         newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).
@@ -857,11 +858,11 @@ public void testFilesOpenClose() throws IOException {
     assertNotNull(r2);
     assertNull(DirectoryReader.openIfChanged(r2));
     r.close();
-    IndexReader[] subReaders = r2.getSequentialSubReaders();
-    assertEquals(2, subReaders.length);
-    for(int i=0;i<2;i++) {
+    List<AtomicReaderContext> leaves = r2.leaves();
+    assertEquals(2, leaves.size());
+    for(AtomicReaderContext ctx : leaves) {
       try {
-        subReaders[i].docFreq(new Term("field", "f"));
+        ctx.reader().docFreq(new Term("field", "f"));
         fail("did not hit expected exception");
       } catch (IllegalStateException ise) {
         // expected
@@ -1003,7 +1004,7 @@ public void testFilesOpenClose() throws IOException {
     dir.close();
   }
   
-  public void testTryIncRef() throws CorruptIndexException, LockObtainFailedException, IOException {
+  public void testTryIncRef() throws IOException {
     Directory dir = newDirectory();
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
     writer.addDocument(new Document());
@@ -1017,7 +1018,7 @@ public void testFilesOpenClose() throws IOException {
     dir.close();
   }
   
-  public void testStressTryIncRef() throws CorruptIndexException, LockObtainFailedException, IOException, InterruptedException {
+  public void testStressTryIncRef() throws IOException, InterruptedException {
     Directory dir = newDirectory();
     IndexWriter writer = new IndexWriter(dir, newIndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())));
     writer.addDocument(new Document());
@@ -1081,7 +1082,7 @@ public void testFilesOpenClose() throws IOException {
     Set<String> fieldsToLoad = new HashSet<String>();
     assertEquals(0, r.document(0, fieldsToLoad).getFields().size());
     fieldsToLoad.add("field1");
-    Document doc2 = r.document(0, fieldsToLoad);
+    StoredDocument doc2 = r.document(0, fieldsToLoad);
     assertEquals(1, doc2.getFields().size());
     assertEquals("foobar", doc2.get("field1"));
     r.close();

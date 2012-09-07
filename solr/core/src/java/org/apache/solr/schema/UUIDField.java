@@ -22,7 +22,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+import org.apache.lucene.index.GeneralField;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.StorableField;
 import org.apache.lucene.search.SortField;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.response.TextResponseWriter;
@@ -53,7 +55,7 @@ public class UUIDField extends StrField {
   }
 
   @Override
-  public void write(TextResponseWriter writer, String name, IndexableField f)
+  public void write(TextResponseWriter writer, String name, StorableField f)
       throws IOException {
     writer.writeStr(name, f.stringValue(), false);
   }
@@ -70,7 +72,7 @@ public class UUIDField extends StrField {
   @Override
   public String toInternal(String val) {
     if (val == null || 0==val.length() || NEW.equals(val)) {
-      return UUID.randomUUID().toString().toLowerCase(Locale.ENGLISH);
+      return UUID.randomUUID().toString().toLowerCase(Locale.ROOT);
     } else {
       // we do some basic validation if 'val' looks like an UUID
       if (val.length() != 36 || val.charAt(8) != DASH || val.charAt(13) != DASH
@@ -79,16 +81,16 @@ public class UUIDField extends StrField {
             "Invalid UUID String: '" + val + "'");
       }
 
-      return val.toLowerCase(Locale.ENGLISH);
+      return val.toLowerCase(Locale.ROOT);
     }
   }
 
   public String toInternal(UUID uuid) {
-    return uuid.toString().toLowerCase(Locale.ENGLISH);
+    return uuid.toString().toLowerCase(Locale.ROOT);
   }
 
   @Override
-  public UUID toObject(IndexableField f) {
+  public UUID toObject(StorableField f) {
     return UUID.fromString(f.stringValue());
   }
 }

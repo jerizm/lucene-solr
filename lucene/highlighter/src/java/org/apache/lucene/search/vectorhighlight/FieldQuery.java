@@ -321,6 +321,10 @@ public class FieldQuery {
     return termOrPhraseNumber++;
   }
   
+  /**
+   * Internal structure of a query for highlighting: represents
+   * a nested query structure
+   */
   public static class QueryPhraseMap {
 
     boolean terminal;
@@ -348,7 +352,7 @@ public class FieldQuery {
       return map;
     }
 
-      void add( Query query, IndexReader reader ) throws IOException {
+      void add( Query query, IndexReader reader ) {
       if( query instanceof TermQuery ){
         addTerm( ((TermQuery)query).getTerm(), query.getBoost() );
       }

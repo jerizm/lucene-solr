@@ -39,6 +39,8 @@ import java.util.LinkedList;
  * This filter recursively traverses each grid length and uses methods on {@link Shape} to efficiently know
  * that all points at a prefix fit in the shape or not to either short-circuit unnecessary traversals or to efficiently
  * load all enclosed points.
+ *
+ * @lucene.internal
  */
 public class RecursivePrefixTreeFilter extends Filter {
 
@@ -110,7 +112,7 @@ RE "scan" threshold:
       if (seekStat == TermsEnum.SeekStatus.NOT_FOUND)
         continue;
       if (cell.getLevel() == detailLevel || cell.isLeaf()) {
-        docsEnum = termsEnum.docs(acceptDocs, docsEnum, false);
+        docsEnum = termsEnum.docs(acceptDocs, docsEnum, 0);
         addDocs(docsEnum,bits);
       } else {//any other intersection
         //If the next indexed term is the leaf marker, then add all of them
@@ -118,7 +120,7 @@ RE "scan" threshold:
         assert StringHelper.startsWith(nextCellTerm, cellTerm);
         scanCell = grid.getNode(nextCellTerm.bytes, nextCellTerm.offset, nextCellTerm.length, scanCell);
         if (scanCell.isLeaf()) {
-          docsEnum = termsEnum.docs(acceptDocs, docsEnum, false);
+          docsEnum = termsEnum.docs(acceptDocs, docsEnum, 0);
           addDocs(docsEnum,bits);
           termsEnum.next();//move pointer to avoid potential redundant addDocs() below
         }
@@ -140,10 +142,10 @@ RE "scan" threshold:
             if (termLevel == detailLevel || scanCell.isLeaf()) {
               //TODO should put more thought into implications of box vs point
               Shape cShape = termLevel == grid.getMaxLevels() ? scanCell.getCenter() : scanCell.getShape();
-              if(queryShape.relate(cShape, grid.getSpatialContext()) == SpatialRelation.DISJOINT)
+              if(queryShape.relate(cShape) == SpatialRelation.DISJOINT)
                 continue;
 
-              docsEnum = termsEnum.docs(acceptDocs, docsEnum, false);
+              docsEnum = termsEnum.docs(acceptDocs, docsEnum, 0);
               addDocs(docsEnum,bits);
             }
           }//term loop

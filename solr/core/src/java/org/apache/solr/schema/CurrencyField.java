@@ -17,7 +17,9 @@ package org.apache.solr.schema;
  */
 
 import org.apache.lucene.index.AtomicReaderContext;
+import org.apache.lucene.index.GeneralField;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.StorableField;
 import org.apache.lucene.queries.function.FunctionValues;
 import org.apache.lucene.queries.function.ValueSource;
 import org.apache.lucene.search.Query;
@@ -131,14 +133,14 @@ public class CurrencyField extends FieldType implements SchemaAware, ResourceLoa
   }
 
   @Override
-  public IndexableField[] createFields(SchemaField field, Object externalVal, float boost) {
+  public StorableField[] createFields(SchemaField field, Object externalVal, float boost) {
     CurrencyValue value = CurrencyValue.parse(externalVal.toString(), defaultCurrency);
 
-    IndexableField[] f = new IndexableField[field.stored() ? 3 : 2];
+    StorableField[] f = new StorableField[field.stored() ? 3 : 2];
     SchemaField amountField = getAmountField(field);
-    f[0] = amountField.createField(String.valueOf(value.getAmount()), amountField.omitNorms() ? 1F : boost);
+    f[0] = amountField.createField(String.valueOf(value.getAmount()), amountField.indexed() && !amountField.omitNorms() ? boost : 1F);
     SchemaField currencyField = getCurrencyField(field);
-    f[1] = currencyField.createField(value.getCurrencyCode(), currencyField.omitNorms() ? 1F : boost);
+    f[1] = currencyField.createField(value.getCurrencyCode(), currencyField.indexed() && !currencyField.omitNorms() ? boost : 1F);
 
     if (field.stored()) {
       org.apache.lucene.document.FieldType customType = new org.apache.lucene.document.FieldType();
@@ -148,7 +150,7 @@ public class CurrencyField extends FieldType implements SchemaAware, ResourceLoa
       if (storedValue.indexOf(",") < 0) {
         storedValue += "," + defaultCurrency;
       }
-      f[2] = createField(field.getName(), storedValue, customType, boost);
+      f[2] = createField(field.getName(), storedValue, customType, 1F);
     }
 
     return f;
@@ -237,12 +239,8 @@ public class CurrencyField extends FieldType implements SchemaAware, ResourceLoa
     }
   }
 
-  public void write(XMLWriter xmlWriter, String name, IndexableField field) throws IOException {
-    xmlWriter.writeStr(name, field.stringValue(), false);
-  }
-
   @Override
-  public void write(TextResponseWriter writer, String name, IndexableField field) throws IOException {
+  public void write(TextResponseWriter writer, String name, StorableField field) throws IOException {
     writer.writeStr(name, field.stringValue(), false);
   }
 

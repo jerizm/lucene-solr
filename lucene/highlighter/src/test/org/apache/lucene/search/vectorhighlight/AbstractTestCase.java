@@ -176,6 +176,8 @@ public abstract class AbstractTestCase extends LuceneTestCase {
 
     BytesRef bytesRef = termAttribute.getBytesRef();
 
+    tokenStream.reset();
+    
     while (tokenStream.incrementToken()) {
       termAttribute.fillBytesRef();
       bytesRefs.add(BytesRef.deepCopyOf(bytesRef));
@@ -317,13 +319,7 @@ public abstract class AbstractTestCase extends LuceneTestCase {
     }
     
     @Override
-    public void reset( Reader input ) throws IOException {
-      super.reset( input );
-      reset();
-    }
-    
-    @Override
-    public void reset() throws IOException {
+    public void reset() {
       startTerm = 0;
       nextStartOffset = 0;
       snippet = null;

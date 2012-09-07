@@ -173,15 +173,15 @@ public class TestDuelingCodecs extends LuceneTestCase {
     }
     assertFieldStatistics(leftFields, rightFields);
     
-    FieldsEnum leftEnum = leftFields.iterator();
-    FieldsEnum rightEnum = rightFields.iterator();
+    Iterator<String> leftEnum = leftFields.iterator();
+    Iterator<String> rightEnum = rightFields.iterator();
     
-    String field;
-    while ((field = leftEnum.next()) != null) {
+    while (leftEnum.hasNext()) {
+      String field = leftEnum.next();
       assertEquals(info, field, rightEnum.next());
-      assertTerms(leftEnum.terms(), rightEnum.terms(), deep);
+      assertTerms(leftFields.terms(field), rightFields.terms(field), deep);
     }
-    assertNull(rightEnum.next());
+    assertFalse(rightEnum.hasNext());
   }
   
   /** 
@@ -190,10 +190,6 @@ public class TestDuelingCodecs extends LuceneTestCase {
   public void assertFieldStatistics(Fields leftFields, Fields rightFields) throws Exception {
     if (leftFields.size() != -1 && rightFields.size() != -1) {
       assertEquals(info, leftFields.size(), rightFields.size());
-    }
-    
-    if (leftFields.getUniqueTermCount() != -1 && rightFields.getUniqueTermCount() != -1) {
-      assertEquals(info, leftFields.getUniqueTermCount(), rightFields.getUniqueTermCount());
     }
   }
   
@@ -207,6 +203,9 @@ public class TestDuelingCodecs extends LuceneTestCase {
       return;
     }
     assertTermsStatistics(leftTerms, rightTerms);
+    assertEquals(leftTerms.hasOffsets(), rightTerms.hasOffsets());
+    assertEquals(leftTerms.hasPositions(), rightTerms.hasPositions());
+    assertEquals(leftTerms.hasPayloads(), rightTerms.hasPayloads());
 
     TermsEnum leftTermsEnum = leftTerms.iterator(null);
     TermsEnum rightTermsEnum = rightTerms.iterator(null);
@@ -329,52 +328,52 @@ public class TestDuelingCodecs extends LuceneTestCase {
       assertEquals(info, term, rightTermsEnum.next());
       assertTermStats(leftTermsEnum, rightTermsEnum);
       if (deep) {
-        assertDocsAndPositionsEnum(leftPositions = leftTermsEnum.docsAndPositions(null, leftPositions, false),
-                                   rightPositions = rightTermsEnum.docsAndPositions(null, rightPositions, false));
-        assertDocsAndPositionsEnum(leftPositions = leftTermsEnum.docsAndPositions(randomBits, leftPositions, false),
-                                   rightPositions = rightTermsEnum.docsAndPositions(randomBits, rightPositions, false));
+        assertDocsAndPositionsEnum(leftPositions = leftTermsEnum.docsAndPositions(null, leftPositions),
+                                   rightPositions = rightTermsEnum.docsAndPositions(null, rightPositions));
+        assertDocsAndPositionsEnum(leftPositions = leftTermsEnum.docsAndPositions(randomBits, leftPositions),
+                                   rightPositions = rightTermsEnum.docsAndPositions(randomBits, rightPositions));
 
         assertPositionsSkipping(leftTermsEnum.docFreq(), 
-                                leftPositions = leftTermsEnum.docsAndPositions(null, leftPositions, false),
-                                rightPositions = rightTermsEnum.docsAndPositions(null, rightPositions, false));
+                                leftPositions = leftTermsEnum.docsAndPositions(null, leftPositions),
+                                rightPositions = rightTermsEnum.docsAndPositions(null, rightPositions));
         assertPositionsSkipping(leftTermsEnum.docFreq(), 
-                                leftPositions = leftTermsEnum.docsAndPositions(randomBits, leftPositions, false),
-                                rightPositions = rightTermsEnum.docsAndPositions(randomBits, rightPositions, false));
+                                leftPositions = leftTermsEnum.docsAndPositions(randomBits, leftPositions),
+                                rightPositions = rightTermsEnum.docsAndPositions(randomBits, rightPositions));
 
         // with freqs:
-        assertDocsEnum(leftDocs = leftTermsEnum.docs(null, leftDocs, true),
-            rightDocs = rightTermsEnum.docs(null, rightDocs, true),
+        assertDocsEnum(leftDocs = leftTermsEnum.docs(null, leftDocs),
+            rightDocs = rightTermsEnum.docs(null, rightDocs),
             true);
-        assertDocsEnum(leftDocs = leftTermsEnum.docs(randomBits, leftDocs, true),
-            rightDocs = rightTermsEnum.docs(randomBits, rightDocs, true),
+        assertDocsEnum(leftDocs = leftTermsEnum.docs(randomBits, leftDocs),
+            rightDocs = rightTermsEnum.docs(randomBits, rightDocs),
             true);
 
         // w/o freqs:
-        assertDocsEnum(leftDocs = leftTermsEnum.docs(null, leftDocs, false),
-            rightDocs = rightTermsEnum.docs(null, rightDocs, false),
+        assertDocsEnum(leftDocs = leftTermsEnum.docs(null, leftDocs, 0),
+            rightDocs = rightTermsEnum.docs(null, rightDocs, 0),
             false);
-        assertDocsEnum(leftDocs = leftTermsEnum.docs(randomBits, leftDocs, false),
-            rightDocs = rightTermsEnum.docs(randomBits, rightDocs, false),
+        assertDocsEnum(leftDocs = leftTermsEnum.docs(randomBits, leftDocs, 0),
+            rightDocs = rightTermsEnum.docs(randomBits, rightDocs, 0),
             false);
         
         // with freqs:
         assertDocsSkipping(leftTermsEnum.docFreq(), 
-            leftDocs = leftTermsEnum.docs(null, leftDocs, true),
-            rightDocs = rightTermsEnum.docs(null, rightDocs, true),
+            leftDocs = leftTermsEnum.docs(null, leftDocs),
+            rightDocs = rightTermsEnum.docs(null, rightDocs),
             true);
         assertDocsSkipping(leftTermsEnum.docFreq(), 
-            leftDocs = leftTermsEnum.docs(randomBits, leftDocs, true),
-            rightDocs = rightTermsEnum.docs(randomBits, rightDocs, true),
+            leftDocs = leftTermsEnum.docs(randomBits, leftDocs),
+            rightDocs = rightTermsEnum.docs(randomBits, rightDocs),
             true);
 
         // w/o freqs:
         assertDocsSkipping(leftTermsEnum.docFreq(), 
-            leftDocs = leftTermsEnum.docs(null, leftDocs, false),
-            rightDocs = rightTermsEnum.docs(null, rightDocs, false),
+            leftDocs = leftTermsEnum.docs(null, leftDocs, 0),
+            rightDocs = rightTermsEnum.docs(null, rightDocs, 0),
             false);
         assertDocsSkipping(leftTermsEnum.docFreq(), 
-            leftDocs = leftTermsEnum.docs(randomBits, leftDocs, false),
-            rightDocs = rightTermsEnum.docs(randomBits, rightDocs, false),
+            leftDocs = leftTermsEnum.docs(randomBits, leftDocs, 0),
+            rightDocs = rightTermsEnum.docs(randomBits, rightDocs, 0),
             false);
       }
     }
@@ -409,12 +408,9 @@ public class TestDuelingCodecs extends LuceneTestCase {
       assertEquals(info, freq, rightDocs.freq());
       for (int i = 0; i < freq; i++) {
         assertEquals(info, leftDocs.nextPosition(), rightDocs.nextPosition());
-        assertEquals(info, leftDocs.hasPayload(), rightDocs.hasPayload());
+        assertEquals(info, leftDocs.getPayload(), rightDocs.getPayload());
         assertEquals(info, leftDocs.startOffset(), rightDocs.startOffset());
         assertEquals(info, leftDocs.endOffset(), rightDocs.endOffset());
-        if (leftDocs.hasPayload()) {
-          assertEquals(info, leftDocs.getPayload(), rightDocs.getPayload());
-        }
       }
     }
     assertEquals(info, DocIdSetIterator.NO_MORE_DOCS, rightDocs.nextDoc());
@@ -506,10 +502,7 @@ public class TestDuelingCodecs extends LuceneTestCase {
       assertEquals(info, freq, rightDocs.freq());
       for (int i = 0; i < freq; i++) {
         assertEquals(info, leftDocs.nextPosition(), rightDocs.nextPosition());
-        assertEquals(info, leftDocs.hasPayload(), rightDocs.hasPayload());
-        if (leftDocs.hasPayload()) {
-          assertEquals(info, leftDocs.getPayload(), rightDocs.getPayload());
-        }
+        assertEquals(info, leftDocs.getPayload(), rightDocs.getPayload());
       }
     }
   }
@@ -528,9 +521,7 @@ public class TestDuelingCodecs extends LuceneTestCase {
       return;
     }
     
-    FieldsEnum fieldsEnum = leftFields.iterator();
-    String field;
-    while ((field = fieldsEnum.next()) != null) {
+    for (String field : leftFields) {
       DocValues leftNorms = MultiDocValues.getNormDocValues(leftReader, field);
       DocValues rightNorms = MultiDocValues.getNormDocValues(rightReader, field);
       if (leftNorms != null && rightNorms != null) {
@@ -548,25 +539,25 @@ public class TestDuelingCodecs extends LuceneTestCase {
   public void assertStoredFields(IndexReader leftReader, IndexReader rightReader) throws Exception {
     assert leftReader.maxDoc() == rightReader.maxDoc();
     for (int i = 0; i < leftReader.maxDoc(); i++) {
-      Document leftDoc = leftReader.document(i);
-      Document rightDoc = rightReader.document(i);
+      StoredDocument leftDoc = leftReader.document(i);
+      StoredDocument rightDoc = rightReader.document(i);
       
       // TODO: I think this is bogus because we don't document what the order should be
       // from these iterators, etc. I think the codec/IndexReader should be free to order this stuff
       // in whatever way it wants (e.g. maybe it packs related fields together or something)
       // To fix this, we sort the fields in both documents by name, but
       // we still assume that all instances with same name are in order:
-      Comparator<IndexableField> comp = new Comparator<IndexableField>() {
+      Comparator<StorableField> comp = new Comparator<StorableField>() {
         @Override
-        public int compare(IndexableField arg0, IndexableField arg1) {
+        public int compare(StorableField arg0, StorableField arg1) {
           return arg0.name().compareTo(arg1.name());
         }        
       };
       Collections.sort(leftDoc.getFields(), comp);
       Collections.sort(rightDoc.getFields(), comp);
 
-      Iterator<IndexableField> leftIterator = leftDoc.iterator();
-      Iterator<IndexableField> rightIterator = rightDoc.iterator();
+      Iterator<StorableField> leftIterator = leftDoc.iterator();
+      Iterator<StorableField> rightIterator = rightDoc.iterator();
       while (leftIterator.hasNext()) {
         assertTrue(info, rightIterator.hasNext());
         assertStoredField(leftIterator.next(), rightIterator.next());
@@ -578,7 +569,7 @@ public class TestDuelingCodecs extends LuceneTestCase {
   /** 
    * checks that two stored fields are equivalent 
    */
-  public void assertStoredField(IndexableField leftField, IndexableField rightField) {
+  public void assertStoredField(StorableField leftField, StorableField rightField) {
     assertEquals(info, leftField.name(), rightField.name());
     assertEquals(info, leftField.binaryValue(), rightField.binaryValue());
     assertEquals(info, leftField.stringValue(), rightField.stringValue());

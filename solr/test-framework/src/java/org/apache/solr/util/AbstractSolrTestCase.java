@@ -25,6 +25,8 @@ import java.util.*;
 import javax.xml.xpath.XPathExpressionException;
 
 import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.util.QuickPatchThreadsFilter;
+import org.apache.solr.SolrIgnoredThreadsFilter;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.*;
 import org.apache.solr.common.params.CommonParams;
@@ -38,7 +40,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
 
-import com.carrotsearch.randomizedtesting.annotations.ThreadLeaks;
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeakFilters;
 import com.carrotsearch.randomizedtesting.rules.SystemPropertiesRestoreRule;
 
 /**
@@ -54,6 +56,10 @@ import com.carrotsearch.randomizedtesting.rules.SystemPropertiesRestoreRule;
  * @see #setUp
  * @see #tearDown
  */
+@ThreadLeakFilters(defaultFilters = true, filters = {
+    SolrIgnoredThreadsFilter.class,
+    QuickPatchThreadsFilter.class
+})
 public abstract class AbstractSolrTestCase extends LuceneTestCase {
   protected SolrConfig solrConfig;
 
@@ -98,19 +104,20 @@ public abstract class AbstractSolrTestCase extends LuceneTestCase {
   
   @ClassRule
   public static TestRule solrClassRules = 
-    RuleChain.outerRule(new SystemPropertiesRestoreRule());
+    RuleChain.outerRule(new SystemPropertiesRestoreRule())
+             .around(new RevertDefaultThreadHandlerRule());
 
   @Rule
   public TestRule solrTestRules = 
     RuleChain.outerRule(new SystemPropertiesRestoreRule());
   
   @BeforeClass
-  public static void beforeClassAbstractSolrTestCase() throws Exception {
+  public static void beforeClassAbstractSolrTestCase() {
     SolrTestCaseJ4.startTrackingSearchers();
   }
   
   @AfterClass
-  public static void afterClassAbstractSolrTestCase() throws Exception {
+  public static void afterClassAbstractSolrTestCase() {
     SolrTestCaseJ4.endTrackingSearchers();
   }
   
@@ -148,7 +155,7 @@ public abstract class AbstractSolrTestCase extends LuceneTestCase {
     System.setProperty("solr.solr.home", getSolrHome());
     if (configFile != null) {
 
-      solrConfig = TestHarness.createConfig(getSolrConfigFile());
+      solrConfig = TestHarness.createConfig(getSolrHome(), getSolrConfigFile());
       h = new TestHarness( dataDir.getAbsolutePath(),
               solrConfig,
               getSchemaFile());
@@ -458,7 +465,7 @@ public abstract class AbstractSolrTestCase extends LuceneTestCase {
   }
 
   /** @see SolrTestCaseJ4#getFile */
-  public static File getFile(String name) throws IOException {
+  public static File getFile(String name) {
     return SolrTestCaseJ4.getFile(name);
   }
 }

@@ -22,22 +22,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import org.apache.lucene.codecs.BlockTermsReader;
-import org.apache.lucene.codecs.BlockTermsWriter;
 import org.apache.lucene.codecs.BlockTreeTermsReader;
 import org.apache.lucene.codecs.BlockTreeTermsWriter;
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.FieldsProducer;
-import org.apache.lucene.codecs.FixedGapTermsIndexReader;
-import org.apache.lucene.codecs.FixedGapTermsIndexWriter;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.PostingsReaderBase;
 import org.apache.lucene.codecs.PostingsWriterBase;
 import org.apache.lucene.codecs.TermStats;
-import org.apache.lucene.codecs.TermsIndexReaderBase;
-import org.apache.lucene.codecs.TermsIndexWriterBase;
-import org.apache.lucene.codecs.VariableGapTermsIndexReader;
-import org.apache.lucene.codecs.VariableGapTermsIndexWriter;
+import org.apache.lucene.codecs.blockterms.BlockTermsReader;
+import org.apache.lucene.codecs.blockterms.BlockTermsWriter;
+import org.apache.lucene.codecs.blockterms.FixedGapTermsIndexReader;
+import org.apache.lucene.codecs.blockterms.FixedGapTermsIndexWriter;
+import org.apache.lucene.codecs.blockterms.TermsIndexReaderBase;
+import org.apache.lucene.codecs.blockterms.TermsIndexWriterBase;
+import org.apache.lucene.codecs.blockterms.VariableGapTermsIndexReader;
+import org.apache.lucene.codecs.blockterms.VariableGapTermsIndexWriter;
 import org.apache.lucene.codecs.lucene40.Lucene40PostingsReader;
 import org.apache.lucene.codecs.lucene40.Lucene40PostingsWriter;
 import org.apache.lucene.codecs.mockintblock.MockFixedIntBlockPostingsFormat;
@@ -71,13 +71,22 @@ public class MockRandomPostingsFormat extends PostingsFormat {
   private final String SEED_EXT = "sd";
   
   public MockRandomPostingsFormat() {
-    // just for reading, we are gonna setSeed from the .seed file... right?
-    this(new Random());
+    // This ctor should *only* be used at read-time: get NPE if you use it!
+    this(null);
   }
   
   public MockRandomPostingsFormat(Random random) {
     super("MockRandom");
-    this.seedRandom = new Random(random.nextLong());
+    if (random == null) {
+      this.seedRandom = new Random(0L) {
+        @Override
+        protected int next(int arg0) {
+          throw new IllegalStateException("Please use MockRandomPostingsFormat(Random)");
+        }
+      };
+    } else {
+      this.seedRandom = new Random(random.nextLong());
+    }
   }
 
   // Chooses random IntStreamFactory depending on file's extension
@@ -319,7 +328,7 @@ public class MockRandomPostingsFormat extends PostingsFormat {
       try {
         fields = new BlockTreeTermsReader(state.dir,
                                           state.fieldInfos,
-                                          state.segmentInfo.name,
+                                          state.segmentInfo,
                                           postingsReader,
                                           state.context,
                                           state.segmentSuffix,
@@ -389,7 +398,7 @@ public class MockRandomPostingsFormat extends PostingsFormat {
         fields = new BlockTermsReader(indexReader,
                                       state.dir,
                                       state.fieldInfos,
-                                      state.segmentInfo.name,
+                                      state.segmentInfo,
                                       postingsReader,
                                       state.context,
                                       termsCacheSize,

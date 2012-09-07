@@ -84,7 +84,7 @@ public class TestIndexWriterMerging extends LuceneTestCase
     int max = reader.maxDoc();
     for (int i = 0; i < max; i++)
     {
-      Document temp = reader.document(i);
+      StoredDocument temp = reader.document(i);
       //System.out.println("doc "+i+"="+temp.getField("count").stringValue());
       //compare the index doc number to the value that it should be
       if (!temp.getField("count").stringValue().equals((i + startAt) + ""))
@@ -312,7 +312,7 @@ public class TestIndexWriterMerging extends LuceneTestCase
   private class MyMergeScheduler extends MergeScheduler {
     @Override
     synchronized public void merge(IndexWriter writer)
-      throws CorruptIndexException, IOException {
+      throws IOException {
 
       while(true) {
         MergePolicy.OneMerge merge = writer.getNextMerge();

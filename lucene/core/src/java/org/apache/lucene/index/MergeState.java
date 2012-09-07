@@ -19,8 +19,6 @@ package org.apache.lucene.index;
 
 import java.util.List;
 
-import org.apache.lucene.index.PayloadProcessorProvider.PayloadProcessor;
-import org.apache.lucene.index.PayloadProcessorProvider.ReaderPayloadProcessor;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.InfoStream;
@@ -31,18 +29,9 @@ import org.apache.lucene.util.packed.PackedInts;
  * @lucene.experimental */
 public class MergeState {
 
-  public static class IndexReaderAndLiveDocs {
-    public final AtomicReader reader;
-    public final Bits liveDocs;
-    public final int numDeletedDocs;
-
-    public IndexReaderAndLiveDocs(AtomicReader reader, Bits liveDocs, int numDeletedDocs) {
-      this.reader = reader;
-      this.liveDocs = liveDocs;
-      this.numDeletedDocs = numDeletedDocs;
-    }
-  }
-
+  /**
+   * Remaps docids around deletes during merge
+   */
   public static abstract class DocMap {
     private final Bits liveDocs;
 
@@ -50,17 +39,17 @@ public class MergeState {
       this.liveDocs = liveDocs;
     }
 
-    public static DocMap build(IndexReaderAndLiveDocs reader) {
-      final int maxDoc = reader.reader.maxDoc();
-      final int numDeletes = reader.numDeletedDocs;
+    public static DocMap build(AtomicReader reader) {
+      final int maxDoc = reader.maxDoc();
+      final int numDeletes = reader.numDeletedDocs();
       final int numDocs = maxDoc - numDeletes;
-      assert reader.liveDocs != null || numDeletes == 0;
+      assert reader.getLiveDocs() != null || numDeletes == 0;
       if (numDeletes == 0) {
         return new NoDelDocMap(maxDoc);
       } else if (numDeletes < numDocs) {
-        return buildDelCountDocmap(maxDoc, numDeletes, reader.liveDocs, PackedInts.COMPACT);
+        return buildDelCountDocmap(maxDoc, numDeletes, reader.getLiveDocs(), PackedInts.COMPACT);
       } else {
-        return buildDirectDocMap(maxDoc, numDocs, reader.liveDocs, PackedInts.COMPACT);
+        return buildDirectDocMap(maxDoc, numDocs, reader.getLiveDocs(), PackedInts.COMPACT);
       }
     }
 
@@ -197,7 +186,7 @@ public class MergeState {
 
   public SegmentInfo segmentInfo;
   public FieldInfos fieldInfos;
-  public List<IndexReaderAndLiveDocs> readers;        // Readers & liveDocs being merged
+  public List<AtomicReader> readers;                  // Readers being merged
   public DocMap[] docMaps;                            // Maps docIDs around deletions
   public int[] docBase;                               // New docID base per reader
   public CheckAbort checkAbort;
@@ -206,18 +195,14 @@ public class MergeState {
   // Updated per field;
   public FieldInfo fieldInfo;
   
-  // Used to process payloads
-  // TODO: this is a FactoryFactory here basically
-  // and we could make a codec(wrapper) to do all of this privately so IW is uninvolved
-  public PayloadProcessorProvider payloadProcessorProvider;
-  public ReaderPayloadProcessor[] readerPayloadProcessor;
-  public PayloadProcessor[] currentPayloadProcessor;
-
   // TODO: get rid of this? it tells you which segments are 'aligned' (e.g. for bulk merging)
   // but is this really so expensive to compute again in different components, versus once in SM?
   public SegmentReader[] matchingSegmentReaders;
   public int matchedCount;
   
+  /**
+   * Class for recording units of work when merging segments.
+   */
   public static class CheckAbort {
     private double workCount;
     private final MergePolicy.OneMerge merge;
@@ -247,7 +232,7 @@ public class MergeState {
      * @lucene.internal */
     static final MergeState.CheckAbort NONE = new MergeState.CheckAbort(null, null) {
       @Override
-      public void work(double units) throws MergePolicy.MergeAbortedException {
+      public void work(double units) {
         // do nothing
       }
     };

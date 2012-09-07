@@ -25,7 +25,7 @@ import java.io.Reader;
 
 
 /**
- *
+ * @lucene.internal
  */
 class PrefixCellsTokenizer extends Tokenizer {
   public PrefixCellsTokenizer(Reader input) {
@@ -75,15 +75,5 @@ class PrefixCellsTokenizer extends Tokenizer {
 
     termAtt.setLength(length);
     return length > 0; // should only happen at the end
-  }
-
-  @Override
-  public final void end() {
-
-  }
-
-  @Override
-  public void reset(Reader input) throws IOException {
-    super.reset(input);
   }
 }

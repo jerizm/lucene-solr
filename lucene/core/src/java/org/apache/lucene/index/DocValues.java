@@ -32,6 +32,7 @@ import org.apache.lucene.document.PackedLongDocValuesField; // javadocs
 import org.apache.lucene.document.ShortDocValuesField; // javadocs
 import org.apache.lucene.document.SortedBytesDocValuesField; // javadocs
 import org.apache.lucene.document.StraightBytesDocValuesField; // javadocs
+import org.apache.lucene.store.DataOutput;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.packed.PackedInts;
 
@@ -104,7 +105,7 @@ public abstract class DocValues implements Closeable {
    * <p>
    * {@link Source} instances obtained from this method are closed / released
    * from the cache once this {@link DocValues} instance is closed by the
-   * {@link IndexReader}, {@link Fields} or {@link FieldsEnum} the
+   * {@link IndexReader}, {@link Fields} or the
    * {@link DocValues} was created from.
    */
   public Source getSource() throws IOException {
@@ -207,7 +208,6 @@ public abstract class DocValues implements Closeable {
      * Returns a {@link BytesRef} for the given document id or throws an
      * {@link UnsupportedOperationException} if this source doesn't support
      * <tt>byte[]</tt> values.
-     * @throws IOException 
      * 
      * @throws UnsupportedOperationException
      *           if this source doesn't support <tt>byte[]</tt> values.
@@ -410,6 +410,11 @@ public abstract class DocValues implements Closeable {
         len = Math.min(len, size() - index);
         Arrays.fill(arr, off, off+len, 0);
         return len;
+      }
+
+      @Override
+      public long ramBytesUsed() {
+        return 0;
       }
     };
 

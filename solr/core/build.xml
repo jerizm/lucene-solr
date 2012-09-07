@@ -18,10 +18,6 @@
 <project name="solr-core" default="default">
   <description>Solr Core</description>
 
-  <!-- hackidty-hack-hack -->
-
-  <property name="ivy.retrieve.pattern" value="${common-solr.dir}/lib/[artifact]-[revision].[ext]"/>
-
   <!-- html file for testing -->
   <property name="rat.excludes" value="**/htmlStripReaderTest.html"/>
 
@@ -29,4 +25,5 @@
 
   <target name="compile-core" depends="compile-solrj,common-solr.compile-core"/>
 
+  <target name="dist-maven" depends="dist-maven-src-java"/>
 </project>

@@ -18,6 +18,7 @@ package org.apache.lucene.index;
  */
 
 import java.io.IOException;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Collection;
 import java.util.Collections;
@@ -83,6 +84,7 @@ public class TieredMergePolicy extends MergePolicy {
   private double forceMergeDeletesPctAllowed = 10.0;
   private boolean useCompoundFile = true;
   private double noCFSRatio = 0.1;
+  private long maxCFSSegmentSize = Long.MAX_VALUE;
   private double reclaimDeletesWeight = 2.0;
 
   /** Maximum number of segments to be merged at a time
@@ -126,7 +128,11 @@ public class TieredMergePolicy extends MergePolicy {
    *  sizes of to-be-merged segments (compensating for
    *  percent deleted docs).  Default is 5 GB. */
   public TieredMergePolicy setMaxMergedSegmentMB(double v) {
-    maxMergedSegmentBytes = (long) (v*1024*1024);
+    if (v < 0.0) {
+      throw new IllegalArgumentException("maxMergedSegmentMB must be >=0 (got " + v + ")");
+    }
+    v *= 1024 * 1024;
+    maxMergedSegmentBytes = (v > Long.MAX_VALUE) ? Long.MAX_VALUE : (long) v;
     return this;
   }
 
@@ -161,13 +167,14 @@ public class TieredMergePolicy extends MergePolicy {
     if (v <= 0.0) {
       throw new IllegalArgumentException("floorSegmentMB must be >= 0.0 (got " + v + ")");
     }
-    floorSegmentBytes = (long) (v*1024*1024);
+    v *= 1024 * 1024;
+    floorSegmentBytes = (v > Long.MAX_VALUE) ? Long.MAX_VALUE : (long) v;
     return this;
   }
 
   /** @see #setFloorSegmentMB */
   public double getFloorSegmentMB() {
-    return floorSegmentBytes/1024*1024.;
+    return floorSegmentBytes/(1024*1024.);
   }
 
   /** When forceMergeDeletes is called, we only merge away a
@@ -289,7 +296,7 @@ public class TieredMergePolicy extends MergePolicy {
         } else if (segBytes < floorSegmentBytes) {
           extra += " [floored]";
         }
-        message("  seg=" + writer.get().segString(info) + " size=" + String.format("%.3f", segBytes/1024/1024.) + " MB" + extra);
+        message("  seg=" + writer.get().segString(info) + " size=" + String.format(Locale.ROOT, "%.3f", segBytes/1024/1024.) + " MB" + extra);
       }
 
       minSegmentBytes = Math.min(segBytes, minSegmentBytes);
@@ -388,7 +395,7 @@ public class TieredMergePolicy extends MergePolicy {
 
           final MergeScore score = score(candidate, hitTooLarge, mergingBytes);
           if (verbose()) {
-            message("  maybe=" + writer.get().segString(candidate) + " score=" + score.getScore() + " " + score.getExplanation() + " tooLarge=" + hitTooLarge + " size=" + String.format("%.3f MB", totAfterMergeBytes/1024./1024.));
+            message("  maybe=" + writer.get().segString(candidate) + " score=" + score.getScore() + " " + score.getExplanation() + " tooLarge=" + hitTooLarge + " size=" + String.format(Locale.ROOT, "%.3f MB", totAfterMergeBytes/1024./1024.));
           }
 
           // If we are already running a max sized merge
@@ -413,7 +420,7 @@ public class TieredMergePolicy extends MergePolicy {
           }
 
           if (verbose()) {
-            message("  add merge=" + writer.get().segString(merge.segments) + " size=" + String.format("%.3f MB", bestMergeBytes/1024./1024.) + " score=" + String.format("%.3f", bestScore.getScore()) + " " + bestScore.getExplanation() + (bestTooLarge ? " [max merge]" : ""));
+            message("  add merge=" + writer.get().segString(merge.segments) + " size=" + String.format(Locale.ROOT, "%.3f MB", bestMergeBytes/1024./1024.) + " score=" + String.format(Locale.ROOT, "%.3f", bestScore.getScore()) + " " + bestScore.getExplanation() + (bestTooLarge ? " [max merge]" : ""));
           }
         } else {
           return spec;
@@ -475,7 +482,7 @@ public class TieredMergePolicy extends MergePolicy {
 
       @Override
       public String getExplanation() {
-        return "skew=" + String.format("%.3f", skew) + " nonDelRatio=" + String.format("%.3f", nonDelRatio);
+        return "skew=" + String.format(Locale.ROOT, "%.3f", skew) + " nonDelRatio=" + String.format(Locale.ROOT, "%.3f", nonDelRatio);
       }
     };
   }
@@ -553,8 +560,7 @@ public class TieredMergePolicy extends MergePolicy {
   }
 
   @Override
-  public MergeSpecification findForcedDeletesMerges(SegmentInfos infos)
-      throws CorruptIndexException, IOException {
+  public MergeSpecification findForcedDeletesMerges(SegmentInfos infos) throws IOException {
     if (verbose()) {
       message("findForcedDeletesMerges infos=" + writer.get().segString(infos) + " forceMergeDeletesPctAllowed=" + forceMergeDeletesPctAllowed);
     }
@@ -602,35 +608,34 @@ public class TieredMergePolicy extends MergePolicy {
 
   @Override
   public boolean useCompoundFile(SegmentInfos infos, SegmentInfoPerCommit mergedInfo) throws IOException {
-    final boolean doCFS;
-
-    if (!useCompoundFile) {
-      doCFS = false;
-    } else if (noCFSRatio == 1.0) {
-      doCFS = true;
-    } else {
-      long totalSize = 0;
-      for (SegmentInfoPerCommit info : infos) {
-        totalSize += size(info);
-      }
-
-      doCFS = size(mergedInfo) <= noCFSRatio * totalSize;
+    if (!getUseCompoundFile()) {
+        return false;
     }
-    return doCFS;
+    long mergedInfoSize = size(mergedInfo);
+    if (mergedInfoSize > maxCFSSegmentSize) {
+        return false;
+    }
+    if (getNoCFSRatio() >= 1.0) {
+        return true;
+    }
+    long totalSize = 0;
+    for (SegmentInfoPerCommit info : infos) {
+        totalSize += size(info);
+    }
+    return mergedInfoSize <= getNoCFSRatio() * totalSize;
   }
 
   @Override
   public void close() {
   }
 
-  private boolean isMerged(SegmentInfoPerCommit info)
-    throws IOException {
+  private boolean isMerged(SegmentInfoPerCommit info) {
     IndexWriter w = writer.get();
     assert w != null;
     boolean hasDeletions = w.numDeletedDocs(info) > 0;
     return !hasDeletions &&
       info.info.dir == w.getDirectory() &&
-      (info.info.getUseCompoundFile() == useCompoundFile || noCFSRatio < 1.0);
+      (info.info.getUseCompoundFile() == useCompoundFile || noCFSRatio < 1.0 || maxCFSSegmentSize < Long.MAX_VALUE);
   }
 
   // Segment size in bytes, pro-rated by % deleted
@@ -665,7 +670,27 @@ public class TieredMergePolicy extends MergePolicy {
     sb.append("forceMergeDeletesPctAllowed=").append(forceMergeDeletesPctAllowed).append(", ");
     sb.append("segmentsPerTier=").append(segsPerTier).append(", ");
     sb.append("useCompoundFile=").append(useCompoundFile).append(", ");
+    sb.append("maxCFSSegmentSizeMB=").append(getMaxCFSSegmentSizeMB()).append(", ");
     sb.append("noCFSRatio=").append(noCFSRatio);
     return sb.toString();
+  }
+
+  /** Returns the largest size allowed for a compound file segment */
+  public final double getMaxCFSSegmentSizeMB() {
+    return maxCFSSegmentSize/1024/1024.;
+  }
+
+  /** If a merged segment will be more than this value,
+   *  leave the segment as
+   *  non-compound file even if compound file is enabled.
+   *  Set this to Double.POSITIVE_INFINITY (default) and noCFSRatio to 1.0
+   *  to always use CFS regardless of merge size. */
+  public final TieredMergePolicy setMaxCFSSegmentSizeMB(double v) {
+    if (v < 0.0) {
+      throw new IllegalArgumentException("maxCFSSegmentSizeMB must be >=0 (got " + v + ")");
+    }
+    v *= 1024 * 1024;
+    this.maxCFSSegmentSize = (v > Long.MAX_VALUE) ? Long.MAX_VALUE : (long) v;
+    return this;
   }
 }

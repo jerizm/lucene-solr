@@ -34,7 +34,6 @@ import org.apache.lucene.store.IOContext;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.InfoStream;
-import org.apache.lucene.util.ReaderUtil;
 
 /**
  * The SegmentMerger class combines two or more Segments, represented by an IndexReader ({@link #add},
@@ -57,13 +56,11 @@ final class SegmentMerger {
 
   // note, just like in codec apis Directory 'dir' is NOT the same as segmentInfo.dir!!
   SegmentMerger(SegmentInfo segmentInfo, InfoStream infoStream, Directory dir, int termIndexInterval,
-                MergeState.CheckAbort checkAbort, PayloadProcessorProvider payloadProcessorProvider,
-                FieldInfos.FieldNumbers fieldNumbers, IOContext context) {
+                MergeState.CheckAbort checkAbort, FieldInfos.FieldNumbers fieldNumbers, IOContext context) {
     mergeState.segmentInfo = segmentInfo;
     mergeState.infoStream = infoStream;
-    mergeState.readers = new ArrayList<MergeState.IndexReaderAndLiveDocs>();
+    mergeState.readers = new ArrayList<AtomicReader>();
     mergeState.checkAbort = checkAbort;
-    mergeState.payloadProcessorProvider = payloadProcessorProvider;
     directory = dir;
     this.termIndexInterval = termIndexInterval;
     this.codec = segmentInfo.getCodec();
@@ -76,21 +73,14 @@ final class SegmentMerger {
    * @param reader
    */
   final void add(IndexReader reader) {
-    try {
-      new ReaderUtil.Gather(reader) {
-        @Override
-        protected void add(int base, AtomicReader r) {
-          mergeState.readers.add(new MergeState.IndexReaderAndLiveDocs(r, r.getLiveDocs(), r.numDeletedDocs()));
-        }
-      }.run();
-    } catch (IOException ioe) {
-      // won't happen
-      throw new RuntimeException(ioe);
+    for (final AtomicReaderContext ctx : reader.leaves()) {
+      final AtomicReader r = ctx.reader();
+      mergeState.readers.add(r);
     }
   }
 
-  final void add(SegmentReader reader, Bits liveDocs, int delCount) {
-    mergeState.readers.add(new MergeState.IndexReaderAndLiveDocs(reader, liveDocs, delCount));
+  final void add(SegmentReader reader) {
+    mergeState.readers.add(reader);
   }
 
   /**
@@ -99,7 +89,7 @@ final class SegmentMerger {
    * @throws CorruptIndexException if the index is corrupt
    * @throws IOException if there is a low-level IO error
    */
-  final MergeState merge() throws CorruptIndexException, IOException {
+  final MergeState merge() throws IOException {
     // NOTE: it's important to add calls to
     // checkAbort.work(...) if you make any changes to this
     // method that will spend alot of time.  The frequency
@@ -146,14 +136,14 @@ final class SegmentMerger {
     // FieldInfos, then we can do a bulk copy of the
     // stored fields:
     for (int i = 0; i < numReaders; i++) {
-      MergeState.IndexReaderAndLiveDocs reader = mergeState.readers.get(i);
+      AtomicReader reader = mergeState.readers.get(i);
       // TODO: we may be able to broaden this to
       // non-SegmentReaders, since FieldInfos is now
       // required?  But... this'd also require exposing
       // bulk-copy (TVs and stored fields) API in foreign
       // readers..
-      if (reader.reader instanceof SegmentReader) {
-        SegmentReader segmentReader = (SegmentReader) reader.reader;
+      if (reader instanceof SegmentReader) {
+        SegmentReader segmentReader = (SegmentReader) reader;
         boolean same = true;
         FieldInfos segmentFieldInfos = segmentReader.getFieldInfos();
         for (FieldInfo fi : segmentFieldInfos) {
@@ -196,8 +186,7 @@ final class SegmentMerger {
     Map<FieldInfo,TypePromoter> docValuesTypes = new HashMap<FieldInfo,TypePromoter>();
     Map<FieldInfo,TypePromoter> normValuesTypes = new HashMap<FieldInfo,TypePromoter>();
 
-    for (MergeState.IndexReaderAndLiveDocs readerAndLiveDocs : mergeState.readers) {
-      final AtomicReader reader = readerAndLiveDocs.reader;
+    for (AtomicReader reader : mergeState.readers) {
       FieldInfos readerFieldInfos = reader.getFieldInfos();
       for (FieldInfo fi : readerFieldInfos) {
         FieldInfo merged = fieldInfosBuilder.add(fi);
@@ -252,7 +241,7 @@ final class SegmentMerger {
    * @throws CorruptIndexException if the index is corrupt
    * @throws IOException if there is a low-level IO error
    */
-  private int mergeFields() throws CorruptIndexException, IOException {
+  private int mergeFields() throws IOException {
     final StoredFieldsWriter fieldsWriter = codec.storedFieldsFormat().fieldsWriter(directory, mergeState.segmentInfo, context);
     
     try {
@@ -283,24 +272,18 @@ final class SegmentMerger {
     // Remap docIDs
     mergeState.docMaps = new MergeState.DocMap[numReaders];
     mergeState.docBase = new int[numReaders];
-    mergeState.readerPayloadProcessor = new PayloadProcessorProvider.ReaderPayloadProcessor[numReaders];
-    mergeState.currentPayloadProcessor = new PayloadProcessorProvider.PayloadProcessor[numReaders];
 
     int docBase = 0;
 
     int i = 0;
     while(i < mergeState.readers.size()) {
 
-      final MergeState.IndexReaderAndLiveDocs reader = mergeState.readers.get(i);
+      final AtomicReader reader = mergeState.readers.get(i);
 
       mergeState.docBase[i] = docBase;
       final MergeState.DocMap docMap = MergeState.DocMap.build(reader);
       mergeState.docMaps[i] = docMap;
       docBase += docMap.numDocs();
-
-      if (mergeState.payloadProcessorProvider != null) {
-        mergeState.readerPayloadProcessor[i] = mergeState.payloadProcessorProvider.getReaderProcessor(reader.reader);
-      }
 
       i++;
     }
@@ -308,19 +291,19 @@ final class SegmentMerger {
     return docBase;
   }
 
-  private final void mergeTerms(SegmentWriteState segmentWriteState) throws CorruptIndexException, IOException {
+  private final void mergeTerms(SegmentWriteState segmentWriteState) throws IOException {
     
     final List<Fields> fields = new ArrayList<Fields>();
-    final List<ReaderUtil.Slice> slices = new ArrayList<ReaderUtil.Slice>();
+    final List<ReaderSlice> slices = new ArrayList<ReaderSlice>();
 
     int docBase = 0;
 
     for(int readerIndex=0;readerIndex<mergeState.readers.size();readerIndex++) {
-      final MergeState.IndexReaderAndLiveDocs r = mergeState.readers.get(readerIndex);
-      final Fields f = r.reader.fields();
-      final int maxDoc = r.reader.maxDoc();
+      final AtomicReader reader = mergeState.readers.get(readerIndex);
+      final Fields f = reader.fields();
+      final int maxDoc = reader.maxDoc();
       if (f != null) {
-        slices.add(new ReaderUtil.Slice(docBase, maxDoc, readerIndex));
+        slices.add(new ReaderSlice(docBase, maxDoc, readerIndex));
         fields.add(f);
       }
       docBase += maxDoc;
@@ -331,7 +314,7 @@ final class SegmentMerger {
     try {
       consumer.merge(mergeState,
                      new MultiFields(fields.toArray(Fields.EMPTY_ARRAY),
-                                     slices.toArray(ReaderUtil.Slice.EMPTY_ARRAY)));
+                                     slices.toArray(ReaderSlice.EMPTY_ARRAY)));
       success = true;
     } finally {
       if (success) {

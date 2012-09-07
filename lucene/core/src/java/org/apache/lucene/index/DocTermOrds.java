@@ -119,10 +119,13 @@ public class DocTermOrds {
   protected final String field;
 
   protected int numTermsInField;
-  protected long termInstances; // total number of references to term numbers
+  /** total number of references to term numbers */
+  protected long termInstances;
   private long memsz;
-  protected int total_time;  // total time to uninvert the field
-  protected int phase1_time;  // time for phase1 of the uninvert process
+  /** total time to uninvert the field */
+  protected int total_time;
+  /** time for phase1 of the uninvert process */
+  protected int phase1_time;
 
   protected int[] index;
   protected byte[][] tnums = new byte[256][];
@@ -175,7 +178,7 @@ public class DocTermOrds {
 
   /** Subclass inits w/ this, but be sure you then call
    *  uninvert, only once */
-  protected DocTermOrds(String field, int maxTermDocFreq, int indexIntervalBits) throws IOException {
+  protected DocTermOrds(String field, int maxTermDocFreq, int indexIntervalBits) {
     //System.out.println("DTO init field=" + field + " maxTDFreq=" + maxTermDocFreq);
     this.field = field;
     this.maxTermDocFreq = maxTermDocFreq;
@@ -234,7 +237,7 @@ public class DocTermOrds {
   protected void setActualDocFreq(int termNum, int df) throws IOException {
   }
 
-  // Call this only once (if you subclass!)
+  /** Call this only once (if you subclass!) */
   protected void uninvert(final AtomicReader reader, final BytesRef termPrefix) throws IOException {
     //System.out.println("DTO uninvert field=" + field + " prefix=" + termPrefix);
     final long startTime = System.currentTimeMillis();
@@ -334,7 +337,7 @@ public class DocTermOrds {
       final int df = te.docFreq();
       if (df <= maxTermDocFreq) {
 
-        docsEnum = te.docs(liveDocs, docsEnum, false);
+        docsEnum = te.docs(liveDocs, docsEnum, 0);
 
         // dF, but takes deletions into account
         int actualDF = 0;
@@ -668,13 +671,13 @@ public class DocTermOrds {
     }
 
     @Override    
-    public DocsEnum docs(Bits liveDocs, DocsEnum reuse, boolean needsFreqs) throws IOException {
-      return termsEnum.docs(liveDocs, reuse, needsFreqs);
+    public DocsEnum docs(Bits liveDocs, DocsEnum reuse, int flags) throws IOException {
+      return termsEnum.docs(liveDocs, reuse, flags);
     }
 
     @Override    
-    public DocsAndPositionsEnum docsAndPositions(Bits liveDocs, DocsAndPositionsEnum reuse, boolean needsOffsets) throws IOException {
-      return termsEnum.docsAndPositions(liveDocs, reuse, needsOffsets);
+    public DocsAndPositionsEnum docsAndPositions(Bits liveDocs, DocsAndPositionsEnum reuse, int flags) throws IOException {
+      return termsEnum.docsAndPositions(liveDocs, reuse, flags);
     }
 
     @Override
@@ -703,7 +706,7 @@ public class DocTermOrds {
     }
 
     @Override
-    public long ord() throws IOException {
+    public long ord() {
       return ordBase + ord;
     }
 

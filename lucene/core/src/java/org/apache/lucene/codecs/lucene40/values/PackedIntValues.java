@@ -18,6 +18,7 @@ package org.apache.lucene.codecs.lucene40.values;
  */
 import java.io.IOException;
 
+import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.DocValuesArraySource;
 import org.apache.lucene.codecs.lucene40.values.FixedStraightBytesImpl.FixedBytesWriterBase;
 import org.apache.lucene.index.DocValues.Source;
@@ -25,12 +26,12 @@ import org.apache.lucene.index.DocValues.Type;
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.IndexFileNames;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.StorableField;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.CodecUtil;
 import org.apache.lucene.util.Counter;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.packed.PackedInts;
@@ -57,7 +58,7 @@ class PackedIntValues {
     private int lastDocId = -1;
 
     protected PackedIntsWriter(Directory dir, String id, Counter bytesUsed,
-        IOContext context) throws IOException {
+        IOContext context) {
       super(dir, id, CODEC_NAME, VERSION_CURRENT, bytesUsed, context, Type.VAR_INTS);
       bytesRef = new BytesRef(8);
     }
@@ -126,7 +127,7 @@ class PackedIntValues {
     }
     
     @Override
-    public void add(int docID, IndexableField docValue) throws IOException {
+    public void add(int docID, StorableField docValue) throws IOException {
       final long v = docValue.numericValue().longValue();
       assert lastDocId < docID;
       if (!started) {
@@ -186,7 +187,7 @@ class PackedIntValues {
       final Source source;
       IndexInput input = null;
       try {
-        input = (IndexInput) datIn.clone();
+        input = datIn.clone();
         
         if (values == null) {
           source = new PackedIntsSource(input, false);
@@ -217,7 +218,7 @@ class PackedIntValues {
 
     @Override
     public Source getDirectSource() throws IOException {
-      return values != null ? new FixedStraightBytesImpl.DirectFixedStraightSource((IndexInput) datIn.clone(), 8, Type.FIXED_INTS_64) : new PackedIntsSource((IndexInput) datIn.clone(), true);
+      return values != null ? new FixedStraightBytesImpl.DirectFixedStraightSource(datIn.clone(), 8, Type.FIXED_INTS_64) : new PackedIntsSource(datIn.clone(), true);
     }
   }
 

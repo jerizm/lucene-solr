@@ -19,6 +19,8 @@ package org.apache.solr.util;
 
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.StorableField;
+import org.apache.lucene.index.StoredDocument;
 import org.apache.lucene.queryparser.classic.ParseException;
 import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.*;
@@ -332,7 +334,7 @@ public class SolrPluginUtils {
     for (int i=0; i<docs.size(); i++) {
       int id = iterator.nextDoc();
 
-      Document doc = searcher.doc(id);
+      StoredDocument doc = searcher.doc(id);
       String strid = schema.printableUniqueKey(doc);
 
       explainList.add(strid, searcher.explain(query, id) );
@@ -434,9 +436,10 @@ public class SolrPluginUtils {
    *
    * @param fieldLists - an array of Strings eg. <code>{"fieldOne^2.3", "fieldTwo", fieldThree~5^-0.4}</code>
    * @param wordGrams - (0=all words, 2,3 = shingle size)
+   * @param defaultSlop - the default slop for this param
    * @return - FieldParams containing the fieldname,boost,slop,and shingle size
    */
-  public static List<FieldParams> parseFieldBoostsAndSlop(String[] fieldLists,int wordGrams) {
+  public static List<FieldParams> parseFieldBoostsAndSlop(String[] fieldLists,int wordGrams,int defaultSlop) {
     if (null == fieldLists || 0 == fieldLists.length) {
         return new ArrayList<FieldParams>();
     }
@@ -454,7 +457,7 @@ public class SolrPluginUtils {
         String[] fieldAndSlopVsBoost = caratPattern.split(s);
         String[] fieldVsSlop = tildePattern.split(fieldAndSlopVsBoost[0]);
         String field = fieldVsSlop[0];
-        int slop  = (2 == fieldVsSlop.length) ? Integer.valueOf(fieldVsSlop[1]) : 0;
+        int slop  = (2 == fieldVsSlop.length) ? Integer.valueOf(fieldVsSlop[1]) : defaultSlop;
         Float boost = (1 == fieldAndSlopVsBoost.length) ? 1  : Float.valueOf(fieldAndSlopVsBoost[1]);
         FieldParams fp = new FieldParams(field,wordGrams,slop,boost);
         out.add(fp);
@@ -847,10 +850,10 @@ public class SolrPluginUtils {
     while (dit.hasNext()) {
       int docid = dit.nextDoc();
 
-      Document luceneDoc = searcher.doc(docid, fields);
+      StoredDocument luceneDoc = searcher.doc(docid, fields);
       SolrDocument doc = new SolrDocument();
       
-      for( IndexableField field : luceneDoc) {
+      for( StorableField field : luceneDoc) {
         if (null == fields || fields.contains(field.name())) {
           SchemaField sf = schema.getField( field.name() );
           doc.addField( field.name(), sf.getType().toObject( field ) );

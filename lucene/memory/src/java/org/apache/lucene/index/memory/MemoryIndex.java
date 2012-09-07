@@ -25,6 +25,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.TokenStream;
@@ -32,7 +33,6 @@ import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
 import org.apache.lucene.analysis.tokenattributes.OffsetAttribute;
 import org.apache.lucene.analysis.tokenattributes.PositionIncrementAttribute;
 import org.apache.lucene.analysis.tokenattributes.TermToBytesRefAttribute;
-import org.apache.lucene.document.Document;
 import org.apache.lucene.index.AtomicReader;
 import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.index.FieldInfo;
@@ -43,7 +43,6 @@ import org.apache.lucene.index.DocsEnum;
 import org.apache.lucene.index.FieldInfos;
 import org.apache.lucene.index.FieldInvertState;
 import org.apache.lucene.index.Fields;
-import org.apache.lucene.index.FieldsEnum;
 import org.apache.lucene.index.OrdTermState;
 import org.apache.lucene.index.StoredFieldVisitor;
 import org.apache.lucene.index.TermState;
@@ -443,7 +442,7 @@ public class MemoryIndex {
         }
 
         @Override
-        public void setScorer(Scorer scorer) throws IOException {
+        public void setScorer(Scorer scorer) {
           this.scorer = scorer;
         }
 
@@ -719,22 +718,27 @@ public class MemoryIndex {
 
     private class MemoryFields extends Fields {
       @Override
-      public FieldsEnum iterator() {
-        return new FieldsEnum() {
+      public Iterator<String> iterator() {
+        return new Iterator<String>() {
           int upto = -1;
 
           @Override
           public String next() {
             upto++;
             if (upto >= sortedFields.length) {
-              return null;
+              throw new NoSuchElementException();
             }
             return sortedFields[upto].getKey();
           }
 
           @Override
-          public Terms terms() {
-            return MemoryFields.this.terms(sortedFields[upto].getKey());
+          public boolean hasNext() {
+            return upto+1 < sortedFields.length;
+          }
+
+          @Override
+          public void remove() {
+            throw new UnsupportedOperationException();
           }
         };
       }
@@ -770,17 +774,30 @@ public class MemoryIndex {
             }
 
             @Override
-            public long getSumDocFreq() throws IOException {
+            public long getSumDocFreq() {
               // each term has df=1
               return info.sortedTerms.length;
             }
 
             @Override
-            public int getDocCount() throws IOException {
+            public int getDocCount() {
               return info.sortedTerms.length > 0 ? 1 : 0;
             }
-              
-              
+
+            @Override
+            public boolean hasOffsets() {
+              return stride == 3;
+            }
+
+            @Override
+            public boolean hasPositions() {
+              return true;
+            }
+            
+            @Override
+            public boolean hasPayloads() {
+              return false;
+            }
           };
         }
       }
@@ -873,7 +890,7 @@ public class MemoryIndex {
       }
 
       @Override
-      public DocsEnum docs(Bits liveDocs, DocsEnum reuse, boolean needsFreqs) {
+      public DocsEnum docs(Bits liveDocs, DocsEnum reuse, int flags) {
         if (reuse == null || !(reuse instanceof MemoryDocsEnum)) {
           reuse = new MemoryDocsEnum();
         }
@@ -881,10 +898,7 @@ public class MemoryIndex {
       }
 
       @Override
-      public DocsAndPositionsEnum docsAndPositions(Bits liveDocs, DocsAndPositionsEnum reuse, boolean needsOffsets) {
-        if (needsOffsets) {
-          return null;
-        }
+      public DocsAndPositionsEnum docsAndPositions(Bits liveDocs, DocsAndPositionsEnum reuse, int flags) {
         if (reuse == null || !(reuse instanceof MemoryDocsAndPositionsEnum)) {
           reuse = new MemoryDocsAndPositionsEnum();
         }
@@ -1007,11 +1021,6 @@ public class MemoryIndex {
       }
 
       @Override
-      public boolean hasPayload() {
-        return false;
-      }
-
-      @Override
       public BytesRef getPayload() {
         return null;
       }
@@ -1065,7 +1074,7 @@ public class MemoryIndex {
     }
 
     @Override
-    public DocValues docValues(String field) throws IOException {
+    public DocValues docValues(String field) {
       return null;
     }
     
@@ -1075,7 +1084,7 @@ public class MemoryIndex {
     private Similarity cachedSimilarity;
     
     @Override
-    public DocValues normValues(String field) throws IOException {
+    public DocValues normValues(String field) {
       DocValues norms = cachedNormValues;
       Similarity sim = getSimilarity();
       if (!field.equals(cachedFieldName) || sim != cachedSimilarity) { // not cached?

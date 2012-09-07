@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.lucene.codecs.Codec;
+import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.LiveDocsFormat;
 import org.apache.lucene.store.ChecksumIndexInput;
 import org.apache.lucene.store.ChecksumIndexOutput;
@@ -41,9 +42,7 @@ import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.NoSuchDirectoryException;
-import org.apache.lucene.util.CodecUtil;
 import org.apache.lucene.util.IOUtils;
-import org.apache.lucene.util.StringHelper;
 import org.apache.lucene.util.ThreadInterruptedException;
 
 /**
@@ -134,7 +133,8 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentInfoPerCom
                                // or wrote; this is normally the same as generation except if
                                // there was an IOException that had interrupted a commit
 
-  public Map<String,String> userData = Collections.<String,String>emptyMap();       // Opaque Map<String, String> that user can specify during IndexWriter.commit
+  /** Opaque Map&lt;String, String&gt; that user can specify during IndexWriter.commit */
+  public Map<String,String> userData = Collections.<String,String>emptyMap();
   
   private List<SegmentInfoPerCommit> segments = new ArrayList<SegmentInfoPerCommit>();
   
@@ -191,7 +191,7 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentInfoPerCom
    * @param files -- array of file names to check
    */
 
-  public static String getLastCommitSegmentsFileName(String[] files) throws IOException {
+  public static String getLastCommitSegmentsFileName(String[] files) {
     return IndexFileNames.fileNameFromGeneration(IndexFileNames.SEGMENTS,
                                                  "",
                                                  getLastCommitGeneration(files));
@@ -259,7 +259,7 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentInfoPerCom
    * @throws CorruptIndexException if the index is corrupt
    * @throws IOException if there is a low-level IO error
    */
-  public final void read(Directory directory, String segmentFileName) throws CorruptIndexException, IOException {
+  public final void read(Directory directory, String segmentFileName) throws IOException {
     boolean success = false;
 
     // Clear any previous segments:
@@ -282,6 +282,9 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentInfoPerCom
       version = input.readLong();
       counter = input.readInt();
       int numSegments = input.readInt();
+      if (numSegments < 0) {
+        throw new CorruptIndexException("invalid segment count: " + numSegments + " (resource: " + input + ")");
+      }
       for(int seg=0;seg<numSegments;seg++) {
         String segName = input.readString();
         Codec codec = Codec.forName(input.readString());
@@ -290,7 +293,9 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentInfoPerCom
         info.setCodec(codec);
         long delGen = input.readLong();
         int delCount = input.readInt();
-        assert delCount <= info.getDocCount();
+        if (delCount < 0 || delCount > info.getDocCount()) {
+          throw new CorruptIndexException("invalid deletion count: " + delCount + " (resource: " + input + ")");
+        }
         add(new SegmentInfoPerCommit(info, delCount, delGen));
       }
       userData = input.readStringStringMap();
@@ -314,13 +319,13 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentInfoPerCom
     }
   }
 
-  public final void read(Directory directory) throws CorruptIndexException, IOException {
+  public final void read(Directory directory) throws IOException {
     generation = lastGeneration = -1;
 
     new FindSegmentsFile(directory) {
 
       @Override
-      protected Object doBody(String segmentFileName) throws CorruptIndexException, IOException {
+      protected Object doBody(String segmentFileName) throws IOException {
         read(directory, segmentFileName);
         return null;
       }
@@ -483,11 +488,11 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentInfoPerCom
       this.directory = directory;
     }
 
-    public Object run() throws CorruptIndexException, IOException {
+    public Object run() throws IOException {
       return run(null);
     }
     
-    public Object run(IndexCommit commit) throws CorruptIndexException, IOException {
+    public Object run(IndexCommit commit) throws IOException {
       if (commit != null) {
         if (directory != commit.getDirectory())
           throw new IOException("the specified commit does not match the specified Directory");
@@ -693,7 +698,7 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentInfoPerCom
      * during the processing that could have been caused by
      * a writer committing.
      */
-    protected abstract Object doBody(String segmentFileName) throws CorruptIndexException, IOException;
+    protected abstract Object doBody(String segmentFileName) throws IOException;
   }
 
   // Carry over generation numbers from another SegmentInfos
@@ -702,7 +707,7 @@ public final class SegmentInfos implements Cloneable, Iterable<SegmentInfoPerCom
     generation = other.generation;
   }
 
-  final void rollbackCommit(Directory dir) throws IOException {
+  final void rollbackCommit(Directory dir) {
     if (pendingSegnOutput != null) {
       try {
         pendingSegnOutput.close();

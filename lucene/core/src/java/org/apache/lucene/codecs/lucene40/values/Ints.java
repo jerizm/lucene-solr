@@ -25,6 +25,7 @@ import org.apache.lucene.index.DocValues.Source;
 import org.apache.lucene.index.DocValues.Type;
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.StorableField;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
@@ -46,7 +47,7 @@ public final class Ints {
   }
   
   public static DocValuesConsumer getWriter(Directory dir, String id, Counter bytesUsed,
-      Type type, IOContext context) throws IOException {
+      Type type, IOContext context) {
     return type == Type.VAR_INTS ? new PackedIntValues.PackedIntsWriter(dir, id,
         bytesUsed, context) : new IntsWriter(dir, id, bytesUsed, context, type);
   }
@@ -92,12 +93,12 @@ public final class Ints {
     private final DocValuesArraySource template;
 
     public IntsWriter(Directory dir, String id, Counter bytesUsed,
-        IOContext context, Type valueType) throws IOException {
+        IOContext context, Type valueType) {
       this(dir, id, CODEC_NAME, VERSION_CURRENT, bytesUsed, context, valueType);
     }
 
     protected IntsWriter(Directory dir, String id, String codecName,
-        int version, Counter bytesUsed, IOContext context, Type valueType) throws IOException {
+        int version, Counter bytesUsed, IOContext context, Type valueType) {
       super(dir, id, codecName, version, bytesUsed, context);
       size = typeToSize(valueType);
       this.bytesRef = new BytesRef(size);
@@ -112,7 +113,7 @@ public final class Ints {
     }
     
     @Override
-    public void add(int docID, IndexableField value) throws IOException {
+    public void add(int docID, StorableField value) throws IOException {
       template.toBytes(value.numericValue().longValue(), bytesRef);
       bytesSpareField.setBytesValue(bytesRef);
       super.add(docID, bytesSpareField);

@@ -23,6 +23,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.logging.Logger;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Field.Store;
@@ -44,7 +45,13 @@ import org.junit.rules.TestRule;
 import org.junit.runner.RunWith;
 import com.carrotsearch.randomizedtesting.*;
 import com.carrotsearch.randomizedtesting.annotations.*;
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeakAction.Action;
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeakGroup.Group;
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope.Scope;
+import com.carrotsearch.randomizedtesting.annotations.ThreadLeakZombies.Consequence;
 import com.carrotsearch.randomizedtesting.generators.RandomPicks;
+import com.carrotsearch.randomizedtesting.rules.NoClassHooksShadowingRule;
+import com.carrotsearch.randomizedtesting.rules.NoInstanceHooksOverridesRule;
 import com.carrotsearch.randomizedtesting.rules.SystemPropertiesInvariantRule;
 
 import static com.carrotsearch.randomizedtesting.RandomizedTest.systemPropertyAsBoolean;
@@ -112,17 +119,32 @@ import static com.carrotsearch.randomizedtesting.RandomizedTest.systemPropertyAs
   RunListenerPrintReproduceInfo.class
 })
 @SeedDecorators({MixWithSuiteName.class}) // See LUCENE-3995 for rationale.
-@ThreadLeaks(failTestIfLeaking = false)
+@ThreadLeakScope(Scope.SUITE)
+@ThreadLeakGroup(Group.MAIN)
+@ThreadLeakAction({Action.WARN, Action.INTERRUPT})
+@ThreadLeakLingering(linger = 20000) // Wait long for leaked threads to complete before failure. zk needs this.
+@ThreadLeakZombies(Consequence.IGNORE_REMAINING_TESTS)
+@TimeoutSuite(millis = 2 * TimeUnits.HOUR)
+@ThreadLeakFilters(defaultFilters = true, filters = {
+    QuickPatchThreadsFilter.class
+})
 public abstract class LuceneTestCase extends Assert {
 
-  // -----------------------------------------------------------------
-  // Test groups and other annotations modifying tests' behavior.
-  // -----------------------------------------------------------------
-   
+  // --------------------------------------------------------------------
+  // Test groups, system properties and other annotations modifying tests
+  // --------------------------------------------------------------------
+
   public static final String SYSPROP_NIGHTLY = "tests.nightly";
   public static final String SYSPROP_WEEKLY = "tests.weekly";
   public static final String SYSPROP_AWAITSFIX = "tests.awaitsfix";
   public static final String SYSPROP_SLOW = "tests.slow";
+  public static final String SYSPROP_BADAPPLES = "tests.badapples";
+
+  /** @see #ignoreAfterMaxFailures*/
+  private static final String SYSPROP_MAXFAILURES = "tests.maxfailures";
+
+  /** @see #ignoreAfterMaxFailures*/
+  private static final String SYSPROP_FAILFAST = "tests.failfast";
 
   /**
    * Annotation for tests that should only be run during nightly builds.
@@ -155,14 +177,28 @@ public abstract class LuceneTestCase extends Assert {
   }
 
   /**
-   * Annotation for tests that are really slow and should be run only when specifically 
-   * asked to run.
+   * Annotation for tests that are slow. Slow tests do run by default but can be
+   * disabled if a quick run is needed.
    */
   @Documented
   @Inherited
   @Retention(RetentionPolicy.RUNTIME)
-  @TestGroup(enabled = false, sysProperty = SYSPROP_SLOW)
+  @TestGroup(enabled = true, sysProperty = SYSPROP_SLOW)
   public @interface Slow {}
+
+  /**
+   * Annotation for tests that fail frequently. You can disable them
+   * if you want to run a long build and not stop on something that
+   * is a known problem.
+   * <pre>
+   * -Dtests.badapples=false
+   * </pre>
+   */
+  @Documented
+  @Inherited
+  @Retention(RetentionPolicy.RUNTIME)
+  @TestGroup(enabled = true, sysProperty = SYSPROP_BADAPPLES)
+  public @interface BadApple {}
 
   /**
    * Annotation for test classes that should avoid certain codec types
@@ -175,7 +211,6 @@ public abstract class LuceneTestCase extends Assert {
   public @interface SuppressCodecs {
     String[] value();
   }
-
   
   // -----------------------------------------------------------------
   // Truly immutable fields and constants, initialized once and valid 
@@ -232,7 +267,7 @@ public abstract class LuceneTestCase extends Assert {
 
   /** Whether or not {@link Slow} tests should run. */
   public static final boolean TEST_SLOW = systemPropertyAsBoolean(SYSPROP_SLOW, false);
-  
+
   /** Throttling, see {@link MockDirectoryWrapper#setThrottling(Throttling)}. */
   public static final Throttling TEST_THROTTLING = TEST_NIGHTLY ? Throttling.SOMETIMES : Throttling.NEVER;
 
@@ -270,6 +305,13 @@ public abstract class LuceneTestCase extends Assert {
     CORE_DIRECTORIES.add("RAMDirectory");
   };
   
+  protected static final Set<String> doesntSupportOffsets = new HashSet<String>(Arrays.asList( 
+    "Lucene3x",
+    "MockFixedIntBlock",
+    "MockVariableIntBlock",
+    "MockSep",
+    "MockRandom"
+  ));
   
   // -----------------------------------------------------------------
   // Fields initialized in class or instance rules.
@@ -298,8 +340,30 @@ public abstract class LuceneTestCase extends Assert {
   /**
    * Suite failure marker (any error in the test or suite scope).
    */
-  public static TestRuleMarkFailure suiteFailureMarker;
-  
+  public final static TestRuleMarkFailure suiteFailureMarker = 
+      new TestRuleMarkFailure();
+
+  /**
+   * Ignore tests after hitting a designated number of initial failures.
+   */
+  final static TestRuleIgnoreAfterMaxFailures ignoreAfterMaxFailures; 
+  static {
+    int maxFailures = systemPropertyAsInt(SYSPROP_MAXFAILURES, Integer.MAX_VALUE);
+    boolean failFast = systemPropertyAsBoolean(SYSPROP_FAILFAST, false);
+
+    if (failFast) {
+      if (maxFailures == Integer.MAX_VALUE) {
+        maxFailures = 1;
+      } else {
+        Logger.getLogger(LuceneTestCase.class.getSimpleName()).warning(
+            "Property '" + SYSPROP_MAXFAILURES + "'=" + maxFailures + ", 'failfast' is" +
+            		" ignored.");
+      }
+    }
+
+    ignoreAfterMaxFailures = new TestRuleIgnoreAfterMaxFailures(maxFailures);
+  }
+
   /**
    * This controls how suite-level rules are nested. It is important that _all_ rules declared
    * in {@link LuceneTestCase} are executed in proper order if they depend on each 
@@ -308,14 +372,19 @@ public abstract class LuceneTestCase extends Assert {
   @ClassRule
   public static TestRule classRules = RuleChain
     .outerRule(new TestRuleIgnoreTestSuites())
-    .around(suiteFailureMarker = new TestRuleMarkFailure())
+    .around(ignoreAfterMaxFailures)
+    .around(suiteFailureMarker)
     .around(new TestRuleAssertionsRequired())
-    .around(new TestRuleNoStaticHooksShadowing())
-    .around(new TestRuleNoInstanceHooksOverrides())
+    .around(new NoClassHooksShadowingRule())
+    .around(new NoInstanceHooksOverridesRule() {
+      @Override
+      protected boolean verify(Method key) {
+        String name = key.getName();
+        return !(name.equals("setUp") || name.equals("tearDown"));
+      }
+    })
     .around(new SystemPropertiesInvariantRule(IGNORED_INVARIANT_PROPERTIES))
-    .around(new TestRuleIcuHack())
     .around(classNameRule = new TestRuleStoreClassName())
-    .around(new TestRuleReportUncaughtExceptions())
     .around(classEnvRule = new TestRuleSetupAndRestoreClassEnv());
 
 
@@ -329,7 +398,7 @@ public abstract class LuceneTestCase extends Assert {
   /** Save test thread and name. */
   private TestRuleThreadAndTestName threadAndTestNameRule = new TestRuleThreadAndTestName();
 
-  /** Taint test failures. */
+  /** Taint suite result with individual test failures. */
   private TestRuleMarkFailure testFailureMarker = new TestRuleMarkFailure(suiteFailureMarker); 
   
   /**
@@ -340,8 +409,8 @@ public abstract class LuceneTestCase extends Assert {
   @Rule
   public final TestRule ruleChain = RuleChain
     .outerRule(testFailureMarker)
+    .around(ignoreAfterMaxFailures)
     .around(threadAndTestNameRule)
-    .around(new TestRuleReportUncaughtExceptions())
     .around(new SystemPropertiesInvariantRule(IGNORED_INVARIANT_PROPERTIES))
     .around(new TestRuleSetupAndRestoreInstanceEnv())
     .around(new TestRuleFieldCacheSanity())
@@ -435,11 +504,12 @@ public abstract class LuceneTestCase extends Assert {
    * do tests on that segment's reader. This is an utility method to help them.
    */
   public static SegmentReader getOnlySegmentReader(DirectoryReader reader) {
-    IndexReader[] subReaders = reader.getSequentialSubReaders();
-    if (subReaders.length != 1)
-      throw new IllegalArgumentException(reader + " has " + subReaders.length + " segments instead of exactly one");
-    assertTrue(subReaders[0] instanceof SegmentReader);
-    return (SegmentReader) subReaders[0];
+    List<AtomicReaderContext> subReaders = reader.leaves();
+    if (subReaders.size() != 1)
+      throw new IllegalArgumentException(reader + " has " + subReaders.size() + " segments instead of exactly one");
+    final AtomicReader r = subReaders.get(0).reader();
+    assertTrue(r instanceof SegmentReader);
+    return (SegmentReader) r;
   }
 
   /**
@@ -695,6 +765,11 @@ public abstract class LuceneTestCase extends Assert {
     } else {
       logmp.setMergeFactor(_TestUtil.nextInt(r, 10, 50));
     }
+    logmp.setUseCompoundFile(r.nextBoolean());
+    logmp.setNoCFSRatio(0.1 + r.nextDouble()*0.8);
+    if (rarely()) {
+      logmp.setMaxCFSSegmentSizeMB(0.2 + r.nextDouble() * 2.0);
+    }
     return logmp;
   }
 
@@ -721,6 +796,9 @@ public abstract class LuceneTestCase extends Assert {
     }
     tmp.setUseCompoundFile(r.nextBoolean());
     tmp.setNoCFSRatio(0.1 + r.nextDouble()*0.8);
+    if (rarely()) {
+      tmp.setMaxCFSSegmentSizeMB(0.2 + r.nextDouble() * 2.0);
+    }
     tmp.setReclaimDeletesWeight(r.nextDouble()*4);
     return tmp;
   }
@@ -748,48 +826,56 @@ public abstract class LuceneTestCase extends Assert {
    * Returns a new Directory instance. Use this when the test does not
    * care about the specific Directory implementation (most tests).
    * <p>
-   * The Directory is wrapped with {@link MockDirectoryWrapper}.
-   * By default this means it will be picky, such as ensuring that you
+   * The Directory is wrapped with {@link BaseDirectoryWrapper}.
+   * this means usually it will be picky, such as ensuring that you
    * properly close it and all open files in your test. It will emulate
    * some features of Windows, such as not allowing open files to be
    * overwritten.
    */
-  public static MockDirectoryWrapper newDirectory() throws IOException {
+  public static BaseDirectoryWrapper newDirectory() {
     return newDirectory(random());
   }
-
+  
   /**
    * Returns a new Directory instance, using the specified random.
    * See {@link #newDirectory()} for more information.
    */
-  public static MockDirectoryWrapper newDirectory(Random r) throws IOException {
-    Directory impl = newDirectoryImpl(r, TEST_DIRECTORY);
-    MockDirectoryWrapper dir = new MockDirectoryWrapper(r, maybeNRTWrap(r, impl));
-    closeAfterSuite(new CloseableDirectory(dir, suiteFailureMarker));
+  public static BaseDirectoryWrapper newDirectory(Random r) {
+    return wrapDirectory(r, newDirectoryImpl(r, TEST_DIRECTORY), rarely(r));
+  }
 
-    dir.setThrottling(TEST_THROTTLING);
-    if (VERBOSE) {
-      System.out.println("NOTE: LuceneTestCase.newDirectory: returning " + dir);
-    }
-    return dir;
-   }
+  public static MockDirectoryWrapper newMockDirectory() {
+    return newMockDirectory(random());
+  }
+
+  public static MockDirectoryWrapper newMockDirectory(Random r) {
+    return (MockDirectoryWrapper) wrapDirectory(r, newDirectoryImpl(r, TEST_DIRECTORY), false);
+  }
+
+  public static MockDirectoryWrapper newMockFSDirectory(File f) {
+    return (MockDirectoryWrapper) newFSDirectory(f, null, false);
+  }
 
   /**
    * Returns a new Directory instance, with contents copied from the
    * provided directory. See {@link #newDirectory()} for more
    * information.
    */
-  public static MockDirectoryWrapper newDirectory(Directory d) throws IOException {
+  public static BaseDirectoryWrapper newDirectory(Directory d) throws IOException {
     return newDirectory(random(), d);
   }
 
   /** Returns a new FSDirectory instance over the given file, which must be a folder. */
-  public static MockDirectoryWrapper newFSDirectory(File f) throws IOException {
+  public static BaseDirectoryWrapper newFSDirectory(File f) {
     return newFSDirectory(f, null);
   }
 
   /** Returns a new FSDirectory instance over the given file, which must be a folder. */
-  public static MockDirectoryWrapper newFSDirectory(File f, LockFactory lf) throws IOException {
+  public static BaseDirectoryWrapper newFSDirectory(File f, LockFactory lf) {
+    return newFSDirectory(f, lf, rarely());
+  }
+
+  private static BaseDirectoryWrapper newFSDirectory(File f, LockFactory lf, boolean bare) {
     String fsdirClass = TEST_DIRECTORY;
     if (fsdirClass.equals("random")) {
       fsdirClass = RandomPicks.randomFrom(random(), FS_DIRECTORIES); 
@@ -806,14 +892,11 @@ public abstract class LuceneTestCase extends Assert {
       }
 
       Directory fsdir = newFSDirectoryImpl(clazz, f);
-      MockDirectoryWrapper dir = new MockDirectoryWrapper(
-          random(), maybeNRTWrap(random(), fsdir));
+      BaseDirectoryWrapper wrapped = wrapDirectory(random(), fsdir, bare);
       if (lf != null) {
-        dir.setLockFactory(lf);
+        wrapped.setLockFactory(lf);
       }
-      closeAfterSuite(new CloseableDirectory(dir, suiteFailureMarker));
-      dir.setThrottling(TEST_THROTTLING);
-      return dir;
+      return wrapped;
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -824,22 +907,27 @@ public abstract class LuceneTestCase extends Assert {
    * with contents copied from the provided directory. See 
    * {@link #newDirectory()} for more information.
    */
-  public static MockDirectoryWrapper newDirectory(Random r, Directory d) throws IOException {
+  public static BaseDirectoryWrapper newDirectory(Random r, Directory d) throws IOException {
     Directory impl = newDirectoryImpl(r, TEST_DIRECTORY);
     for (String file : d.listAll()) {
      d.copy(impl, file, file, newIOContext(r));
     }
-    MockDirectoryWrapper dir = new MockDirectoryWrapper(r, maybeNRTWrap(r, impl));
-    closeAfterSuite(new CloseableDirectory(dir, suiteFailureMarker));
-    dir.setThrottling(TEST_THROTTLING);
-    return dir;
+    return wrapDirectory(r, impl, rarely(r));
   }
   
-  private static Directory maybeNRTWrap(Random random, Directory directory) {
+  private static BaseDirectoryWrapper wrapDirectory(Random random, Directory directory, boolean bare) {
     if (rarely(random)) {
-      return new NRTCachingDirectory(directory, random.nextDouble(), random.nextDouble());
+      directory = new NRTCachingDirectory(directory, random.nextDouble(), random.nextDouble());
+    }
+    if (bare) {
+      BaseDirectoryWrapper base = new BaseDirectoryWrapper(directory);
+      closeAfterSuite(new CloseableDirectory(base, suiteFailureMarker));
+      return base;
     } else {
-      return directory;
+      MockDirectoryWrapper mock = new MockDirectoryWrapper(random, directory);
+      mock.setThrottling(TEST_THROTTLING);
+      closeAfterSuite(new CloseableDirectory(mock, suiteFailureMarker));
+      return mock;
     }
   }
   
@@ -886,6 +974,10 @@ public abstract class LuceneTestCase extends Assert {
       }
       if (!newType.storeTermVectorPositions()) {
         newType.setStoreTermVectorPositions(random.nextBoolean());
+        
+        if (newType.storeTermVectorPositions() && !newType.storeTermVectorPayloads()) {
+          newType.setStoreTermVectorPayloads(random.nextBoolean());
+        }
       }
     }
 
@@ -978,7 +1070,7 @@ public abstract class LuceneTestCase extends Assert {
       // TODO: remove this, and fix those tests to wrap before putting slow around:
       final boolean wasOriginallyAtomic = r instanceof AtomicReader;
       for (int i = 0, c = random.nextInt(6)+1; i < c; i++) {
-        switch(random.nextInt(4)) {
+        switch(random.nextInt(5)) {
           case 0:
             r = SlowCompositeReaderWrapper.wrap(r);
             break;
@@ -1009,6 +1101,16 @@ public abstract class LuceneTestCase extends Assert {
               new FieldFilterAtomicReader(ar, fields, true)
             );
             break;
+          case 4:
+            // Häckidy-Hick-Hack: a standard Reader will cause FC insanity, so we use
+            // QueryUtils' reader with a fake cache key, so insanity checker cannot walk
+            // along our reader:
+            if (r instanceof AtomicReader) {
+              r = new AssertingAtomicReader((AtomicReader)r);
+            } else if (r instanceof DirectoryReader) {
+              r = new AssertingDirectoryReader((DirectoryReader)r);
+            }
+            break;
           default:
             fail("should not get here");
         }
@@ -1028,10 +1130,25 @@ public abstract class LuceneTestCase extends Assert {
 
   /** TODO: javadoc */
   public static IOContext newIOContext(Random random) {
+    return newIOContext(random, IOContext.DEFAULT);
+  }
+
+  /** TODO: javadoc */
+  public static IOContext newIOContext(Random random, IOContext oldContext) {
     final int randomNumDocs = random.nextInt(4192);
     final int size = random.nextInt(512) * randomNumDocs;
-    final IOContext context;
-    switch (random.nextInt(5)) {
+    if (oldContext.flushInfo != null) {
+      // Always return at least the estimatedSegmentSize of
+      // the incoming IOContext:
+      return new IOContext(new FlushInfo(randomNumDocs, Math.max(oldContext.flushInfo.estimatedSegmentSize, size)));
+    } else if (oldContext.mergeInfo != null) {
+      // Always return at least the estimatedMergeBytes of
+      // the incoming IOContext:
+      return new IOContext(new MergeInfo(randomNumDocs, Math.max(oldContext.mergeInfo.estimatedMergeBytes, size), random.nextBoolean(), _TestUtil.nextInt(random, 1, 100)));
+    } else {
+      // Make a totally random IOContext:
+      final IOContext context;
+      switch (random.nextInt(5)) {
       case 0:
         context = IOContext.DEFAULT;
         break;
@@ -1049,8 +1166,9 @@ public abstract class LuceneTestCase extends Assert {
         break;
       default:
         context = IOContext.DEFAULT;
+      }
+      return context;
     }
-    return context;
   }
 
   /**
@@ -1072,7 +1190,7 @@ public abstract class LuceneTestCase extends Assert {
       if (maybeWrap) {
         r = maybeWrapReader(r);
       }
-      IndexSearcher ret = random.nextBoolean() ? new AssertingIndexSearcher(random, r) : new AssertingIndexSearcher(random, r.getTopReaderContext());
+      IndexSearcher ret = random.nextBoolean() ? new AssertingIndexSearcher(random, r) : new AssertingIndexSearcher(random, r.getContext());
       ret.setSimilarity(classEnvRule.similarity);
       return ret;
     } else {
@@ -1101,7 +1219,7 @@ public abstract class LuceneTestCase extends Assert {
       }
       IndexSearcher ret = random.nextBoolean() 
           ? new AssertingIndexSearcher(random, r, ex)
-          : new AssertingIndexSearcher(random, r.getTopReaderContext(), ex);
+          : new AssertingIndexSearcher(random, r.getContext(), ex);
       ret.setSimilarity(classEnvRule.similarity);
       return ret;
     }

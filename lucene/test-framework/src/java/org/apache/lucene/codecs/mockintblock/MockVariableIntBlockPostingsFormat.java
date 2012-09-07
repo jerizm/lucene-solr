@@ -19,17 +19,17 @@ package org.apache.lucene.codecs.mockintblock;
 
 import java.io.IOException;
 
-import org.apache.lucene.codecs.BlockTermsReader;
-import org.apache.lucene.codecs.BlockTermsWriter;
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.FieldsProducer;
-import org.apache.lucene.codecs.FixedGapTermsIndexReader;
-import org.apache.lucene.codecs.FixedGapTermsIndexWriter;
 import org.apache.lucene.codecs.PostingsFormat;
 import org.apache.lucene.codecs.PostingsReaderBase;
 import org.apache.lucene.codecs.PostingsWriterBase;
-import org.apache.lucene.codecs.TermsIndexReaderBase;
-import org.apache.lucene.codecs.TermsIndexWriterBase;
+import org.apache.lucene.codecs.blockterms.BlockTermsReader;
+import org.apache.lucene.codecs.blockterms.BlockTermsWriter;
+import org.apache.lucene.codecs.blockterms.FixedGapTermsIndexReader;
+import org.apache.lucene.codecs.blockterms.FixedGapTermsIndexWriter;
+import org.apache.lucene.codecs.blockterms.TermsIndexReaderBase;
+import org.apache.lucene.codecs.blockterms.TermsIndexWriterBase;
 import org.apache.lucene.codecs.intblock.VariableIntBlockIndexInput;
 import org.apache.lucene.codecs.intblock.VariableIntBlockIndexOutput;
 import org.apache.lucene.codecs.sep.IntIndexInput;
@@ -70,6 +70,10 @@ public class MockVariableIntBlockPostingsFormat extends PostingsFormat {
     return getName() + "(baseBlockSize="+ baseBlockSize + ")";
   }
 
+  /**
+   * If the first value is <= 3, writes baseBlockSize vInts at once,
+   * otherwise writes 2*baseBlockSize vInts.
+   */
   public static class MockIntFactory extends IntStreamFactory {
 
     private final int baseBlockSize;
@@ -85,7 +89,7 @@ public class MockVariableIntBlockPostingsFormat extends PostingsFormat {
       return new VariableIntBlockIndexInput(in) {
 
         @Override
-        protected BlockReader getBlockReader(final IndexInput in, final int[] buffer) throws IOException {
+        protected BlockReader getBlockReader(final IndexInput in, final int[] buffer) {
           return new BlockReader() {
             public void seek(long pos) {}
             public int readBlock() throws IOException {
@@ -203,7 +207,7 @@ public class MockVariableIntBlockPostingsFormat extends PostingsFormat {
       FieldsProducer ret = new BlockTermsReader(indexReader,
                                                 state.dir,
                                                 state.fieldInfos,
-                                                state.segmentInfo.name,
+                                                state.segmentInfo,
                                                 postingsReader,
                                                 state.context,
                                                 1024,

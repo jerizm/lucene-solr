@@ -30,6 +30,7 @@ import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexReaderContext;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.DisjunctionMaxQuery;
@@ -43,7 +44,6 @@ import org.apache.lucene.search.spans.SpanOrQuery;
 import org.apache.lucene.search.spans.SpanQuery;
 import org.apache.lucene.search.spans.SpanTermQuery;
 import org.apache.lucene.search.spans.Spans;
-import org.apache.lucene.util.TermContext;
 
 /**
  * Experimental class to get set of payloads for most standard Lucene queries.
@@ -60,7 +60,7 @@ public class PayloadSpanUtil {
    * @param context
    *          that contains doc with payloads to extract
    *          
-   * @see IndexReader#getTopReaderContext()
+   * @see IndexReader#getContext()
    */
   public PayloadSpanUtil(IndexReaderContext context) {
     this.context = context;
@@ -184,8 +184,7 @@ public class PayloadSpanUtil {
     for (Term term : terms) {
       termContexts.put(term, TermContext.build(context, term, true));
     }
-    final AtomicReaderContext[] leaves = context.leaves();
-    for (AtomicReaderContext atomicReaderContext : leaves) {
+    for (AtomicReaderContext atomicReaderContext : context.leaves()) {
       final Spans spans = query.getSpans(atomicReaderContext, atomicReaderContext.reader().getLiveDocs(), termContexts);
       while (spans.next() == true) {
         if (spans.isPayloadAvailable()) {

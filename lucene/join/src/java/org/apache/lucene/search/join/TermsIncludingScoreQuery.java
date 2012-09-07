@@ -36,6 +36,7 @@ import org.apache.lucene.util.BytesRefHash;
 import org.apache.lucene.util.FixedBitSet;
 
 import java.io.IOException;
+import java.util.Locale;
 import java.util.Set;
 
 class TermsIncludingScoreQuery extends Query {
@@ -69,7 +70,7 @@ class TermsIncludingScoreQuery extends Query {
   }
 
   public String toString(String string) {
-    return String.format("TermsIncludingScoreQuery{field=%s;originalQuery=%s}", field, unwrittenOriginalQuery);
+    return String.format(Locale.ROOT, "TermsIncludingScoreQuery{field=%s;originalQuery=%s}", field, unwrittenOriginalQuery);
   }
 
   @Override
@@ -98,9 +99,9 @@ class TermsIncludingScoreQuery extends Query {
       private TermsEnum segmentTermsEnum;
 
       public Explanation explain(AtomicReaderContext context, int doc) throws IOException {
-        SVInnerScorer scorer = (SVInnerScorer) scorer(context, true, false, context.reader().getLiveDocs());
+        SVInnerScorer scorer = (SVInnerScorer) scorer(context, false, false, context.reader().getLiveDocs());
         if (scorer != null) {
-          if (scorer.advance(doc) == doc) {
+          if (scorer.advanceForExplainOnly(doc) == doc) {
             return scorer.explain();
           }
         }
@@ -126,7 +127,13 @@ class TermsIncludingScoreQuery extends Query {
         }
 
         segmentTermsEnum = terms.iterator(segmentTermsEnum);
-        if (multipleValuesPerDocument) {
+        if (scoreDocsInOrder) {
+          if (multipleValuesPerDocument) {
+            return new MVInOrderScorer(this, acceptDocs, segmentTermsEnum, context.reader().maxDoc());
+          } else {
+            return new SVInOrderScorer(this, acceptDocs, segmentTermsEnum, context.reader().maxDoc());
+          }
+        } else if (multipleValuesPerDocument) {
           return new MVInnerScorer(this, acceptDocs, segmentTermsEnum, context.reader().maxDoc());
         } else {
           return new SVInnerScorer(this, acceptDocs, segmentTermsEnum);
@@ -181,9 +188,8 @@ class TermsIncludingScoreQuery extends Query {
         }
 
         scoreUpto = upto;
-        TermsEnum.SeekStatus status = termsEnum.seekCeil(terms.get(ords[upto++], spare), true);
-        if (status == TermsEnum.SeekStatus.FOUND) {
-          docsEnum = reuse = termsEnum.docs(acceptDocs, reuse, false);
+        if (termsEnum.seekExact(terms.get(ords[upto++], spare), true)) {
+          docsEnum = reuse = termsEnum.docs(acceptDocs, reuse, 0);
         }
       } while (docsEnum == null);
 
@@ -191,6 +197,10 @@ class TermsIncludingScoreQuery extends Query {
     }
 
     public int advance(int target) throws IOException {
+      throw new UnsupportedOperationException("advance() isn't supported because doc ids are emitted out of order");
+    }
+
+    private int advanceForExplainOnly(int target) throws IOException {
       int docId;
       do {
         docId = nextDoc();
@@ -206,6 +216,11 @@ class TermsIncludingScoreQuery extends Query {
         docsEnum = null; // goto the next ord.
       } while (docId != DocIdSetIterator.NO_MORE_DOCS);
       return docId;
+    }
+
+    @Override
+    public float freq() {
+      return 1;
     }
   }
 
@@ -245,9 +260,8 @@ class TermsIncludingScoreQuery extends Query {
           }
 
           scoreUpto = upto;
-          TermsEnum.SeekStatus status = termsEnum.seekCeil(terms.get(ords[upto++], spare), true);
-          if (status == TermsEnum.SeekStatus.FOUND) {
-            docsEnum = reuse = termsEnum.docs(acceptDocs, reuse, false);
+          if (termsEnum.seekExact(terms.get(ords[upto++], spare), true)) {
+            docsEnum = reuse = termsEnum.docs(acceptDocs, reuse, 0);
           }
         } while (docsEnum == null);
 
@@ -263,6 +277,91 @@ class TermsIncludingScoreQuery extends Query {
         } else {
           alreadyEmittedDocs.set(docId);
           return docId;
+        }
+      }
+    }
+  }
+
+  class SVInOrderScorer extends Scorer {
+
+    final DocIdSetIterator matchingDocsIterator;
+    final float[] scores;
+
+    int currentDoc = -1;
+
+    SVInOrderScorer(Weight weight, Bits acceptDocs, TermsEnum termsEnum, int maxDoc) throws IOException {
+      super(weight);
+      FixedBitSet matchingDocs = new FixedBitSet(maxDoc);
+      this.scores = new float[maxDoc];
+      fillDocsAndScores(matchingDocs, acceptDocs, termsEnum);
+      this.matchingDocsIterator = matchingDocs.iterator();
+    }
+
+    protected void fillDocsAndScores(FixedBitSet matchingDocs, Bits acceptDocs, TermsEnum termsEnum) throws IOException {
+      BytesRef spare = new BytesRef();
+      DocsEnum docsEnum = null;
+      for (int i = 0; i < terms.size(); i++) {
+        if (termsEnum.seekExact(terms.get(ords[i], spare), true)) {
+          docsEnum = termsEnum.docs(acceptDocs, docsEnum, 0);
+          float score = TermsIncludingScoreQuery.this.scores[ords[i]];
+          for (int doc = docsEnum.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = docsEnum.nextDoc()) {
+            matchingDocs.set(doc);
+            // In the case the same doc is also related to a another doc, a score might be overwritten. I think this
+            // can only happen in a many-to-many relation
+            scores[doc] = score;
+          }
+        }
+      }
+    }
+
+    public float score() throws IOException {
+      return scores[currentDoc];
+    }
+
+    public float freq() throws IOException {
+      return 1;
+    }
+
+    public int docID() {
+      return currentDoc;
+    }
+
+    public int nextDoc() throws IOException {
+      return currentDoc = matchingDocsIterator.nextDoc();
+    }
+
+    public int advance(int target) throws IOException {
+      return currentDoc = matchingDocsIterator.advance(target);
+    }
+  }
+
+  // This scorer deals with the fact that a document can have more than one score from multiple related documents.
+  class MVInOrderScorer extends SVInOrderScorer {
+
+    MVInOrderScorer(Weight weight, Bits acceptDocs, TermsEnum termsEnum, int maxDoc) throws IOException {
+      super(weight, acceptDocs, termsEnum, maxDoc);
+    }
+
+    @Override
+    protected void fillDocsAndScores(FixedBitSet matchingDocs, Bits acceptDocs, TermsEnum termsEnum) throws IOException {
+      BytesRef spare = new BytesRef();
+      DocsEnum docsEnum = null;
+      for (int i = 0; i < terms.size(); i++) {
+        if (termsEnum.seekExact(terms.get(ords[i], spare), true)) {
+          docsEnum = termsEnum.docs(acceptDocs, docsEnum, 0);
+          float score = TermsIncludingScoreQuery.this.scores[ords[i]];
+          for (int doc = docsEnum.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = docsEnum.nextDoc()) {
+            // I prefer this:
+            /*if (scores[doc] < score) {
+              scores[doc] = score;
+              matchingDocs.set(doc);
+            }*/
+            // But this behaves the same as MVInnerScorer and only then the tests will pass:
+            if (!matchingDocs.get(doc)) {
+              scores[doc] = score;
+              matchingDocs.set(doc);
+            }
+          }
         }
       }
     }

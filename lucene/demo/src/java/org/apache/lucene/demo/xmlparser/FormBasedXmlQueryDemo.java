@@ -37,11 +37,11 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.StoredDocument;
 import org.apache.lucene.queryparser.xml.CorePlusExtensionsParser;
 import org.apache.lucene.queryparser.xml.QueryTemplateManager;
 import org.apache.lucene.search.IndexSearcher;
@@ -49,6 +49,7 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.RAMDirectory;
+import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.Version;
 
 /**
@@ -112,7 +113,7 @@ public class FormBasedXmlQueryDemo extends HttpServlet {
       //and package the results and forward to JSP
       if (topDocs != null) {
         ScoreDoc[] sd = topDocs.scoreDocs;
-        Document[] results = new Document[sd.length];
+        StoredDocument[] results = new StoredDocument[sd.length];
         for (int i = 0; i < results.length; i++) {
           results[i] = searcher.doc(sd[i].doc);
           request.setAttribute("results", results);
@@ -126,13 +127,13 @@ public class FormBasedXmlQueryDemo extends HttpServlet {
     }
   }
 
-  private void openExampleIndex() throws CorruptIndexException, IOException {
+  private void openExampleIndex() throws IOException {
     //Create a RAM-based index from our test data file
     RAMDirectory rd = new RAMDirectory();
     IndexWriterConfig iwConfig = new IndexWriterConfig(Version.LUCENE_40, analyzer);
     IndexWriter writer = new IndexWriter(rd, iwConfig);
     InputStream dataIn = getServletContext().getResourceAsStream("/WEB-INF/data.tsv");
-    BufferedReader br = new BufferedReader(new InputStreamReader(dataIn));
+    BufferedReader br = new BufferedReader(new InputStreamReader(dataIn, IOUtils.CHARSET_UTF_8));
     String line = br.readLine();
     final FieldType textNoNorms = new FieldType(TextField.TYPE_STORED);
     textNoNorms.setOmitNorms(true);

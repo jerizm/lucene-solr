@@ -21,6 +21,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.WeakHashMap;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -28,10 +29,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.DocumentStoredFieldVisitor;
 import org.apache.lucene.search.SearcherManager; // javadocs
-import org.apache.lucene.store.*;
+import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.ReaderUtil;         // for javadocs
 
 /** IndexReader is an abstract class, providing an interface for accessing an
  index.  Search of an index is done entirely through this abstract interface,
@@ -53,7 +53,7 @@ import org.apache.lucene.util.ReaderUtil;         // for javadocs
  
  <p>IndexReader instances for indexes on disk are usually constructed
  with a call to one of the static <code>DirectoryReader.open()</code> methods,
- e.g. {@link DirectoryReader#open(Directory)}. {@link DirectoryReader} implements
+ e.g. {@link DirectoryReader#open(org.apache.lucene.store.Directory)}. {@link DirectoryReader} implements
  the {@link CompositeReader} interface, it is not possible to directly get postings.
 
  <p> For efficiency, in this API documents are often referred to via
@@ -243,7 +243,8 @@ public abstract class IndexReader implements Closeable {
   }
   
   /**
-   * @throws AlreadyClosedException if this IndexReader is closed
+   * Throws AlreadyClosedException if this IndexReader or any
+   * of its child readers is closed, otherwise returns.
    */
   protected final void ensureOpen() throws AlreadyClosedException {
     if (refCount.get() <= 0) {
@@ -317,7 +318,7 @@ public abstract class IndexReader implements Closeable {
    *  simply want to load all fields, use {@link
    *  #document(int)}.  If you want to load a subset, use
    *  {@link DocumentStoredFieldVisitor}.  */
-  public abstract void document(int docID, StoredFieldVisitor visitor) throws CorruptIndexException, IOException;
+  public abstract void document(int docID, StoredFieldVisitor visitor) throws IOException;
   
   /**
    * Returns the stored fields of the <code>n</code><sup>th</sup>
@@ -341,7 +342,7 @@ public abstract class IndexReader implements Closeable {
   // TODO: we need a separate StoredField, so that the
   // Document returned here contains that class not
   // IndexableField
-  public final Document document(int docID) throws CorruptIndexException, IOException {
+  public final StoredDocument document(int docID) throws IOException {
     final DocumentStoredFieldVisitor visitor = new DocumentStoredFieldVisitor();
     document(docID, visitor);
     return visitor.getDocument();
@@ -352,8 +353,10 @@ public abstract class IndexReader implements Closeable {
    * fields.  Note that this is simply sugar for {@link
    * DocumentStoredFieldVisitor#DocumentStoredFieldVisitor(Set)}.
    */
-  public final Document document(int docID, Set<String> fieldsToLoad) throws CorruptIndexException, IOException {
-    final DocumentStoredFieldVisitor visitor = new DocumentStoredFieldVisitor(fieldsToLoad);
+  public final StoredDocument document(int docID, Set<String> fieldsToLoad)
+      throws IOException {
+    final DocumentStoredFieldVisitor visitor = new DocumentStoredFieldVisitor(
+        fieldsToLoad);
     document(docID, visitor);
     return visitor.getDocument();
   }
@@ -378,9 +381,11 @@ public abstract class IndexReader implements Closeable {
   protected abstract void doClose() throws IOException;
 
   /**
-   * Expert: Returns a the root {@link IndexReaderContext} for this
-   * {@link IndexReader}'s sub-reader tree. Iff this reader is composed of sub
-   * readers ,ie. this reader being a composite reader, this method returns a
+   * Expert: Returns the root {@link IndexReaderContext} for this
+   * {@link IndexReader}'s sub-reader tree. 
+   * <p>
+   * Iff this reader is composed of sub
+   * readers, i.e. this reader being a composite reader, this method returns a
    * {@link CompositeReaderContext} holding the reader's direct children as well as a
    * view of the reader tree's atomic leaf contexts. All sub-
    * {@link IndexReaderContext} instances referenced from this readers top-level
@@ -389,14 +394,21 @@ public abstract class IndexReader implements Closeable {
    * atomic leaf reader at a time. If this reader is not composed of child
    * readers, this method returns an {@link AtomicReaderContext}.
    * <p>
-   * Note: Any of the sub-{@link CompositeReaderContext} instances reference from this
-   * top-level context holds a <code>null</code> {@link CompositeReaderContext#leaves()}
-   * reference. Only the top-level context maintains the convenience leaf-view
+   * Note: Any of the sub-{@link CompositeReaderContext} instances referenced
+   * from this top-level context do not support {@link CompositeReaderContext#leaves()}.
+   * Only the top-level context maintains the convenience leaf-view
    * for performance reasons.
-   * 
-   * @lucene.experimental
    */
-  public abstract IndexReaderContext getTopReaderContext();
+  public abstract IndexReaderContext getContext();
+  
+  /**
+   * Returns the reader's leaves, or itself if this reader is atomic.
+   * This is a convenience method calling {@code this.getContext().leaves()}.
+   * @see IndexReaderContext#leaves()
+   */
+  public final List<AtomicReaderContext> leaves() {
+    return getContext().leaves();
+  }
 
   /** Expert: Returns a key for this IndexReader, so FieldCache/CachingWrapperFilter can find
    * it again.

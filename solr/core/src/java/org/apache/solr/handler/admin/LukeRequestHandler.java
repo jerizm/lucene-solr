@@ -31,6 +31,7 @@ import org.apache.lucene.document.Field;
 import org.apache.lucene.index.*;
 import org.apache.lucene.index.FieldInfo.IndexOptions;
 import org.apache.lucene.search.DocIdSetIterator;
+import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CharsRef;
@@ -52,6 +53,7 @@ import org.apache.solr.schema.FieldType;
 import org.apache.solr.update.SolrIndexWriter;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.SchemaField;
+import org.apache.solr.schema.CopyField;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -132,7 +134,7 @@ public class LukeRequestHandler extends RequestHandlerBase
       if( style != null && style != ShowStyle.DOC ) {
         throw new SolrException(ErrorCode.BAD_REQUEST, "missing doc param for doc style");
       }
-      Document doc = null;
+      StoredDocument doc = null;
       try {
         doc = reader.document( docId );
       }
@@ -169,7 +171,7 @@ public class LukeRequestHandler extends RequestHandlerBase
   /**
    * @return a string representing a IndexableField's flags.  
    */
-  private static String getFieldFlags( IndexableField f )
+  private static String getFieldFlags( StorableField f )
   {
     IndexOptions opts = (f == null) ? null : f.fieldType().indexOptions();
 
@@ -238,7 +240,7 @@ public class LukeRequestHandler extends RequestHandlerBase
     return key;
   }
 
-  private static SimpleOrderedMap<Object> getDocumentFieldsInfo( Document doc, int docId, IndexReader reader,
+  private static SimpleOrderedMap<Object> getDocumentFieldsInfo( StoredDocument doc, int docId, IndexReader reader,
                                                                  IndexSchema schema ) throws IOException
   {
     final CharsRef spare = new CharsRef();
@@ -342,13 +344,13 @@ public class LukeRequestHandler extends RequestHandlerBase
       if(sfield != null && sfield.indexed() ) {
         // In the pre-4.0 days, this did a veeeery expensive range query. But we can be much faster now,
         // so just do this all the time.
-        Document doc = getFirstLiveDoc(reader, fieldName, terms);
+        StoredDocument doc = getFirstLiveDoc(reader, fieldName, terms);
 
 
         if( doc != null ) {
           // Found a document with this field
           try {
-            IndexableField fld = doc.getField( fieldName );
+            StorableField fld = doc.getField( fieldName );
             if( fld != null ) {
               fieldMap.add("index", getFieldFlags(fld));
             }
@@ -376,7 +378,7 @@ public class LukeRequestHandler extends RequestHandlerBase
   // Just get a document with the term in it, the first one will do!
   // Is there a better way to do this? Shouldn't actually be very costly
   // to do it this way.
-  private static Document getFirstLiveDoc(AtomicReader reader, String fieldName, Terms terms) throws IOException {
+  private static StoredDocument getFirstLiveDoc(AtomicReader reader, String fieldName, Terms terms) throws IOException {
     DocsEnum docsEnum = null;
     TermsEnum termsEnum = terms.iterator(null);
     BytesRef text;
@@ -390,7 +392,7 @@ public class LukeRequestHandler extends RequestHandlerBase
       docsEnum = reader.termDocsEnum(reader.getLiveDocs(),
           term.field(),
           new BytesRef(term.text()),
-          false);
+          0);
       if (docsEnum != null) {
         int docId;
         if ((docId = docsEnum.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
@@ -425,6 +427,7 @@ public class LukeRequestHandler extends RequestHandlerBase
       field.add("className", ft.getClass().getName());
       field.add("indexAnalyzer", getAnalyzerInfo(ft.getAnalyzer()));
       field.add("queryAnalyzer", getAnalyzerInfo(ft.getQueryAnalyzer()));
+      field.add("similarity", getSimilarityInfo(ft.getSimilarity()));
       types.add( ft.getTypeName(), field );
     }
 
@@ -450,6 +453,14 @@ public class LukeRequestHandler extends RequestHandlerBase
     return finfo;
   }
 
+  private static SimpleOrderedMap<Object> getSimilarityInfo(Similarity similarity) {
+    SimpleOrderedMap<Object> toReturn = new SimpleOrderedMap<Object>();
+    if (similarity != null) {
+      toReturn.add("className", similarity.getClass().getName());
+      toReturn.add("details", similarity.toString());
+    }
+    return toReturn;
+  }
 
   private static SimpleOrderedMap<Object> getAnalyzerInfo(Analyzer analyzer) {
     SimpleOrderedMap<Object> aninfo = new SimpleOrderedMap<Object>();
@@ -512,8 +523,8 @@ public class LukeRequestHandler extends RequestHandlerBase
     if (ft.getAnalyzer().getPositionIncrementGap(f.getName()) != 0) {
       field.add("positionIncrementGap", ft.getAnalyzer().getPositionIncrementGap(f.getName()));
     }
-    field.add("copyDests", schema.getCopyFieldsList(f.getName()));
-    field.add("copySources", schema.getCopySources(f.getName()));
+    field.add("copyDests", toListOfStringDests(schema.getCopyFieldsList(f.getName())));
+    field.add("copySources", toListOfStrings(schema.getCopySources(f.getName())));
 
 
     fields.put( f.getName(), field );
@@ -544,7 +555,7 @@ public class LukeRequestHandler extends RequestHandlerBase
     indexInfo.add("maxDoc", reader.maxDoc());
 
     indexInfo.add("version", reader.getVersion());  // TODO? Is this different then: IndexReader.getCurrentVersion( dir )?
-    indexInfo.add("segmentCount", reader.getSequentialSubReaders().length);
+    indexInfo.add("segmentCount", reader.leaves().size());
     indexInfo.add("current", reader.isCurrent() );
     indexInfo.add("hasDeletions", reader.hasDeletions() );
     indexInfo.add("directory", dir );
@@ -607,6 +618,22 @@ public class LukeRequestHandler extends RequestHandlerBase
     // Add a histogram
     fieldMap.add("histogram", tiq.histogram.toNamedList());
   }
+
+  private static List<String> toListOfStrings(SchemaField[] raw) {
+    List<String> result = new ArrayList<String>(raw.length);
+    for (SchemaField f : raw) {
+      result.add(f.getName());
+    }
+    return result;
+  }
+  private static List<String> toListOfStringDests(List<CopyField> raw) {
+    List<String> result = new ArrayList<String>(raw.size());
+    for (CopyField f : raw) {
+      result.add(f.getDestination().getName());
+    }
+    return result;
+  }
+
   //////////////////////// SolrInfoMBeans methods //////////////////////
 
   @Override

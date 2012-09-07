@@ -60,7 +60,7 @@ public abstract class ThreadedIndexingAndSearchingTestCase extends LuceneTestCas
   protected final AtomicInteger delCount = new AtomicInteger();
   protected final AtomicInteger packCount = new AtomicInteger();
 
-  protected Directory dir;
+  protected MockDirectoryWrapper dir;
   protected IndexWriter writer;
 
   private static class SubDocs {
@@ -89,19 +89,19 @@ public abstract class ThreadedIndexingAndSearchingTestCase extends LuceneTestCas
     return in;
   }
 
-  protected void updateDocuments(Term id, List<? extends Iterable<? extends IndexableField>> docs) throws Exception {
+  protected void updateDocuments(Term id, List<? extends IndexDocument> docs) throws Exception {
     writer.updateDocuments(id, docs);
   }
 
-  protected void addDocuments(Term id, List<? extends Iterable<? extends IndexableField>> docs) throws Exception {
+  protected void addDocuments(Term id, List<? extends IndexDocument> docs) throws Exception {
     writer.addDocuments(docs);
   }
 
-  protected void addDocument(Term id, Iterable<? extends IndexableField> doc) throws Exception {
+  protected void addDocument(Term id, IndexDocument doc) throws Exception {
     writer.addDocument(doc);
   }
 
-  protected void updateDocument(Term term, Iterable<? extends IndexableField> doc) throws Exception {
+  protected void updateDocument(Term term, IndexDocument doc) throws Exception {
     writer.updateDocument(term, doc);
   }
 
@@ -117,8 +117,7 @@ public abstract class ThreadedIndexingAndSearchingTestCase extends LuceneTestCas
                                          final long stopTime,
                                          final Set<String> delIDs,
                                          final Set<String> delPackIDs,
-                                         final List<SubDocs> allSubDocs)
-    throws Exception {
+                                         final List<SubDocs> allSubDocs) {
     final Thread[] threads = new Thread[numThreads];
     for(int thread=0;thread<numThreads;thread++) {
       threads[thread] = new Thread() {
@@ -335,14 +334,15 @@ public abstract class ThreadedIndexingAndSearchingTestCase extends LuceneTestCas
                   // Verify 1) IW is correctly setting
                   // diagnostics, and 2) segment warming for
                   // merged segments is actually happening:
-                  for(AtomicReader sub : ((DirectoryReader) s.getIndexReader()).getSequentialSubReaders()) {
-                    SegmentReader segReader = (SegmentReader) sub;
+                  for(final AtomicReaderContext sub : s.getIndexReader().leaves()) {
+                    SegmentReader segReader = (SegmentReader) sub.reader();
                     Map<String,String> diagnostics = segReader.getSegmentInfo().info.getDiagnostics();
                     assertNotNull(diagnostics);
                     String source = diagnostics.get("source");
                     assertNotNull(source);
                     if (source.equals("merge")) {
-                      assertTrue("sub reader " + sub + " wasn't warmed: " + warmed, !assertMergedSegmentsWarmed || warmed.containsKey(((SegmentReader) sub).core));
+                      assertTrue("sub reader " + sub + " wasn't warmed: warmed=" + warmed + " diagnostics=" + diagnostics + " si=" + segReader.getSegmentInfo(),
+                                 !assertMergedSegmentsWarmed || warmed.containsKey(segReader.core));
                     }
                   }
                   if (s.getIndexReader().numDocs() > 0) {
@@ -432,8 +432,8 @@ public abstract class ThreadedIndexingAndSearchingTestCase extends LuceneTestCas
     Random random = new Random(random().nextLong());
     final LineFileDocs docs = new LineFileDocs(random, true);
     final File tempDir = _TestUtil.getTempDir(testName);
-    dir = newFSDirectory(tempDir);
-    ((MockDirectoryWrapper) dir).setCheckIndexOnClose(false); // don't double-checkIndex, we do it ourselves.
+    dir = newMockFSDirectory(tempDir); // some subclasses rely on this being MDW
+    dir.setCheckIndexOnClose(false); // don't double-checkIndex, we do it ourselves.
     final IndexWriterConfig conf = newIndexWriterConfig(TEST_VERSION_CURRENT, 
         new MockAnalyzer(random())).setInfoStream(new FailOnNonBulkMergesInfoStream());
 
@@ -464,7 +464,7 @@ public abstract class ThreadedIndexingAndSearchingTestCase extends LuceneTestCas
         final int inc = Math.max(1, maxDoc/50);
         for(int docID=0;docID<maxDoc;docID += inc) {
           if (liveDocs == null || liveDocs.get(docID)) {
-            final Document doc = reader.document(docID);
+            final StoredDocument doc = reader.document(docID);
             sum += doc.getFields().size();
           }
         }
@@ -564,7 +564,7 @@ public abstract class ThreadedIndexingAndSearchingTestCase extends LuceneTestCas
               startDocID = docID;
             }
             lastDocID = docID;
-            final Document doc = s.doc(docID);
+            final StoredDocument doc = s.doc(docID);
             assertEquals(subDocs.packID, doc.get("packID"));
           }
 

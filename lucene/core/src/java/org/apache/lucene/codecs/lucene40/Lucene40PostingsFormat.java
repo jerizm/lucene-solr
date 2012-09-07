@@ -21,6 +21,7 @@ import java.io.IOException;
 
 import org.apache.lucene.codecs.BlockTreeTermsReader;
 import org.apache.lucene.codecs.BlockTreeTermsWriter;
+import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.codecs.FieldsConsumer;
 import org.apache.lucene.codecs.FieldsProducer;
 import org.apache.lucene.codecs.PostingsFormat;
@@ -32,7 +33,6 @@ import org.apache.lucene.index.FieldInfos; // javadocs
 import org.apache.lucene.index.SegmentReadState;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.store.DataOutput; // javadocs
-import org.apache.lucene.util.CodecUtil; // javadocs
 import org.apache.lucene.util.fst.FST; // javadocs
 
 /** 
@@ -159,7 +159,7 @@ import org.apache.lucene.util.fst.FST; // javadocs
  * with the frequency of the term in that document (except when frequencies are
  * omitted: {@link IndexOptions#DOCS_ONLY}).</p>
  * <ul>
- *   <li>FreqFile (.frq) --&gt; Header, &lt;TermFreqs, SkipData&gt; <sup>TermCount</sup></li>
+ *   <li>FreqFile (.frq) --&gt; Header, &lt;TermFreqs, SkipData?&gt; <sup>TermCount</sup></li>
  *   <li>Header --&gt; {@link CodecUtil#writeHeader CodecHeader}</li>
  *   <li>TermFreqs --&gt; &lt;TermFreq&gt; <sup>DocFreq</sup></li>
  *   <li>TermFreq --&gt; DocDelta[, Freq?]</li>
@@ -314,7 +314,7 @@ public class Lucene40PostingsFormat extends PostingsFormat {
       FieldsProducer ret = new BlockTreeTermsReader(
                                                     state.dir,
                                                     state.fieldInfos,
-                                                    state.segmentInfo.name,
+                                                    state.segmentInfo,
                                                     postings,
                                                     state.context,
                                                     state.segmentSuffix,

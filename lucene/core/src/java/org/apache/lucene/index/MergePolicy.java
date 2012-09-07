@@ -24,7 +24,6 @@ import java.util.Map;
 
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MergeInfo;
-import org.apache.lucene.util.Bits;
 import org.apache.lucene.util.SetOnce.AlreadySetException;
 import org.apache.lucene.util.SetOnce;
 
@@ -74,7 +73,6 @@ public abstract class MergePolicy implements java.io.Closeable, Cloneable {
     int maxNumSegments = -1;        // used by IndexWriter
     public long estimatedMergeBytes;       // used by IndexWriter
     List<SegmentReader> readers;        // used by IndexWriter
-    List<Bits> readerLiveDocs;      // used by IndexWriter
     public final List<SegmentInfoPerCommit> segments;
     public final int totalDocCount;
     boolean aborted;
@@ -245,6 +243,10 @@ public abstract class MergePolicy implements java.io.Closeable, Cloneable {
     }
   }
 
+  /** Thrown when a merge was explicity aborted because
+   *  {@link IndexWriter#close(boolean)} was called with
+   *  <code>false</code>.  Normally this exception is
+   *  privately caught and suppresed by {@link IndexWriter}.  */
   public static class MergeAbortedException extends IOException {
     public MergeAbortedException() {
       super("merge is aborted");
@@ -299,7 +301,7 @@ public abstract class MergePolicy implements java.io.Closeable, Cloneable {
    *          the total set of segments in the index
    */
   public abstract MergeSpecification findMerges(SegmentInfos segmentInfos)
-      throws CorruptIndexException, IOException;
+      throws IOException;
 
   /**
    * Determine what set of merge operations is necessary in
@@ -324,7 +326,7 @@ public abstract class MergePolicy implements java.io.Closeable, Cloneable {
    */
   public abstract MergeSpecification findForcedMerges(
           SegmentInfos segmentInfos, int maxSegmentCount, Map<SegmentInfoPerCommit,Boolean> segmentsToMerge)
-      throws CorruptIndexException, IOException;
+      throws IOException;
 
   /**
    * Determine what set of merge operations is necessary in order to expunge all
@@ -334,7 +336,7 @@ public abstract class MergePolicy implements java.io.Closeable, Cloneable {
    *          the total set of segments in the index
    */
   public abstract MergeSpecification findForcedDeletesMerges(
-      SegmentInfos segmentInfos) throws CorruptIndexException, IOException;
+      SegmentInfos segmentInfos) throws IOException;
 
   /**
    * Release all resources for the policy.

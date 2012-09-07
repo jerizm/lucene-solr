@@ -22,7 +22,10 @@ import java.util.HashMap;
 import java.util.List;
 
 import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.StoredField;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.StorableField;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrInputDocument;
@@ -56,7 +59,7 @@ public class DocumentBuilder {
     // might actually want to map it to something.  If createField()
     // returns null, then we don't store the field.
     if (sfield.isPolyField()) {
-      IndexableField[] fields = sfield.createFields(val, boost);
+      StorableField[] fields = sfield.createFields(val, boost);
       if (fields.length > 0) {
         if (!sfield.multiValued()) {
           String oldValue = map.put(sfield.getName(), val);
@@ -66,12 +69,12 @@ public class DocumentBuilder {
           }
         }
         // Add each field
-        for (IndexableField field : fields) {
-          doc.add(field);
+        for (StorableField field : fields) {
+          doc.add((Field) field);
         }
       }
     } else {
-      IndexableField field = sfield.createField(val, boost);
+      StorableField field = sfield.createField(val, boost);
       if (field != null) {
         if (!sfield.multiValued()) {
           String oldValue = map.put(sfield.getName(), val);
@@ -81,7 +84,7 @@ public class DocumentBuilder {
           }
         }
       }
-      doc.add(field);
+      doc.add((Field) field);
     }
 
   }
@@ -190,13 +193,13 @@ public class DocumentBuilder {
 
   private static void addField(Document doc, SchemaField field, Object val, float boost) {
     if (field.isPolyField()) {
-      IndexableField[] farr = field.getType().createFields(field, val, boost);
-      for (IndexableField f : farr) {
-        if (f != null) doc.add(f); // null fields are not added
+      StorableField[] farr = field.getType().createFields(field, val, boost);
+      for (StorableField f : farr) {
+        if (f != null) doc.add((Field) f); // null fields are not added
       }
     } else {
-      IndexableField f = field.createField(val, boost);
-      if (f != null) doc.add(f);  // null fields are not added
+      StorableField f = field.createField(val, boost);
+      if (f != null) doc.add((Field) f);  // null fields are not added
     }
   }
   
@@ -235,7 +238,7 @@ public class DocumentBuilder {
       SchemaField sfield = schema.getFieldOrNull(name);
       boolean used = false;
       float boost = field.getBoost();
-      boolean omitNorms = sfield != null && sfield.omitNorms();
+      boolean applyBoost = sfield != null && sfield.indexed() && !sfield.omitNorms();
       
       // Make sure it has the correct number
       if( sfield!=null && !sfield.multiValued() && field.getValueCount() > 1 ) {
@@ -244,9 +247,9 @@ public class DocumentBuilder {
               sfield.getName() + ": " +field.getValue() );
       }
       
-      if (omitNorms && boost != 1.0F) {
+      if (applyBoost == false && boost != 1.0F) {
         throw new SolrException( SolrException.ErrorCode.BAD_REQUEST,
-            "ERROR: "+getID(doc, schema)+"cannot set an index-time boost, norms are omitted for field " + 
+            "ERROR: "+getID(doc, schema)+"cannot set an index-time boost, unindexed or norms are omitted for field " + 
               sfield.getName() + ": " +field.getValue() );
       }
 
@@ -260,7 +263,7 @@ public class DocumentBuilder {
           hasField = true;
           if (sfield != null) {
             used = true;
-            addField(out, sfield, v, omitNorms ? 1F : docBoost*boost);
+            addField(out, sfield, v, applyBoost ? docBoost*boost : 1f);
           }
   
           // Check if we should copy this field to any other fields.
@@ -282,7 +285,7 @@ public class DocumentBuilder {
             if( val instanceof String && cf.getMaxChars() > 0 ) {
               val = cf.getLimitedValue((String)val);
             }
-            addField(out, destinationField, val, destinationField.omitNorms() ? 1F : docBoost*boost);
+            addField(out, destinationField, val, destinationField.indexed() && !destinationField.omitNorms() ? docBoost*boost : 1F);
           }
           
           // In lucene, the boost for a given field is the product of the 

@@ -67,11 +67,11 @@ public class TestDocumentWriter extends LuceneTestCase {
     //After adding the document, we should be able to read it back in
     SegmentReader reader = new SegmentReader(info, DirectoryReader.DEFAULT_TERMS_INDEX_DIVISOR, newIOContext(random()));
     assertTrue(reader != null);
-    Document doc = reader.document(0);
+    StoredDocument doc = reader.document(0);
     assertTrue(doc != null);
 
     //System.out.println("Document: " + doc);
-    IndexableField [] fields = doc.getFields("textField2");
+    StorableField[] fields = doc.getFields("textField2");
     assertTrue(fields != null && fields.length == 1);
     assertTrue(fields[0].stringValue().equals(DocHelper.FIELD_2_TEXT));
     assertTrue(fields[0].fieldType().storeTermVectors());
@@ -129,7 +129,7 @@ public class TestDocumentWriter extends LuceneTestCase {
     SegmentReader reader = new SegmentReader(info, DirectoryReader.DEFAULT_TERMS_INDEX_DIVISOR, newIOContext(random()));
 
     DocsAndPositionsEnum termPositions = MultiFields.getTermPositionsEnum(reader, MultiFields.getLiveDocs(reader),
-                                                                          "repeated", new BytesRef("repeated"), false);
+                                                                          "repeated", new BytesRef("repeated"));
     assertTrue(termPositions.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
     int freq = termPositions.freq();
     assertEquals(2, freq);
@@ -200,16 +200,16 @@ public class TestDocumentWriter extends LuceneTestCase {
     writer.close();
     SegmentReader reader = new SegmentReader(info, DirectoryReader.DEFAULT_TERMS_INDEX_DIVISOR, newIOContext(random()));
 
-    DocsAndPositionsEnum termPositions = MultiFields.getTermPositionsEnum(reader, reader.getLiveDocs(), "f1", new BytesRef("a"), false);
+    DocsAndPositionsEnum termPositions = MultiFields.getTermPositionsEnum(reader, reader.getLiveDocs(), "f1", new BytesRef("a"));
     assertTrue(termPositions.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
     int freq = termPositions.freq();
     assertEquals(3, freq);
     assertEquals(0, termPositions.nextPosition());
-    assertEquals(true, termPositions.hasPayload());
+    assertNotNull(termPositions.getPayload());
     assertEquals(6, termPositions.nextPosition());
-    assertEquals(false, termPositions.hasPayload());
+    assertNull(termPositions.getPayload());
     assertEquals(7, termPositions.nextPosition());
-    assertEquals(false, termPositions.hasPayload());
+    assertNull(termPositions.getPayload());
     reader.close();
   }
 
@@ -226,7 +226,7 @@ public class TestDocumentWriter extends LuceneTestCase {
       private CharTermAttribute termAtt = addAttribute(CharTermAttribute.class);
       
       @Override
-      public boolean incrementToken() throws IOException {
+      public boolean incrementToken() {
         if (index == tokens.length) {
           return false;
         } else {
@@ -243,18 +243,18 @@ public class TestDocumentWriter extends LuceneTestCase {
     writer.close();
     SegmentReader reader = new SegmentReader(info, DirectoryReader.DEFAULT_TERMS_INDEX_DIVISOR, newIOContext(random()));
 
-    DocsAndPositionsEnum termPositions = reader.termPositionsEnum(reader.getLiveDocs(), "preanalyzed", new BytesRef("term1"), false);
+    DocsAndPositionsEnum termPositions = reader.termPositionsEnum(reader.getLiveDocs(), "preanalyzed", new BytesRef("term1"));
     assertTrue(termPositions.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
     assertEquals(1, termPositions.freq());
     assertEquals(0, termPositions.nextPosition());
 
-    termPositions = reader.termPositionsEnum(reader.getLiveDocs(), "preanalyzed", new BytesRef("term2"), false);
+    termPositions = reader.termPositionsEnum(reader.getLiveDocs(), "preanalyzed", new BytesRef("term2"));
     assertTrue(termPositions.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
     assertEquals(2, termPositions.freq());
     assertEquals(1, termPositions.nextPosition());
     assertEquals(3, termPositions.nextPosition());
     
-    termPositions = reader.termPositionsEnum(reader.getLiveDocs(), "preanalyzed", new BytesRef("term3"), false);
+    termPositions = reader.termPositionsEnum(reader.getLiveDocs(), "preanalyzed", new BytesRef("term3"));
     assertTrue(termPositions.nextDoc() != DocIdSetIterator.NO_MORE_DOCS);
     assertEquals(1, termPositions.freq());
     assertEquals(2, termPositions.nextPosition());

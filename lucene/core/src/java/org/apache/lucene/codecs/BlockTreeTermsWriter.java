@@ -31,7 +31,6 @@ import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.RAMOutputStream;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
-import org.apache.lucene.util.CodecUtil;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.IntsRef;
 import org.apache.lucene.util.fst.Builder;
@@ -72,7 +71,7 @@ import org.apache.lucene.util.fst.Util;
 */
 
 /**
- * block-based terms index and dictionary writer.
+ * Block-based terms index and dictionary writer.
  * <p>
  * Writes terms dict and index, block-encoding (column
  * stride) each term's metadata for each set of terms
@@ -725,7 +724,7 @@ public class BlockTreeTermsWriter extends FieldsConsumer {
           // Write term stats, to separate byte[] blob:
           bytesWriter2.writeVInt(term.stats.docFreq);
           if (fieldInfo.getIndexOptions() != IndexOptions.DOCS_ONLY) {
-            assert term.stats.totalTermFreq >= term.stats.docFreq;
+            assert term.stats.totalTermFreq >= term.stats.docFreq: term.stats.totalTermFreq + " vs " + term.stats.docFreq;
             bytesWriter2.writeVLong(term.stats.totalTermFreq - term.stats.docFreq);
           }
         }
@@ -897,7 +896,7 @@ public class BlockTreeTermsWriter extends FieldsConsumer {
         //   w.close();
         // }
       } else {
-        assert sumTotalTermFreq == 0;
+        assert sumTotalTermFreq == 0 || fieldInfo.getIndexOptions() == IndexOptions.DOCS_ONLY && sumTotalTermFreq == -1;
         assert sumDocFreq == 0;
         assert docCount == 0;
       }

@@ -42,7 +42,7 @@ public final class MappingMultiDocsAndPositionsEnum extends DocsAndPositionsEnum
   int doc = -1;
   private MergeState mergeState;
 
-  MappingMultiDocsAndPositionsEnum reset(MultiDocsAndPositionsEnum postingsEnum) throws IOException {
+  MappingMultiDocsAndPositionsEnum reset(MultiDocsAndPositionsEnum postingsEnum) {
     this.numSubs = postingsEnum.getNumSubs();
     this.subs = postingsEnum.getSubs();
     upto = -1;
@@ -73,7 +73,7 @@ public final class MappingMultiDocsAndPositionsEnum extends DocsAndPositionsEnum
   }
 
   @Override
-  public int advance(int target) throws IOException {
+  public int advance(int target) {
     throw new UnsupportedOperationException();
   }
 
@@ -123,16 +123,7 @@ public final class MappingMultiDocsAndPositionsEnum extends DocsAndPositionsEnum
   
   @Override
   public BytesRef getPayload() throws IOException {
-    BytesRef payload = current.getPayload();
-    if (mergeState.currentPayloadProcessor[upto] != null) {
-      mergeState.currentPayloadProcessor[upto].processPayload(payload);
-    }
-    return payload;
-  }
-
-  @Override
-  public boolean hasPayload() {
-    return current.hasPayload();
+    return current.getPayload();
   }
 }
 

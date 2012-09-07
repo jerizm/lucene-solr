@@ -47,9 +47,11 @@ public final class SegmentReader extends AtomicReader {
   final SegmentCoreReaders core;
 
   /**
+   * Constructs a new SegmentReader with a new core.
    * @throws CorruptIndexException if the index is corrupt
    * @throws IOException if there is a low-level IO error
    */
+  // TODO: why is this public?
   public SegmentReader(SegmentInfoPerCommit si, int termInfosIndexDivisor, IOContext context) throws IOException {
     this.si = si;
     core = new SegmentCoreReaders(this, si.info.dir, si, context, termInfosIndexDivisor);
@@ -76,20 +78,20 @@ public final class SegmentReader extends AtomicReader {
     }
   }
 
-  // Create new SegmentReader sharing core from a previous
-  // SegmentReader and loading new live docs from a new
-  // deletes file.  Used by openIfChanged.
+  /** Create new SegmentReader sharing core from a previous
+   *  SegmentReader and loading new live docs from a new
+   *  deletes file.  Used by openIfChanged. */
   SegmentReader(SegmentInfoPerCommit si, SegmentCoreReaders core, IOContext context) throws IOException {
     this(si, core,
          si.info.getCodec().liveDocsFormat().readLiveDocs(si.info.dir, si, context),
          si.info.getDocCount() - si.getDelCount());
   }
 
-  // Create new SegmentReader sharing core from a previous
-  // SegmentReader and using the provided in-memory
-  // liveDocs.  Used by IndexWriter to provide a new NRT
-  // reader:
-  SegmentReader(SegmentInfoPerCommit si, SegmentCoreReaders core, Bits liveDocs, int numDocs) throws IOException {
+  /** Create new SegmentReader sharing core from a previous
+   *  SegmentReader and using the provided in-memory
+   *  liveDocs.  Used by IndexWriter to provide a new NRT
+   *  reader */
+  SegmentReader(SegmentInfoPerCommit si, SegmentCoreReaders core, Bits liveDocs, int numDocs) {
     this.si = si;
     this.core = core;
     core.incRef();
@@ -131,7 +133,7 @@ public final class SegmentReader extends AtomicReader {
   }
   
   @Override
-  public void document(int docID, StoredFieldVisitor visitor) throws CorruptIndexException, IOException {
+  public void document(int docID, StoredFieldVisitor visitor) throws IOException {
     if (docID < 0 || docID >= maxDoc()) {       
       throw new IllegalArgumentException("docID must be >= 0 and < maxDoc=" + maxDoc() + " (got docID=" + docID + ")");
     }
@@ -139,7 +141,7 @@ public final class SegmentReader extends AtomicReader {
   }
 
   @Override
-  public Fields fields() throws IOException {
+  public Fields fields() {
     ensureOpen();
     return core.fields;
   }

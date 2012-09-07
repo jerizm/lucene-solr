@@ -35,8 +35,10 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.index.DocsAndPositionsEnum;
 import org.apache.lucene.index.Fields;
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.StoredDocument;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
+import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.util.ArrayUtil;
 import org.apache.lucene.util.BytesRef;
 
@@ -57,7 +59,7 @@ public class TokenSources {
    *        and get the vector from
    * @param docId The docId to retrieve.
    * @param field The field to retrieve on the document
-   * @param doc The document to fall back on
+   * @param document The document to fall back on
    * @param analyzer The analyzer to use for creating the TokenStream if the
    *        vector doesn't exist
    * @return The {@link org.apache.lucene.analysis.TokenStream} for the
@@ -67,7 +69,7 @@ public class TokenSources {
    */
 
   public static TokenStream getAnyTokenStream(IndexReader reader, int docId,
-      String field, Document doc, Analyzer analyzer) throws IOException {
+      String field, StoredDocument document, Analyzer analyzer) throws IOException {
     TokenStream ts = null;
 
     Fields vectors = reader.getTermVectors(docId);
@@ -80,7 +82,7 @@ public class TokenSources {
 
     // No token info stored so fall back to analyzing raw content
     if (ts == null) {
-      ts = getTokenStream(doc, field, analyzer);
+      ts = getTokenStream(document, field, analyzer);
     }
     return ts;
   }
@@ -124,18 +126,7 @@ public class TokenSources {
   }
 
   private static boolean hasPositions(Terms vector) throws IOException {
-    final TermsEnum termsEnum = vector.iterator(null);
-    if (termsEnum.next() != null) {
-      DocsAndPositionsEnum dpEnum = termsEnum.docsAndPositions(null, null, false);
-      if (dpEnum != null) {
-        int pos = dpEnum.nextPosition();
-        if (pos >= 0) {
-          return true;
-        }
-      }
-    }
-
-    return false;
+    return vector.hasPositions();
   }
 
   /**
@@ -191,7 +182,7 @@ public class TokenSources {
       }
 
       @Override
-      public boolean incrementToken() throws IOException {
+      public boolean incrementToken() {
         if (currentToken >= tokens.length) {
           return false;
         }
@@ -219,18 +210,21 @@ public class TokenSources {
     DocsAndPositionsEnum dpEnum = null;
     while ((text = termsEnum.next()) != null) {
 
-      dpEnum = termsEnum.docsAndPositions(null, dpEnum, true);
+      dpEnum = termsEnum.docsAndPositions(null, dpEnum);
       if (dpEnum == null) {
         throw new IllegalArgumentException(
             "Required TermVector Offset information was not found");
       }
-
       final String term = text.utf8ToString();
 
       dpEnum.nextDoc();
       final int freq = dpEnum.freq();
       for(int posUpto=0;posUpto<freq;posUpto++) {
         final int pos = dpEnum.nextPosition();
+        if (dpEnum.startOffset() < 0) {
+          throw new IllegalArgumentException(
+              "Required TermVector Offset information was not found");
+        }
         final Token token = new Token(term,
                                       dpEnum.startOffset(),
                                       dpEnum.endOffset());
@@ -298,11 +292,11 @@ public class TokenSources {
   // convenience method
   public static TokenStream getTokenStream(IndexReader reader, int docId,
       String field, Analyzer analyzer) throws IOException {
-    Document doc = reader.document(docId);
+    StoredDocument doc = reader.document(docId);
     return getTokenStream(doc, field, analyzer);
   }
-
-  public static TokenStream getTokenStream(Document doc, String field,
+  
+  public static TokenStream getTokenStream(StoredDocument doc, String field,
       Analyzer analyzer) {
     String contents = doc.get(field);
     if (contents == null) {

@@ -27,8 +27,9 @@ import java.io.Reader;
 
 
 /**
- *
- *
+ * Wraps a whitespace tokenizer with a filter that sets
+ * the first token, and odd tokens to posinc=1, and all others
+ * to 0, encoding the position as pos: XXX in the payload.
  **/
 public final class MockPayloadAnalyzer extends Analyzer {
 
@@ -67,7 +68,7 @@ final class MockPayloadFilter extends TokenFilter {
   @Override
   public boolean incrementToken() throws IOException {
     if (input.incrementToken()) {
-      payloadAttr.setPayload(new BytesRef(("pos: " + pos).getBytes()));
+      payloadAttr.setPayload(new BytesRef(("pos: " + pos).getBytes("UTF-8")));
       int posIncr;
       if (pos == 0 || i % 2 == 1) {
         posIncr = 1;

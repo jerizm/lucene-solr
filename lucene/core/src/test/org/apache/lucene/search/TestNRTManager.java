@@ -27,8 +27,8 @@ import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexDocument;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
@@ -37,13 +37,12 @@ import org.apache.lucene.index.RandomIndexWriter;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.index.ThreadedIndexingAndSearchingTestCase;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.LockObtainFailedException;
 import org.apache.lucene.store.NRTCachingDirectory;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.LuceneTestCase.SuppressCodecs;
 import org.apache.lucene.util.ThreadInterruptedException;
 
-@SuppressCodecs({ "SimpleText", "Memory" })
+@SuppressCodecs({ "SimpleText", "Memory", "Direct" })
 public class TestNRTManager extends ThreadedIndexingAndSearchingTestCase {
 
   private final ThreadLocal<Long> lastGens = new ThreadLocal<Long>();
@@ -77,7 +76,7 @@ public class TestNRTManager extends ThreadedIndexingAndSearchingTestCase {
   }
 
   @Override
-  protected void updateDocuments(Term id, List<? extends Iterable<? extends IndexableField>> docs) throws Exception {
+  protected void updateDocuments(Term id, List<? extends IndexDocument> docs) throws Exception {
     final long gen = genWriter.updateDocuments(id, docs);
 
     // Randomly verify the update "took":
@@ -101,7 +100,7 @@ public class TestNRTManager extends ThreadedIndexingAndSearchingTestCase {
   }
 
   @Override
-  protected void addDocuments(Term id, List<? extends Iterable<? extends IndexableField>> docs) throws Exception {
+  protected void addDocuments(Term id, List<? extends IndexDocument> docs) throws Exception {
     final long gen = genWriter.addDocuments(docs);
     // Randomly verify the add "took":
     if (random().nextInt(20) == 2) {
@@ -123,7 +122,7 @@ public class TestNRTManager extends ThreadedIndexingAndSearchingTestCase {
   }
 
   @Override
-  protected void addDocument(Term id, Iterable<? extends IndexableField> doc) throws Exception {
+  protected void addDocument(Term id, IndexDocument doc) throws Exception {
     final long gen = genWriter.addDocument(doc);
 
     // Randomly verify the add "took":
@@ -146,7 +145,7 @@ public class TestNRTManager extends ThreadedIndexingAndSearchingTestCase {
   }
 
   @Override
-  protected void updateDocument(Term id, Iterable<? extends IndexableField> doc) throws Exception {
+  protected void updateDocument(Term id, IndexDocument doc) throws Exception {
     final long gen = genWriter.updateDocument(id, doc);
     // Randomly verify the udpate "took":
     if (random().nextInt(20) == 2) {
@@ -367,7 +366,7 @@ public class TestNRTManager extends ThreadedIndexingAndSearchingTestCase {
 
     public LatchedIndexWriter(Directory d, IndexWriterConfig conf,
         CountDownLatch latch, CountDownLatch signal)
-        throws CorruptIndexException, LockObtainFailedException, IOException {
+        throws IOException {
       super(d, conf);
       this.latch = latch;
       this.signal = signal;
@@ -375,8 +374,8 @@ public class TestNRTManager extends ThreadedIndexingAndSearchingTestCase {
     }
 
     public void updateDocument(Term term,
-        Iterable<? extends IndexableField> doc, Analyzer analyzer)
-        throws CorruptIndexException, IOException {
+        IndexDocument doc, Analyzer analyzer)
+        throws IOException {
       super.updateDocument(term, doc, analyzer);
       try {
         if (waitAfterUpdate) {
@@ -398,7 +397,7 @@ public class TestNRTManager extends ThreadedIndexingAndSearchingTestCase {
 
     final SearcherFactory theEvilOne = new SearcherFactory() {
       @Override
-      public IndexSearcher newSearcher(IndexReader ignored) throws IOException {
+      public IndexSearcher newSearcher(IndexReader ignored) {
         return new IndexSearcher(other);
       }
       };

@@ -28,12 +28,14 @@ import org.apache.lucene.codecs.DocValuesConsumer;
 import org.apache.lucene.codecs.lucene40.values.Bytes;
 import org.apache.lucene.codecs.lucene40.values.Floats;
 import org.apache.lucene.codecs.lucene40.values.Ints;
+import org.apache.lucene.document.FieldType;
 import org.apache.lucene.index.DocValues.SortedSource;
 import org.apache.lucene.index.DocValues.Source;
 import org.apache.lucene.index.DocValues.Type;
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.index.IndexableFieldType;
+import org.apache.lucene.index.StorableField;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Counter;
@@ -360,7 +362,7 @@ public class TestDocValues extends LuceneTestCase {
       final Counter trackBytes = Counter.newCounter();
       DocValuesConsumer w = Ints.getWriter(dir, "test", trackBytes, type, newIOContext(random()));
       for (int i = 0; i < NUM_VALUES; i++) {
-        final long v = random().nextLong() % (1 + maxV);
+        final long v = _TestUtil.nextLong(random(), -maxV, maxV);
         valueHolder.numberValue = values[i] = v;
         w.add(i, valueHolder);
       }
@@ -438,20 +440,10 @@ public class TestDocValues extends LuceneTestCase {
     return getSource(values).asSortedSource();
   }
   
-  public static class DocValueHolder implements IndexableField {
+  public static class DocValueHolder implements StorableField {
     BytesRef bytes;
     Number numberValue;
     Comparator<BytesRef> comp;
-
-    @Override
-    public TokenStream tokenStream(Analyzer a) {
-      return null;
-    }
-
-    @Override
-    public float boost() {
-      return 0.0f;
-    }
 
     @Override
     public String name() {
@@ -479,7 +471,7 @@ public class TestDocValues extends LuceneTestCase {
     }
 
     @Override
-    public IndexableFieldType fieldType() {
+    public FieldType fieldType() {
       return null;
     }
   }

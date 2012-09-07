@@ -24,6 +24,7 @@ import org.apache.lucene.document.ByteDocValuesField;
 import org.apache.lucene.document.DerefBytesDocValuesField;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.DoubleDocValuesField;
+import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FloatDocValuesField;
 import org.apache.lucene.document.IntDocValuesField;
 import org.apache.lucene.document.LongDocValuesField;
@@ -33,7 +34,6 @@ import org.apache.lucene.document.SortedBytesDocValuesField;
 import org.apache.lucene.document.StraightBytesDocValuesField;
 import org.apache.lucene.index.DocValues.Type;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.LockObtainFailedException;
 import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.LuceneTestCase;
 
@@ -42,8 +42,7 @@ import org.apache.lucene.util.LuceneTestCase;
  */
 public class TestDocValuesTypeCompatibility extends LuceneTestCase {
   
-  public void testAddCompatibleIntTypes() throws CorruptIndexException,
-      LockObtainFailedException, IOException {
+  public void testAddCompatibleIntTypes() throws IOException {
     int numIter = atLeast(10);
     for (int i = 0; i < numIter; i++) {
       Directory dir = newDirectory();
@@ -69,7 +68,7 @@ public class TestDocValuesTypeCompatibility extends LuceneTestCase {
   }
   
   @SuppressWarnings("fallthrough")
-  public IndexableField getRandomIntsField(Type maxType, boolean force) {
+  public Field getRandomIntsField(Type maxType, boolean force) {
     switch (maxType) {
     
       case VAR_INTS:
@@ -97,8 +96,7 @@ public class TestDocValuesTypeCompatibility extends LuceneTestCase {
     }
   }
   
-  public void testAddCompatibleDoubleTypes() throws CorruptIndexException,
-      LockObtainFailedException, IOException {
+  public void testAddCompatibleDoubleTypes() throws IOException {
     int numIter = atLeast(10);
     for (int i = 0; i < numIter; i++) {
       Directory dir = newDirectory();
@@ -123,7 +121,7 @@ public class TestDocValuesTypeCompatibility extends LuceneTestCase {
     
   }
   @SuppressWarnings("fallthrough")
-  public IndexableField getRandomFloatField(Type maxType, boolean force) {
+  public Field getRandomFloatField(Type maxType, boolean force) {
     switch (maxType) {
     
       case FLOAT_64:
@@ -151,8 +149,7 @@ public class TestDocValuesTypeCompatibility extends LuceneTestCase {
     }
   }
   
-  public void testAddCompatibleDoubleTypes2() throws CorruptIndexException,
-      LockObtainFailedException, IOException {
+  public void testAddCompatibleDoubleTypes2() throws IOException {
     int numIter = atLeast(10);
     for (int i = 0; i < numIter; i++) {
       Directory dir = newDirectory();
@@ -165,7 +162,7 @@ public class TestDocValuesTypeCompatibility extends LuceneTestCase {
       iwc.setRAMBufferSizeMB(IndexWriterConfig.DISABLE_AUTO_FLUSH);
       iwc.setRAMPerThreadHardLimitMB(2000);
       IndexWriter writer = new IndexWriter(dir, iwc);
-      IndexableField[] fields = new IndexableField[] {
+      Field[] fields = new Field[] {
           new DoubleDocValuesField("f", 1.0), new IntDocValuesField("f", 1),
           new ShortDocValuesField("f", (short) 1),
           new ByteDocValuesField("f", (byte) 1)};
@@ -183,8 +180,7 @@ public class TestDocValuesTypeCompatibility extends LuceneTestCase {
     
   }
   
-  public void testAddCompatibleByteTypes() throws CorruptIndexException,
-      LockObtainFailedException, IOException {
+  public void testAddCompatibleByteTypes() throws IOException {
     int numIter = atLeast(10);
     for (int i = 0; i < numIter; i++) {
       Directory dir = newDirectory();
@@ -199,7 +195,7 @@ public class TestDocValuesTypeCompatibility extends LuceneTestCase {
       IndexWriter writer = new IndexWriter(dir, iwc);
       boolean mustBeFixed = random().nextBoolean();
       int maxSize = 2 + random().nextInt(15);
-      IndexableField bytesField = getRandomBytesField(mustBeFixed, maxSize,
+      Field bytesField = getRandomBytesField(mustBeFixed, maxSize,
           true);
       addDoc(writer, bytesField);
       for (int j = 0; j < numDocs; j++) {
@@ -212,7 +208,7 @@ public class TestDocValuesTypeCompatibility extends LuceneTestCase {
     }
   }
   
-  public IndexableField getRandomBytesField(boolean mustBeFixed, int maxSize,
+  public Field getRandomBytesField(boolean mustBeFixed, int maxSize,
       boolean mustBeVariableIfNotFixed) {
     int size = mustBeFixed ? maxSize : random().nextInt(maxSize) + 1;
     StringBuilder s = new StringBuilder();
@@ -261,16 +257,16 @@ public class TestDocValuesTypeCompatibility extends LuceneTestCase {
     dir.close();
   }
   
-  private void addDoc(IndexWriter writer, IndexableField... fields)
-      throws CorruptIndexException, IOException {
+  private void addDoc(IndexWriter writer, Field... fields)
+      throws IOException {
     Document doc = new Document();
-    for (IndexableField indexableField : fields) {
+    for (Field indexableField : fields) {
       doc.add(indexableField);
     }
     writer.addDocument(doc);
   }
   
-  public IndexableField getRandomIndexableDVField() {
+  public Field getRandomIndexableDVField() {
     int size = random().nextInt(100) + 1;
     StringBuilder s = new StringBuilder();
     for (int i = 0; i < size; i++) {

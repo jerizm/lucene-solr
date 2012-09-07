@@ -121,12 +121,10 @@ public final class ParallelAtomicReader extends AtomicReader {
     for (final AtomicReader reader : this.parallelReaders) {
       final Fields readerFields = reader.fields();
       if (readerFields != null) {
-        final FieldsEnum it = readerFields.iterator();
-        String name;
-        while ((name = it.next()) != null) {
+        for (String field : readerFields) {
           // only add if the reader responsible for that field name is the current:
-          if (fieldToReader.get(name) == reader) {
-            this.fields.addField(name, it.terms());
+          if (fieldToReader.get(field) == reader) {
+            this.fields.addField(field, readerFields.terms(field));
           }
         }
       }
@@ -151,33 +149,6 @@ public final class ParallelAtomicReader extends AtomicReader {
     return buffer.append(')').toString();
   }
   
-  private final class ParallelFieldsEnum extends FieldsEnum {
-    private String currentField;
-    private final Iterator<String> keys;
-    private final ParallelFields fields;
-    
-    ParallelFieldsEnum(ParallelFields fields) {
-      this.fields = fields;
-      keys = fields.fields.keySet().iterator();
-    }
-    
-    @Override
-    public String next() throws IOException {
-      if (keys.hasNext()) {
-        currentField = keys.next();
-      } else {
-        currentField = null;
-      }
-      return currentField;
-    }
-    
-    @Override
-    public Terms terms() throws IOException {
-      return fields.terms(currentField);
-    }
-    
-  }
-  
   // Single instance of this, per ParallelReader instance
   private final class ParallelFields extends Fields {
     final Map<String,Terms> fields = new TreeMap<String,Terms>();
@@ -185,22 +156,22 @@ public final class ParallelAtomicReader extends AtomicReader {
     ParallelFields() {
     }
     
-    void addField(String fieldName, Terms terms) throws IOException {
+    void addField(String fieldName, Terms terms) {
       fields.put(fieldName, terms);
     }
     
     @Override
-    public FieldsEnum iterator() throws IOException {
-      return new ParallelFieldsEnum(this);
+    public Iterator<String> iterator() {
+      return Collections.unmodifiableSet(fields.keySet()).iterator();
     }
     
     @Override
-    public Terms terms(String field) throws IOException {
+    public Terms terms(String field) {
       return fields.get(field);
     }
     
     @Override
-    public int size() throws IOException {
+    public int size() {
       return fields.size();
     }
   }
@@ -249,7 +220,7 @@ public final class ParallelAtomicReader extends AtomicReader {
   }
   
   @Override
-  public void document(int docID, StoredFieldVisitor visitor) throws CorruptIndexException, IOException {
+  public void document(int docID, StoredFieldVisitor visitor) throws IOException {
     ensureOpen();
     for (final AtomicReader reader: storedFieldsReaders) {
       reader.document(docID, visitor);

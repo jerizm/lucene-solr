@@ -94,18 +94,21 @@ public class NIOFSDirectory extends FSDirectory {
       }
 
       @Override
-      public IndexInput openSlice(String sliceDescription, long offset, long length) throws IOException {
+      public IndexInput openSlice(String sliceDescription, long offset, long length) {
         return new NIOFSIndexInput(sliceDescription, path, descriptor, descriptor.getChannel(), offset,
             length, BufferedIndexInput.bufferSize(context), getReadChunkSize());
       }
 
       @Override
-      public IndexInput openFullSlice() throws IOException {
+      public IndexInput openFullSlice() {
         return openSlice("full-slice", 0, descriptor.length);
       }
     };
   }
 
+  /**
+   * Reads bytes with {@link FileChannel#read(ByteBuffer, long)}
+   */
   protected static class NIOFSIndexInput extends SimpleFSDirectory.SimpleFSIndexInput {
 
     private ByteBuffer byteBuf; // wraps the buffer for NIO
@@ -117,7 +120,7 @@ public class NIOFSDirectory extends FSDirectory {
       channel = file.getChannel();
     }
     
-    public NIOFSIndexInput(String sliceDescription, File path, Descriptor file, FileChannel fc, long off, long length, int bufferSize, int chunkSize) throws IOException {
+    public NIOFSIndexInput(String sliceDescription, File path, Descriptor file, FileChannel fc, long off, long length, int bufferSize, int chunkSize) {
       super("NIOFSIndexInput(" + sliceDescription + " in path=\"" + path + "\" slice=" + off + ":" + (off+length) + ")", file, off, length, bufferSize, chunkSize);
       channel = fc;
       isClone = true;

@@ -22,11 +22,11 @@ import java.io.IOException;
 import org.apache.lucene.codecs.lucene40.values.Bytes.BytesReaderBase;
 import org.apache.lucene.codecs.lucene40.values.Bytes.BytesSourceBase;
 import org.apache.lucene.codecs.lucene40.values.Bytes.BytesWriterBase;
-import org.apache.lucene.document.Field;
+import org.apache.lucene.document.StoredField;
 import org.apache.lucene.index.DocValues.Source;
 import org.apache.lucene.index.DocValues.Type;
 import org.apache.lucene.index.DocValues;
-import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.StorableField;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
@@ -64,8 +64,7 @@ class VarStraightBytesImpl {
     private final ByteBlockPool pool;
     private IndexOutput datOut;
     private boolean merge = false;
-    public Writer(Directory dir, String id, Counter bytesUsed, IOContext context)
-        throws IOException {
+    public Writer(Directory dir, String id, Counter bytesUsed, IOContext context) {
       super(dir, id, CODEC_NAME_IDX, CODEC_NAME_DAT, VERSION_CURRENT, bytesUsed, context, Type.BYTES_VAR_STRAIGHT);
       pool = new ByteBlockPool(new DirectTrackingAllocator(bytesUsed));
       docToAddress = new long[1];
@@ -87,7 +86,7 @@ class VarStraightBytesImpl {
     }
 
     @Override
-    public void add(int docID, IndexableField value) throws IOException {
+    public void add(int docID, StorableField value) throws IOException {
       final BytesRef bytes = value.binaryValue();
       assert bytes != null;
       assert !merge;
@@ -122,7 +121,7 @@ class VarStraightBytesImpl {
           final IndexInput cloneIdx = reader.cloneIndex();
           try {
             numDataBytes = cloneIdx.readVLong();
-            final ReaderIterator iter = PackedInts.getReaderIterator(cloneIdx);
+            final ReaderIterator iter = PackedInts.getReaderIterator(cloneIdx, PackedInts.DEFAULT_BUFFER_SIZE);
             for (int i = 0; i < maxDocs; i++) {
               long offset = iter.next();
               ++lastDocID;
@@ -157,7 +156,7 @@ class VarStraightBytesImpl {
     }
     
     @Override
-    protected void mergeDoc(Field scratchField, Source source, int docID, int sourceDoc) throws IOException {
+    protected void mergeDoc(StoredField scratchField, Source source, int docID, int sourceDoc) throws IOException {
       assert merge;
       assert lastDocID < docID;
       source.getBytes(sourceDoc, bytesRef);

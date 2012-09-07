@@ -33,6 +33,8 @@ import org.apache.lucene.document.Field;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.index.LogMergePolicy;
+import org.apache.lucene.index.StorableField;
+import org.apache.lucene.index.StoredDocument;
 import org.apache.lucene.util.English;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.params.CommonParams;
@@ -52,6 +54,7 @@ import org.apache.solr.schema.SchemaField;
 import org.apache.solr.search.DocIterator;
 import org.apache.solr.search.DocList;
 import org.apache.solr.update.DirectUpdateHandler2;
+import org.apache.solr.util.RefCounted;
 
 
 import org.junit.BeforeClass;
@@ -125,9 +128,19 @@ public class BasicFunctionalityTest extends SolrTestCaseJ4 {
     // test merge factor picked up
     SolrCore core = h.getCore();
 
-    IndexWriter writer = ((DirectUpdateHandler2)core.getUpdateHandler()).getSolrCoreState().getIndexWriter(core);
-    assertEquals("Mergefactor was not picked up", 8, ((LogMergePolicy)writer.getConfig().getMergePolicy()).getMergeFactor());
-
+    RefCounted<IndexWriter> iw = ((DirectUpdateHandler2) core
+        .getUpdateHandler()).getSolrCoreState().getIndexWriter(core);
+    try {
+      assertEquals("Mergefactor was not picked up", 8, ((LogMergePolicy) iw
+          .get().getConfig().getMergePolicy()).getMergeFactor());
+    } finally {
+      iw.decref();
+    }
+    // test stats call
+    NamedList stats = core.getStatistics();
+    assertEquals("collection1", stats.get("coreName"));
+    assertTrue(stats.get("refCount") != null);
+    
     lrf.args.put(CommonParams.VERSION,"2.2");
     assertQ("test query on empty index",
             req("qlkciyopsbgzyvkylsjhchghjrdf")
@@ -408,7 +421,7 @@ public class BasicFunctionalityTest extends SolrTestCaseJ4 {
     
     IndexSchema ischema = new IndexSchema(solrConfig, getSchemaFile(), null);
     SchemaField f; // Solr field type
-    IndexableField luf; // Lucene field
+    StorableField luf; // Lucene field
 
     f = ischema.getField("test_basictv");
     luf = f.createField("test", 0f);
@@ -610,7 +623,7 @@ public class BasicFunctionalityTest extends SolrTestCaseJ4 {
     core.execute(core.getRequestHandler(req.getParams().get(CommonParams.QT)), req, rsp);
 
     DocList dl = ((ResultContext) rsp.getValues().get("response")).docs;
-    Document d = req.getSearcher().doc(dl.iterator().nextDoc());
+    StoredDocument d = req.getSearcher().doc(dl.iterator().nextDoc());
     // ensure field is not lazy, only works for Non-Numeric fields currently (if you change schema behind test, this may fail)
     assertFalse( ((Field) d.getField("test_hlt")).getClass().getSimpleName().equals("LazyField"));
     assertFalse( ((Field) d.getField("title")).getClass().getSimpleName().equals("LazyField"));
@@ -633,7 +646,7 @@ public class BasicFunctionalityTest extends SolrTestCaseJ4 {
 
     DocList dl = ((ResultContext) rsp.getValues().get("response")).docs;
     DocIterator di = dl.iterator();    
-    Document d = req.getSearcher().doc(di.nextDoc());
+    StoredDocument d = req.getSearcher().doc(di.nextDoc());
     // ensure field is lazy
     assertTrue( (d.getField("test_hlt")).getClass().getSimpleName().equals("LazyField"));
     assertFalse( (d.getField("title")).getClass().getSimpleName().equals("LazyField"));

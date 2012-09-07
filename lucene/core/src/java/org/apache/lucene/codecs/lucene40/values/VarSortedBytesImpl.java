@@ -60,7 +60,7 @@ final class VarSortedBytesImpl {
     private final Comparator<BytesRef> comp;
 
     public Writer(Directory dir, String id, Comparator<BytesRef> comp,
-        Counter bytesUsed, IOContext context, float acceptableOverheadRatio) throws IOException {
+        Counter bytesUsed, IOContext context, float acceptableOverheadRatio) {
       super(dir, id, CODEC_NAME_IDX, CODEC_NAME_DAT, VERSION_CURRENT, bytesUsed, context, acceptableOverheadRatio, Type.BYTES_VAR_SORTED);
       this.comp = comp;
       size = 0;
@@ -211,7 +211,7 @@ final class VarSortedBytesImpl {
       valueCount = ordToOffsetIndex.size()-1; // the last value here is just a dummy value to get the length of the last value
       // advance this iterator to the end and clone the stream once it points to the docToOrdIndex header
       ordToOffsetIndex.get(valueCount);
-      docToOrdIndex = PackedInts.getDirectReader((IndexInput) idxIn.clone()); // read the ords in to prevent too many random disk seeks
+      docToOrdIndex = PackedInts.getDirectReader(idxIn.clone()); // read the ords in to prevent too many random disk seeks
       basePointer = datIn.getFilePointer();
       this.datIn = datIn;
     }

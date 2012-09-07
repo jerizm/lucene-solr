@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -29,7 +30,6 @@ import java.util.concurrent.TimeUnit;
 import org.apache.lucene.analysis.MockAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
-import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
@@ -39,6 +39,7 @@ import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.English;
 import org.apache.lucene.util.LuceneTestCase;
+import org.apache.lucene.util.NamedThreadFactory;
 
 /**
  * Spell checker test case
@@ -103,7 +104,7 @@ public class TestSpellChecker extends LuceneTestCase {
   }
 
 
-  public void testBuild() throws CorruptIndexException, IOException {
+  public void testBuild() throws IOException {
     IndexReader r = DirectoryReader.open(userindex);
 
     spellChecker.clearIndex();
@@ -413,7 +414,7 @@ public class TestSpellChecker extends LuceneTestCase {
     int num_field2 = this.numdoc();
     assertEquals(num_field2, num_field1 + 1);
     int numThreads = 5 + random().nextInt(5);
-    ExecutorService executor = Executors.newFixedThreadPool(numThreads);
+    ExecutorService executor = Executors.newFixedThreadPool(numThreads, new NamedThreadFactory("testConcurrentAccess"));
     SpellCheckWorker[] workers = new SpellCheckWorker[numThreads];
     for (int i = 0; i < numThreads; i++) {
       SpellCheckWorker spellCheckWorker = new SpellCheckWorker(r);
@@ -436,8 +437,8 @@ public class TestSpellChecker extends LuceneTestCase {
     executor.awaitTermination(60L, TimeUnit.SECONDS);
     
     for (int i = 0; i < workers.length; i++) {
-      assertFalse(String.format("worker thread %d failed", i), workers[i].failed);
-      assertTrue(String.format("worker thread %d is still running but should be terminated", i), workers[i].terminated);
+      assertFalse(String.format(Locale.ROOT, "worker thread %d failed", i), workers[i].failed);
+      assertTrue(String.format(Locale.ROOT, "worker thread %d is still running but should be terminated", i), workers[i].terminated);
     }
     // 4 searchers more than iterations
     // 1. at creation

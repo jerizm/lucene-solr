@@ -17,11 +17,14 @@ import traceback
 import os
 import sys
 import re
-from HTMLParser import HTMLParser, HTMLParseError
-import urlparse
+from html.parser import HTMLParser, HTMLParseError
+import urllib.parse as urlparse
 
 reHyperlink = re.compile(r'<a(\s+.*?)>', re.I)
 reAtt = re.compile(r"""(?:\s+([a-z]+)\s*=\s*("[^"]*"|'[^']?'|[^'"\s]+))+""", re.I)
+
+# Char ::= #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF] /* any Unicode character, excluding the surrogate blocks, FFFE, and FFFF. */
+reValidChar = re.compile("^[\u0009\u000A\u000D\u0020-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]*$")
 
 # silly emacs: '
 
@@ -57,7 +60,7 @@ class FindHyperlinks(HTMLParser):
             pass
           else:
             self.printFile()
-            print '    WARNING: anchor "%s" appears more than once' % name
+            print('    WARNING: anchor "%s" appears more than once' % name)
         else:
           self.anchors.add(name)
       elif href is not None:
@@ -65,7 +68,7 @@ class FindHyperlinks(HTMLParser):
         href = href.strip()
         self.links.append(urlparse.urljoin(self.baseURL, href))
       else:
-        if self.baseURL.endswith(os.path.sep + 'AttributeSource.html'):
+        if self.baseURL.endswith('/AttributeSource.html'):
           # LUCENE-4010: AttributeSource's javadocs has an unescaped <A> generics!!  Seems to be a javadocs bug... (fixed in Java 7)
           pass
         else:
@@ -73,20 +76,26 @@ class FindHyperlinks(HTMLParser):
 
   def printFile(self):
     if not self.printed:
-      print
-      print '  ' + self.baseURL
+      print()
+      print('  ' + self.baseURL)
       self.printed = True
                    
 def parse(baseURL, html):
   global failures
+  # look for broken unicode
+  if not reValidChar.match(html):
+    print(' WARNING: invalid characters detected in: %s' % baseURL)
+    failures = True
+    return [], []
+
   parser = FindHyperlinks(baseURL)
   try:
     parser.feed(html)
     parser.close()
   except HTMLParseError:
     parser.printFile()
-    print '  WARNING: failed to parse:'
-    traceback.print_exc()
+    print('  WARNING: failed to parse %s:' % baseURL)
+    traceback.print_exc(file=sys.stdout)
     failures = True
     return [], []
   
@@ -104,8 +113,8 @@ def checkAll(dirName):
   global failures
 
   # Find/parse all HTML files first
-  print
-  print 'Crawl/parse...'
+  print()
+  print('Crawl/parse...')
   allFiles = {}
 
   if os.path.isfile(dirName):
@@ -126,13 +135,13 @@ def checkAll(dirName):
          main not in ('deprecated-list',):
         # Somehow even w/ java 7 generaged javadocs,
         # deprecated-list.html can fail to escape generics types
-        fullPath = os.path.join(root, f)
+        fullPath = os.path.join(root, f).replace(os.path.sep,'/')
         #print '  %s' % fullPath
-        allFiles[fullPath] = parse(fullPath, open('%s/%s' % (root, f)).read())
+        allFiles[fullPath] = parse(fullPath, open('%s/%s' % (root, f), encoding='UTF-8').read())
 
   # ... then verify:
-  print
-  print 'Verify...'
+  print()
+  print('Verify...')
   for fullPath, (links, anchors) in allFiles.items():
     #print fullPath
     printed = False
@@ -176,16 +185,16 @@ def checkAll(dirName):
              and os.path.basename(fullPath) != 'Changes.html':
           if not printed:
             printed = True
-            print
-            print fullPath
-          print '  BAD EXTERNAL LINK: %s' % link
+            print()
+            print(fullPath)
+          print('  BAD EXTERNAL LINK: %s' % link)
       elif link.startswith('mailto:'):
         if link.find('@lucene.apache.org') == -1 and link.find('@apache.org') != -1:
           if not printed:
             printed = True
-            print
-            print fullPath
-          print '  BROKEN MAILTO (?): %s' % link
+            print()
+            print(fullPath)
+          print('  BROKEN MAILTO (?): %s' % link)
       elif link.startswith('javascript:'):
         # ok...?
         pass
@@ -193,6 +202,14 @@ def checkAll(dirName):
         # see LUCENE-4011: this is a javadocs bug for constants 
         # on annotations it seems?
         pass
+      elif link.startswith('file:'):
+        filepath = urlparse.unquote(urlparse.urlparse(link).path)
+        if not (os.path.exists(filepath) or os.path.exists(filepath[1:])):
+          if not printed:
+            printed = True
+            print()
+            print(fullPath)
+          print('  BROKEN LINK: %s' % link)
       elif link not in allFiles:
         # We only load HTML... so if the link is another resource (eg
         # SweetSpotSimilarity refs
@@ -200,15 +217,15 @@ def checkAll(dirName):
         if not os.path.exists(link):
           if not printed:
             printed = True
-            print
-            print fullPath
-          print '  BROKEN LINK: %s' % link
+            print()
+            print(fullPath)
+          print('  BROKEN LINK: %s' % link)
       elif anchor is not None and anchor not in allFiles[link][1]:
         if not printed:
           printed = True
-          print
-          print fullPath
-        print '  BROKEN ANCHOR: %s' % origLink
+          print()
+          print(fullPath)
+        print('  BROKEN ANCHOR: %s' % origLink)
 
     failures = failures or printed
 
@@ -216,8 +233,8 @@ def checkAll(dirName):
 
 if __name__ == '__main__':
   if checkAll(sys.argv[1]):
-    print
-    print 'Broken javadocs links were found!'
+    print()
+    print('Broken javadocs links were found!')
     sys.exit(1)
   sys.exit(0)
   

@@ -30,12 +30,12 @@ import org.apache.solr.common.SolrException;
 import org.apache.solr.common.cloud.SolrZkClient;
 import org.apache.solr.common.cloud.ZkCmdExecutor;
 import org.apache.solr.common.cloud.ZooKeeperException;
-import org.apache.solr.core.SolrCore;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.KeeperException.ConnectionLossException;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.Watcher.Event.EventType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -93,6 +93,13 @@ public  class LeaderElector {
     sortSeqs(seqs);
     List<Integer> intSeqs = getSeqs(seqs);
     if (seq <= intSeqs.get(0)) {
+      // first we delete the node advertising the old leader in case the ephem is still there
+      try {
+        zkClient.delete(context.leaderPath, -1, true);
+      } catch(Exception e) {
+        // fine
+      }
+
       runIamLeaderProcess(context, replacement);
     } else {
       // I am not the leader - watch the node below me
@@ -115,6 +122,11 @@ public  class LeaderElector {
               
               @Override
               public void process(WatchedEvent event) {
+                // session events are not change events,
+                // and do not remove the watcher
+                if (EventType.None.equals(event.getType())) {
+                  return;
+                }
                 // am I the next leader?
                 try {
                   checkIfIamLeader(seq, context, true);
@@ -133,6 +145,7 @@ public  class LeaderElector {
       } catch (KeeperException.SessionExpiredException e) {
         throw e;
       } catch (KeeperException e) {
+        SolrException.log(log, "Failed setting watch", e);
         // we couldn't set our watch - the node before us may already be down?
         // we need to check if we are the leader again
         checkIfIamLeader(seq, context, true);

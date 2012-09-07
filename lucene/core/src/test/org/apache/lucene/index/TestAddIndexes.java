@@ -51,6 +51,7 @@ import org.apache.lucene.index.IndexWriterConfig.OpenMode;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.PhraseQuery;
 import org.apache.lucene.store.AlreadyClosedException;
+import org.apache.lucene.store.BaseDirectoryWrapper;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MockDirectoryWrapper;
 import org.apache.lucene.store.RAMDirectory;
@@ -549,7 +550,7 @@ public class TestAddIndexes extends LuceneTestCase {
   private void verifyTermDocs(Directory dir, Term term, int numDocs)
       throws IOException {
     IndexReader reader = DirectoryReader.open(dir);
-    DocsEnum docsEnum = _TestUtil.docs(random(), reader, term.field, term.bytes, null, null, false);
+    DocsEnum docsEnum = _TestUtil.docs(random(), reader, term.field, term.bytes, null, null, 0);
     int count = 0;
     while (docsEnum.nextDoc() != DocIdSetIterator.NO_MORE_DOCS)
       count++;
@@ -1105,10 +1106,11 @@ public class TestAddIndexes extends LuceneTestCase {
     IndexReader[] readers = new IndexReader[] { DirectoryReader.open(dirs[0]), DirectoryReader.open(dirs[1]) };
     
     Directory dir = new MockDirectoryWrapper(random(), new RAMDirectory());
-    IndexWriterConfig conf = new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMergePolicy(newLogMergePolicy());
+    IndexWriterConfig conf = new IndexWriterConfig(TEST_VERSION_CURRENT, new MockAnalyzer(random())).setMergePolicy(newLogMergePolicy(true));
     LogMergePolicy lmp = (LogMergePolicy) conf.getMergePolicy();
-    lmp.setUseCompoundFile(true);
-    lmp.setNoCFSRatio(1.0); // Force creation of CFS
+    // Force creation of CFS:
+    lmp.setNoCFSRatio(1.0);
+    lmp.setMaxCFSSegmentSizeMB(Double.POSITIVE_INFINITY);
     IndexWriter w3 = new IndexWriter(dir, conf);
     w3.addIndexes(readers);
     w3.close();
@@ -1168,7 +1170,7 @@ public class TestAddIndexes extends LuceneTestCase {
    * simple test that ensures we getting expected exceptions 
    */
   public void testAddIndexMissingCodec() throws IOException {
-    MockDirectoryWrapper toAdd = newDirectory();
+    BaseDirectoryWrapper toAdd = newDirectory();
     // Disable checkIndex, else we get an exception because
     // of the unregistered codec:
     toAdd.setCheckIndexOnClose(false);
@@ -1245,7 +1247,7 @@ public class TestAddIndexes extends LuceneTestCase {
     w.close();
     assertEquals(2, r3.numDocs());
     for(int docID=0;docID<2;docID++) {
-      Document d = r3.document(docID);
+      StoredDocument d = r3.document(docID);
       if (d.get("id").equals("1")) {
         assertEquals("doc1 field1", d.get("f1"));
       } else {

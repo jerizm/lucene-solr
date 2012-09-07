@@ -39,11 +39,16 @@ import org.apache.lucene.util.LuceneTestCase;
 public class TestIndexFileDeleter extends LuceneTestCase {
   
   public void testDeleteLeftoverFiles() throws IOException {
-    MockDirectoryWrapper dir = newDirectory();
-    dir.setPreventDoubleWrite(false);
+    Directory dir = newDirectory();
+    if (dir instanceof MockDirectoryWrapper) {
+      ((MockDirectoryWrapper)dir).setPreventDoubleWrite(false);
+    }
 
     LogMergePolicy mergePolicy = newLogMergePolicy(true, 10);
-    mergePolicy.setNoCFSRatio(1); // This test expects all of its segments to be in CFS
+    
+    // This test expects all of its segments to be in CFS
+    mergePolicy.setNoCFSRatio(1.0);
+    mergePolicy.setMaxCFSSegmentSizeMB(Double.POSITIVE_INFINITY);
 
     IndexWriter writer = new IndexWriter(
         dir,

@@ -20,9 +20,9 @@ package org.apache.lucene.search.spans;
 import org.apache.lucene.index.AtomicReaderContext;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.index.TermContext;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.util.Bits;
-import org.apache.lucene.util.TermContext;
 import org.apache.lucene.util.ToStringUtils;
 
 import java.io.IOException;
@@ -157,7 +157,7 @@ public class SpanNotQuery extends SpanQuery implements Cloneable {
 
       // TODO: Remove warning after API has been finalized
       @Override
-      public boolean isPayloadAvailable() {
+      public boolean isPayloadAvailable() throws IOException {
         return includeSpans.isPayloadAvailable();
       }
 

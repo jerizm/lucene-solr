@@ -1,3 +1,5 @@
+package org.apache.lucene.spatial;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -15,14 +17,11 @@
  * limitations under the License.
  */
 
-package org.apache.lucene.spatial;
-
 import com.spatial4j.core.context.SpatialContext;
-import com.spatial4j.core.context.simple.SimpleSpatialContext;
-import com.spatial4j.core.query.SpatialArgsParser;
-import com.spatial4j.core.query.SpatialOperation;
+import com.spatial4j.core.context.SpatialContext;
 import com.spatial4j.core.shape.Rectangle;
-
+import org.apache.lucene.spatial.query.SpatialArgsParser;
+import org.apache.lucene.spatial.query.SpatialOperation;
 import org.apache.lucene.util.LuceneTestCase;
 import org.junit.Assert;
 import org.junit.Test;
@@ -44,7 +43,7 @@ public class TestTestFramework extends LuceneTestCase {
     String name = StrategyTestCase.QTEST_Cities_IsWithin_BBox;
 
     InputStream in = getClass().getClassLoader().getResourceAsStream(name);
-    SpatialContext ctx = SimpleSpatialContext.GEO_KM;
+    SpatialContext ctx = SpatialContext.GEO;
     Iterator<SpatialTestQuery> iter = SpatialTestQuery.getTestQueries(
         new SpatialArgsParser(), ctx, name, in );
     List<SpatialTestQuery> tests = new ArrayList<SpatialTestQuery>();

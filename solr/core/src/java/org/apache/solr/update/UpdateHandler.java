@@ -127,9 +127,11 @@ public abstract class UpdateHandler implements SolrInfoMBean {
    * Called when the Writer should be opened again - eg when replication replaces
    * all of the index files.
    * 
+   * @param rollback IndexWriter if true else close
+   * 
    * @throws IOException
    */
-  public abstract void newIndexWriter() throws IOException;
+  public abstract void newIndexWriter(boolean rollback) throws IOException;
 
   public abstract SolrCoreState getSolrCoreState();
 
@@ -177,4 +179,6 @@ public abstract class UpdateHandler implements SolrInfoMBean {
   {
     optimizeCallbacks.add( listener );
   }
+
+  public abstract void split(SplitIndexCommand cmd) throws IOException;
 }

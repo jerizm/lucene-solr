@@ -175,8 +175,7 @@ public final class ClassicTokenizer extends Tokenizer {
   }
 
   @Override
-  public void reset(Reader reader) throws IOException {
-    super.reset(reader);
-    scanner.yyreset(reader);
+  public void reset() throws IOException {
+    scanner.yyreset(input);
   }
 }
